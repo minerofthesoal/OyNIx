@@ -196,9 +196,10 @@ jobs:
         run: ls -la
 
       - name: Create release (tag push)
-        if: github.ref_type == 'tag'
+        if: ${{ startsWith(github.ref, 'refs/tags/') }}
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ github.ref_name }}
           files: |
             *.deb
             *.exe
@@ -207,7 +208,7 @@ jobs:
           fail_on_unmatched_files: false
 
       - name: Upload summary (manual run)
-        if: github.ref_type != 'tag'
+        if: ${{ !startsWith(github.ref, 'refs/tags/') }}
         run: |
           echo "## Build Artifacts" >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
