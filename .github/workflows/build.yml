@@ -114,9 +114,23 @@ jobs:
       image: archlinux:latest
     steps:
       - name: Setup build environment
-        run: pacman -Syu --noconfirm base-devel python python-pip git
+        run: |
+          pacman -Syu --noconfirm base-devel python python-pip git \
+            python-pyqt6 python-pyqt6-webengine qt6-webengine 2>/dev/null || \
+          pacman -Syu --noconfirm base-devel python python-pip git
 
       - uses: actions/checkout@v4
+
+      - name: Install Python deps via pip
+        run: pip install --break-system-packages -r requirements.txt pyinstaller
+
+      - name: Build with PyInstaller
+        run: |
+          pyinstaller --onedir --name oynix \
+            --add-data "oynix:oynix" \
+            --hidden-import PyQt6.QtWebEngineWidgets \
+            --hidden-import PyQt6.QtWebEngineCore \
+            oynix/oynix.py
 
       - name: Create PKGBUILD
         env:
@@ -130,16 +144,15 @@ jobs:
           pkgrel=1
           pkgdesc="Nyx-themed desktop browser with local AI assistant"
           arch=('x86_64')
-          depends=('python' 'python-pyqt6' 'python-pyqt6-webengine' 'qt6-webengine')
+          depends=('python')
           makedepends=()
 
           package() {
             install -dm755 "\$pkgdir/usr/lib/oynix"
-            cp -r "\$startdir/../oynix" "\$pkgdir/usr/lib/oynix/"
-            cp "\$startdir/../requirements.txt" "\$pkgdir/usr/lib/oynix/"
+            cp -r "\$startdir/../dist/oynix/"* "\$pkgdir/usr/lib/oynix/"
 
             install -dm755 "\$pkgdir/usr/bin"
-            printf '#!/bin/bash\nexec python /usr/lib/oynix/oynix/oynix.py "\$@"\n' \
+            printf '#!/bin/bash\nexec /usr/lib/oynix/oynix "\$@"\n' \
               > "\$pkgdir/usr/bin/oynix"
             chmod +x "\$pkgdir/usr/bin/oynix"
 
@@ -154,7 +167,7 @@ jobs:
         run: |
           cd pkg
           useradd -m builder 2>/dev/null || true
-          chown -R builder:builder . ..
+          chown -R builder:builder . .. ../dist
           su builder -c "makepkg -sf --noconfirm --skipinteg"
 
       - name: Collect artifact
