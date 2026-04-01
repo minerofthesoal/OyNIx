@@ -26,15 +26,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y dpkg-dev fakeroot
-          pip install -r requirements.txt pyinstaller
-
-      - name: Build binary
-        run: |
-          pyinstaller --onedir --name oynix \
-            --add-data "oynix:oynix" \
-            --hidden-import PyQt6.QtWebEngineWidgets \
-            --hidden-import PyQt6.QtWebEngineCore \
-            oynix/oynix.py
+          pip install -r requirements.txt
 
       - name: Package .deb
         run: |
@@ -45,33 +37,42 @@ jobs:
           mkdir -p "${PKG}/usr/bin"
           mkdir -p "${PKG}/usr/share/applications"
 
-          cp -r dist/oynix/* "${PKG}/usr/lib/oynix/"
+          cp -r oynix "${PKG}/usr/lib/oynix/"
+          cp requirements.txt "${PKG}/usr/lib/oynix/"
 
-          printf '#!/bin/bash\nexec /usr/lib/oynix/oynix "$@"\n' \
-            > "${PKG}/usr/bin/oynix"
+          cat > "${PKG}/usr/bin/oynix" <<'LAUNCHER'
+#!/bin/bash
+cd /usr/lib/oynix
+exec python3 -m oynix "$@"
+LAUNCHER
           chmod +x "${PKG}/usr/bin/oynix"
 
-          cat > "${PKG}/usr/share/applications/oynix.desktop" <<EOF
-          [Desktop Entry]
-          Name=OyNIx Browser
-          Comment=Nyx-themed browser with local AI
-          Exec=oynix
-          Type=Application
-          Categories=Network;WebBrowser;
-          EOF
-          sed -i 's/^          //' "${PKG}/usr/share/applications/oynix.desktop"
+          cat > "${PKG}/usr/share/applications/oynix.desktop" <<'DESKTOP'
+[Desktop Entry]
+Name=OyNIx Browser
+Comment=Nyx-themed browser with local AI
+Exec=oynix
+Type=Application
+Categories=Network;WebBrowser;
+DESKTOP
 
-          cat > "${PKG}/DEBIAN/control" <<EOF
-          Package: oynix
-          Version: ${VERSION}
-          Architecture: amd64
-          Maintainer: OyNIx Project
-          Description: Nyx-themed desktop browser with local AI assistant
-           Custom Firefox-inspired browser with tree tabs, local LLM,
-           auto-indexing Nyx search engine, and purple/black theme.
-          Depends: libgl1, libxkbcommon0, libnss3, libxcomposite1
-          EOF
-          sed -i 's/^          //' "${PKG}/DEBIAN/control"
+          cat > "${PKG}/DEBIAN/control" <<CTRL
+Package: oynix
+Version: ${VERSION}
+Architecture: amd64
+Maintainer: OyNIx Project
+Description: Nyx-themed desktop browser with local AI assistant
+ Custom Firefox-inspired browser with tree tabs, local LLM,
+ auto-indexing Nyx search engine, and purple/black theme.
+Depends: python3, python3-pip, libgl1, libxkbcommon0, libnss3, libxcomposite1
+CTRL
+
+          cat > "${PKG}/DEBIAN/postinst" <<'POSTINST'
+#!/bin/bash
+pip install --break-system-packages -r /usr/lib/oynix/requirements.txt 2>/dev/null || \
+pip install -r /usr/lib/oynix/requirements.txt 2>/dev/null || true
+POSTINST
+          chmod +x "${PKG}/DEBIAN/postinst"
 
           dpkg-deb --build "${PKG}"
           mv "${PKG}.deb" "oynix-${VERSION}-amd64.deb"
@@ -94,13 +95,23 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt pyinstaller
 
+      - name: Create launcher script
+        run: |
+          Set-Content -Path "run_oynix.py" -Value @"
+          import sys, os
+          sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+          from oynix.oynix import main
+          main()
+          "@
+
       - name: Build .exe
         run: |
           pyinstaller --onefile --name OyNIx `
             --add-data "oynix;oynix" `
             --hidden-import PyQt6.QtWebEngineWidgets `
             --hidden-import PyQt6.QtWebEngineCore `
-            oynix/oynix.py
+            --hidden-import PyQt6.sip `
+            run_oynix.py
 
       - name: Rename artifact
         run: Move-Item dist/OyNIx.exe "OyNIx-${{ env.APP_VERSION }}.exe"
@@ -124,51 +135,39 @@ jobs:
 
       - uses: actions/checkout@v4
 
-      - name: Install Python deps via pip
-        run: pip install --break-system-packages -r requirements.txt pyinstaller
-
-      - name: Build with PyInstaller
-        run: |
-          pyinstaller --onedir --name oynix \
-            --add-data "oynix:oynix" \
-            --hidden-import PyQt6.QtWebEngineWidgets \
-            --hidden-import PyQt6.QtWebEngineCore \
-            oynix/oynix.py
-
       - name: Create PKGBUILD
         run: |
           mkdir -p pkg
           PKGVER=$(echo "${APP_VERSION#v}" | tr -c '[:alnum:].' '.')
           cat > pkg/PKGBUILD <<EOF
-          pkgname=oynix
-          pkgver=${PKGVER}
-          pkgrel=1
-          pkgdesc="Nyx-themed desktop browser with local AI assistant"
-          arch=('x86_64')
-          depends=('python')
-          makedepends=()
+pkgname=oynix
+pkgver=${PKGVER}
+pkgrel=1
+pkgdesc="Nyx-themed desktop browser with local AI assistant"
+arch=('x86_64')
+depends=('python' 'python-pip')
 
-          package() {
-            install -dm755 "\$pkgdir/usr/lib/oynix"
-            cp -r "\$startdir/../dist/oynix/"* "\$pkgdir/usr/lib/oynix/"
+package() {
+  install -dm755 "\$pkgdir/usr/lib/oynix"
+  cp -r "\$startdir/../oynix" "\$pkgdir/usr/lib/oynix/"
+  cp "\$startdir/../requirements.txt" "\$pkgdir/usr/lib/oynix/"
 
-            install -dm755 "\$pkgdir/usr/bin"
-            printf '#!/bin/bash\nexec /usr/lib/oynix/oynix "\$@"\n' \
-              > "\$pkgdir/usr/bin/oynix"
-            chmod +x "\$pkgdir/usr/bin/oynix"
+  install -dm755 "\$pkgdir/usr/bin"
+  printf '#!/bin/bash\\ncd /usr/lib/oynix\\nexec python -m oynix "\$@"\\n' \\
+    > "\$pkgdir/usr/bin/oynix"
+  chmod +x "\$pkgdir/usr/bin/oynix"
 
-            install -dm755 "\$pkgdir/usr/share/applications"
-            printf '[Desktop Entry]\nName=OyNIx Browser\nComment=Nyx-themed browser with local AI\nExec=oynix\nType=Application\nCategories=Network;WebBrowser;\n' \
-              > "\$pkgdir/usr/share/applications/oynix.desktop"
-          }
-          EOF
-          sed -i 's/^          //' pkg/PKGBUILD
+  install -dm755 "\$pkgdir/usr/share/applications"
+  printf '[Desktop Entry]\\nName=OyNIx Browser\\nComment=Nyx-themed browser with local AI\\nExec=oynix\\nType=Application\\nCategories=Network;WebBrowser;\\n' \\
+    > "\$pkgdir/usr/share/applications/oynix.desktop"
+}
+EOF
 
       - name: Build package
         run: |
           cd pkg
           useradd -m builder 2>/dev/null || true
-          chown -R builder:builder . .. ../dist
+          chown -R builder:builder . ..
           su builder -c "makepkg -sf --noconfirm --skipinteg"
 
       - name: Collect artifact

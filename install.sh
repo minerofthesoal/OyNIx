@@ -68,7 +68,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cat > "$SCRIPT_DIR/oynix-browser" << LAUNCHER
 #!/bin/bash
 cd "$SCRIPT_DIR"
-$PYTHON_CMD -m oynix.oynix "\$@"
+$PYTHON_CMD -m oynix "\$@"
 LAUNCHER
 chmod +x "$SCRIPT_DIR/oynix-browser"
 
