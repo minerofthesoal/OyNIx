@@ -297,6 +297,7 @@ class NyxSearchEngine(QObject):
         self.indexer = NyxIndexer()
         self.database = database
         self._ddg_thread = None
+        self.auto_expand_database = True  # Controlled by settings
 
     def index_page(self, url, title, content_snippet=""):
         """Auto-index a visited page (called by browser on page load)."""
@@ -365,6 +366,9 @@ class NyxSearchEngine(QObject):
         # Auto-index web results into Nyx index
         for r in results:
             self.indexer.index_page(r['url'], r['title'], r.get('description', ''))
+        # Auto-expand database with DDG results (if enabled)
+        if self.auto_expand_database:
+            self.database.add_sites_batch(results, source="duckduckgo")
 
     def get_stats(self):
         """Get search engine statistics."""

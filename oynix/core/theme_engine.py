@@ -506,299 +506,95 @@ def get_qt_stylesheet(colors=None):
 
 
 def get_homepage_html(colors=None):
-    """Generate the Nyx-themed homepage HTML."""
+    """Generate the Nyx-themed homepage with animated particle canvas."""
     c = colors or NYX_COLORS
     return f'''<!DOCTYPE html>
-<html>
-<head>
-<meta charset="utf-8">
-<title>OyNIx - Home</title>
+<html><head><meta charset="utf-8"><title>OyNIx</title>
 <style>
-* {{ margin:0; padding:0; box-sizing:border-box; }}
-
-body {{
-    background: {c['bg_darkest']};
-    color: {c['text_primary']};
-    font-family: 'Segoe UI', 'Ubuntu', 'Cantarell', sans-serif;
-    min-height: 100vh;
-    overflow-x: hidden;
-}}
-
-/* Animated background */
-body::before {{
-    content: '';
-    position: fixed;
-    top: 0; left: 0; right: 0; bottom: 0;
-    background:
-        radial-gradient(ellipse at 20% 50%, rgba(123,79,191,0.08) 0%, transparent 50%),
-        radial-gradient(ellipse at 80% 20%, rgba(155,111,223,0.06) 0%, transparent 50%),
-        radial-gradient(ellipse at 50% 80%, rgba(74,45,122,0.1) 0%, transparent 50%);
-    pointer-events: none;
-    z-index: 0;
-}}
-
-.container {{
-    position: relative;
-    z-index: 1;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    min-height: 100vh;
-    padding: 40px 20px;
-}}
-
-/* Logo */
-.logo {{
-    font-size: 5.5em;
-    font-weight: 900;
-    letter-spacing: -3px;
-    background: linear-gradient(135deg, {c['purple_mid']}, {c['purple_glow']}, {c['purple_soft']});
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    text-shadow: none;
-    margin-bottom: 8px;
-    animation: logoGlow 3s ease-in-out infinite alternate;
-}}
-
-@keyframes logoGlow {{
-    from {{ filter: drop-shadow(0 0 20px rgba(123,79,191,0.3)); }}
-    to {{ filter: drop-shadow(0 0 40px rgba(123,79,191,0.6)); }}
-}}
-
-.tagline {{
-    color: {c['text_muted']};
-    font-size: 1.1em;
-    margin-bottom: 50px;
-    letter-spacing: 4px;
-    text-transform: uppercase;
-}}
-
-/* Search */
-.search-wrap {{
-    position: relative;
-    width: 650px;
-    max-width: 90vw;
-    margin-bottom: 60px;
-}}
-
-.search-box {{
-    width: 100%;
-    padding: 18px 60px 18px 24px;
-    font-size: 1.15em;
-    background: {c['bg_mid']};
-    border: 2px solid {c['border']};
-    border-radius: 50px;
-    color: {c['text_primary']};
-    outline: none;
-    transition: all 0.3s ease;
-}}
-
-.search-box:focus {{
-    border-color: {c['purple_mid']};
-    box-shadow: 0 0 30px rgba(123,79,191,0.3), inset 0 0 10px rgba(123,79,191,0.05);
-    background: {c['bg_light']};
-}}
-
-.search-box::placeholder {{
-    color: {c['text_muted']};
-}}
-
-.search-icon {{
-    position: absolute;
-    right: 20px;
-    top: 50%;
-    transform: translateY(-50%);
-    font-size: 1.3em;
-    opacity: 0.5;
-}}
-
-/* Engine switcher */
-.engine-row {{
-    display: flex;
-    gap: 12px;
-    justify-content: center;
-    margin-top: 16px;
-}}
-
-.engine-btn {{
-    padding: 6px 18px;
-    border-radius: 20px;
-    border: 1px solid {c['border']};
-    background: {c['bg_mid']};
-    color: {c['text_secondary']};
-    cursor: pointer;
-    font-size: 0.9em;
-    transition: all 0.2s;
-}}
-
-.engine-btn:hover, .engine-btn.active {{
-    border-color: {c['purple_mid']};
-    color: {c['purple_light']};
-    background: {c['bg_lighter']};
-}}
-
-.engine-btn.active {{
-    background: {c['purple_dark']};
-    color: {c['purple_pale']};
-}}
-
-/* Quick links */
-.quick-links {{
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 16px;
-    max-width: 800px;
-    width: 100%;
-}}
-
-.link-card {{
-    background: linear-gradient(145deg, {c['bg_mid']}, {c['bg_dark']});
-    border: 1px solid {c['border']};
-    border-radius: 16px;
-    padding: 28px 16px;
-    text-align: center;
-    cursor: pointer;
-    transition: all 0.3s ease;
-    text-decoration: none;
-}}
-
-.link-card:hover {{
-    transform: translateY(-6px);
-    border-color: {c['purple_mid']};
-    box-shadow: 0 12px 30px rgba(123,79,191,0.2);
-}}
-
-.link-icon {{
-    font-size: 2.4em;
-    margin-bottom: 10px;
-    display: block;
-}}
-
-.link-title {{
-    color: {c['text_primary']};
-    font-weight: 600;
-    font-size: 0.95em;
-}}
-
-.link-sub {{
-    color: {c['text_muted']};
-    font-size: 0.8em;
-    margin-top: 4px;
-}}
-
-/* Stats footer */
-.stats {{
-    position: fixed;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    display: flex;
-    justify-content: center;
-    gap: 50px;
-    padding: 16px;
-    background: linear-gradient(transparent, {c['bg_darkest']});
-}}
-
-.stat {{ text-align: center; }}
-
-.stat-num {{
-    font-size: 1.8em;
-    font-weight: 800;
-    color: {c['purple_mid']};
-}}
-
-.stat-label {{
-    color: {c['text_muted']};
-    font-size: 0.85em;
-}}
-</style>
-</head>
-<body>
-<div class="container">
-    <div class="logo">OyNIx</div>
-    <div class="tagline">Nyx-Powered Local AI Browser</div>
-
-    <div class="search-wrap">
-        <input type="text" class="search-box"
-               placeholder="Search the web or ask Nyx AI..."
-               id="searchInput" autofocus
-               onkeypress="if(event.key==='Enter') doSearch(this.value)">
-        <span class="search-icon">&#128270;</span>
-        <div class="engine-row">
-            <button class="engine-btn active" onclick="setEngine('nyx',this)">Nyx</button>
-            <button class="engine-btn" onclick="setEngine('duckduckgo',this)">DuckDuckGo</button>
-            <button class="engine-btn" onclick="setEngine('google',this)">Google</button>
-            <button class="engine-btn" onclick="setEngine('brave',this)">Brave</button>
-        </div>
-    </div>
-
-    <div class="quick-links">
-        <a class="link-card" href="oyn://ai-chat">
-            <span class="link-icon">&#129302;</span>
-            <div class="link-title">AI Chat</div>
-            <div class="link-sub">Local LLM</div>
-        </a>
-        <a class="link-card" href="oyn://nyx-search">
-            <span class="link-icon">&#128270;</span>
-            <div class="link-title">Nyx Search</div>
-            <div class="link-sub">Auto-Indexed</div>
-        </a>
-        <a class="link-card" href="oyn://settings">
-            <span class="link-icon">&#9881;</span>
-            <div class="link-title">Settings</div>
-            <div class="link-sub">Configure</div>
-        </a>
-        <a class="link-card" href="oyn://database">
-            <span class="link-icon">&#128218;</span>
-            <div class="link-title">Site Database</div>
-            <div class="link-sub">1400+ Sites</div>
-        </a>
-    </div>
+*{{margin:0;padding:0;box-sizing:border-box}}
+body{{background:{c['bg_darkest']};color:{c['text_primary']};font-family:'Segoe UI','Ubuntu',sans-serif;min-height:100vh;overflow:hidden}}
+canvas#bg{{position:fixed;top:0;left:0;width:100%;height:100%;z-index:0}}
+.wrap{{position:relative;z-index:1;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;padding:30px 20px}}
+.logo{{font-size:5.5em;font-weight:900;letter-spacing:-3px;background:linear-gradient(135deg,{c['purple_mid']},{c['purple_glow']},{c['purple_soft']});-webkit-background-clip:text;-webkit-text-fill-color:transparent;margin-bottom:6px;animation:pulse 3s ease-in-out infinite alternate;opacity:0;animation:fadeIn .8s ease forwards,pulse 3s 1s ease-in-out infinite alternate}}
+.tagline{{color:{c['text_muted']};font-size:1em;letter-spacing:5px;text-transform:uppercase;margin-bottom:40px;opacity:0;animation:fadeIn .8s .3s ease forwards}}
+@keyframes pulse{{from{{filter:drop-shadow(0 0 15px rgba(123,79,191,.3))}}to{{filter:drop-shadow(0 0 35px rgba(123,79,191,.6))}}}}
+@keyframes fadeIn{{to{{opacity:1}}}}
+@keyframes slideUp{{from{{opacity:0;transform:translateY(20px)}}to{{opacity:1;transform:translateY(0)}}}}
+@keyframes scaleIn{{from{{opacity:0;transform:scale(.9)}}to{{opacity:1;transform:scale(1)}}}}
+.search-wrap{{position:relative;width:620px;max-width:90vw;margin-bottom:50px;opacity:0;animation:slideUp .6s .5s ease forwards}}
+.search-box{{width:100%;padding:16px 55px 16px 22px;font-size:1.1em;background:{c['bg_mid']};border:2px solid {c['border']};border-radius:50px;color:{c['text_primary']};outline:none;transition:all .3s}}
+.search-box:focus{{border-color:{c['purple_mid']};box-shadow:0 0 25px rgba(123,79,191,.3);background:{c['bg_light']}}}
+.search-box::placeholder{{color:{c['text_muted']}}}
+.si{{position:absolute;right:18px;top:50%;transform:translateY(-50%);font-size:1.2em;opacity:.4}}
+.er{{display:flex;gap:10px;justify-content:center;margin-top:14px}}
+.eb{{padding:5px 16px;border-radius:18px;border:1px solid {c['border']};background:{c['bg_mid']};color:{c['text_secondary']};cursor:pointer;font-size:.85em;transition:all .25s}}
+.eb:hover,.eb.a{{border-color:{c['purple_mid']};color:{c['purple_light']};background:{c['bg_lighter']}}}
+.eb.a{{background:{c['purple_dark']};color:{c['purple_pale']}}}
+.cards{{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;max-width:820px;width:100%}}
+.card{{background:linear-gradient(145deg,{c['bg_mid']},{c['bg_dark']});border:1px solid {c['border']};border-radius:14px;padding:22px 14px;text-align:center;cursor:pointer;transition:all .35s cubic-bezier(.4,0,.2,1);text-decoration:none;opacity:0;animation:scaleIn .5s ease forwards}}
+.card:nth-child(1){{animation-delay:.6s}}.card:nth-child(2){{animation-delay:.7s}}.card:nth-child(3){{animation-delay:.8s}}.card:nth-child(4){{animation-delay:.9s}}.card:nth-child(5){{animation-delay:1s}}.card:nth-child(6){{animation-delay:1.1s}}.card:nth-child(7){{animation-delay:1.15s}}.card:nth-child(8){{animation-delay:1.2s}}
+.card:hover{{transform:translateY(-7px) scale(1.02);border-color:{c['purple_mid']};box-shadow:0 14px 35px rgba(123,79,191,.2)}}
+.ci{{font-size:2em;margin-bottom:8px;display:block}}.ct{{color:{c['text_primary']};font-weight:600;font-size:.9em}}.cs{{color:{c['text_muted']};font-size:.75em;margin-top:3px}}
+.ft{{position:fixed;bottom:0;left:0;right:0;display:flex;justify-content:center;gap:40px;padding:14px;background:linear-gradient(transparent,{c['bg_darkest']})}}
+.st{{text-align:center}}.sn{{font-size:1.5em;font-weight:800;color:{c['purple_mid']}}}.sl{{color:{c['text_muted']};font-size:.8em}}
+.credit{{position:fixed;bottom:6px;right:14px;color:{c['text_muted']};font-size:.7em;opacity:.5;z-index:2}}
+.credit a{{color:{c['purple_light']};text-decoration:none}}
+</style></head><body>
+<canvas id="bg"></canvas>
+<div class="wrap">
+<div class="logo">OyNIx</div>
+<div class="tagline">Nyx-Powered Local AI Browser</div>
+<div class="search-wrap">
+<input class="search-box" id="si" placeholder="Search the web or ask Nyx AI..." autofocus onkeypress="if(event.key==='Enter')go(this.value)">
+<span class="si">&#128270;</span>
+<div class="er">
+<button class="eb a" onclick="se('nyx',this)">Nyx</button>
+<button class="eb" onclick="se('duckduckgo',this)">DuckDuckGo</button>
+<button class="eb" onclick="se('google',this)">Google</button>
+<button class="eb" onclick="se('brave',this)">Brave</button>
+</div></div>
+<div class="cards">
+<a class="card" href="oyn://ai-chat"><span class="ci">&#129302;</span><div class="ct">AI Chat</div><div class="cs">Local LLM</div></a>
+<a class="card" href="oyn://nyx-search"><span class="ci">&#128270;</span><div class="ct">Nyx Search</div><div class="cs">Auto-Indexed</div></a>
+<a class="card" href="oyn://settings"><span class="ci">&#9881;</span><div class="ct">Settings</div><div class="cs">Configure</div></a>
+<a class="card" href="oyn://database"><span class="ci">&#128218;</span><div class="ct">Site Database</div><div class="cs">Auto-Expands</div></a>
+<a class="card" href="oyn://categories"><span class="ci">&#128193;</span><div class="ct">Categories</div><div class="cs">Browse All</div></a>
+<a class="card" href="oyn://history"><span class="ci">&#128336;</span><div class="ct">History</div><div class="cs">Recent Pages</div></a>
+<a class="card" href="https://duckduckgo.com"><span class="ci">&#129413;</span><div class="ct">DuckDuckGo</div><div class="cs">Private Search</div></a>
+<a class="card" href="https://github.com"><span class="ci">&#128025;</span><div class="ct">GitHub</div><div class="cs">Code</div></a>
+</div></div>
+<div class="ft">
+<div class="st"><div class="sn">1400+</div><div class="sl">Curated Sites</div></div>
+<div class="st"><div class="sn">Auto</div><div class="sl">Expanding DB</div></div>
+<div class="st"><div class="sn">Local</div><div class="sl">AI Model</div></div>
+<div class="st"><div class="sn">Nyx</div><div class="sl">Search Engine</div></div>
 </div>
-
-<div class="stats">
-    <div class="stat">
-        <div class="stat-num">1400+</div>
-        <div class="stat-label">Indexed Sites</div>
-    </div>
-    <div class="stat">
-        <div class="stat-num">Local</div>
-        <div class="stat-label">AI Model</div>
-    </div>
-    <div class="stat">
-        <div class="stat-num">Nyx</div>
-        <div class="stat-label">Search Engine</div>
-    </div>
-    <div class="stat">
-        <div class="stat-num">&#9889;</div>
-        <div class="stat-label">Tree Tabs</div>
-    </div>
-</div>
-
+<div class="credit">Coded by Claude (Anthropic) &middot; Native Desktop App &middot; <a href="oyn://about">About</a></div>
 <script>
-var currentEngine = 'nyx';
-
-function setEngine(engine, btn) {{
-    currentEngine = engine;
-    document.querySelectorAll('.engine-btn').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
-    var ph = {{
-        'nyx': 'Search with Nyx engine...',
-        'duckduckgo': 'Search with DuckDuckGo...',
-        'google': 'Search with Google...',
-        'brave': 'Search with Brave...'
-    }};
-    document.getElementById('searchInput').placeholder = ph[engine] || 'Search...';
-}}
-
-function doSearch(q) {{
-    if (!q.trim()) return;
-    window.location = 'oyn://search?engine=' + currentEngine + '&q=' + encodeURIComponent(q);
-}}
-</script>
-</body>
-</html>'''
+var E='nyx';
+function se(e,b){{E=e;document.querySelectorAll('.eb').forEach(x=>x.classList.remove('a'));b.classList.add('a');var p={{'nyx':'Search with Nyx...','duckduckgo':'DuckDuckGo...','google':'Google...','brave':'Brave...'}};document.getElementById('si').placeholder=p[e]||'Search...'}}
+function go(q){{if(!q.trim())return;window.location='oyn://search?engine='+E+'&q='+encodeURIComponent(q)}}
+/* Particle canvas animation */
+var c=document.getElementById('bg'),x=c.getContext('2d'),W,H,pts=[];
+function resize(){{W=c.width=window.innerWidth;H=c.height=window.innerHeight}}
+window.addEventListener('resize',resize);resize();
+for(var i=0;i<80;i++)pts.push({{x:Math.random()*W,y:Math.random()*H,r:Math.random()*2+.5,dx:(Math.random()-.5)*.4,dy:(Math.random()-.5)*.4,o:Math.random()*.4+.1}});
+function draw(){{
+x.clearRect(0,0,W,H);
+for(var i=0;i<pts.length;i++){{
+var p=pts[i];
+p.x+=p.dx;p.y+=p.dy;
+if(p.x<0)p.x=W;if(p.x>W)p.x=0;if(p.y<0)p.y=H;if(p.y>H)p.y=0;
+x.beginPath();x.arc(p.x,p.y,p.r,0,Math.PI*2);
+x.fillStyle='rgba(123,79,191,'+p.o+')';x.fill();
+for(var j=i+1;j<pts.length;j++){{
+var q=pts[j],d=Math.hypot(p.x-q.x,p.y-q.y);
+if(d<130){{x.beginPath();x.moveTo(p.x,p.y);x.lineTo(q.x,q.y);
+x.strokeStyle='rgba(123,79,191,'+((.15)*(1-d/130))+')';x.lineWidth=.6;x.stroke()}}
+}}}}
+requestAnimationFrame(draw)}}
+draw();
+</script></body></html>'''
 
 
 def get_search_results_html(query, local_results, web_results, colors=None):

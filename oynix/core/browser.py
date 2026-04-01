@@ -34,7 +34,7 @@ from oynix.core.theme_engine import (
 from oynix.core.tree_tabs import TabManager
 from oynix.core.nyx_search import nyx_search
 from oynix.core.ai_manager import ai_manager
-from oynix.core.database import database
+from oynix.core.database import database, guess_category
 from oynix.core.security import security_manager
 from oynix.core.github_sync import github_sync
 
@@ -77,9 +77,12 @@ class OynixBrowser(QMainWindow):
             'default_search_engine': 'nyx',
             'show_security_prompts': True,
             'auto_index_pages': True,
+            'auto_expand_database': True,   # Auto-add visited + DDG sites to DB
+            'community_upload': False,       # Auto-upload new sites to shared GitHub
             'theme': 'nyx',
             'show_ai_panel': False,
         }
+        self._community_batch = []  # Buffer new sites for community upload
 
         self.current_theme = 'nyx'
         self.theme_colors = get_theme('nyx')
@@ -487,14 +490,34 @@ class OynixBrowser(QMainWindow):
         url = browser.url().toString()
         title = browser.page().title()
 
+        # Skip internal pages
+        if url.startswith("oyn://") or not url.startswith("http"):
+            return
+
         # Auto-index the page for Nyx search
-        if (self.config.get('auto_index_pages', True) and
-                not url.startswith("oyn://") and
-                url.startswith("http")):
-            # Get page text for indexing
+        if self.config.get('auto_index_pages', True):
             browser.page().toPlainText(
                 lambda text: nyx_search.index_page(url, title, text[:2000])
             )
+
+        # Auto-expand database: add visited site
+        if self.config.get('auto_expand_database', True) and title:
+            is_new = database.add_site(url, title, source="visited")
+            nyx_search.auto_expand_database = True
+            # Buffer new sites for community upload
+            if is_new and self.config.get('community_upload', False):
+                self._community_batch.append({
+                    'url': url, 'title': title,
+                    'description': '', 'category': guess_category(url, title),
+                })
+                if len(self._community_batch) >= 10:
+                    github_sync.community_upload(self._community_batch)
+                    self._community_batch = []
+        else:
+            nyx_search.auto_expand_database = False
+
+        # Update stats display
+        self._refresh_stats()
 
     def _on_current_view_changed(self, browser):
         """Active tab changed."""
@@ -519,6 +542,16 @@ class OynixBrowser(QMainWindow):
     def _update_status(self, message):
         """Update status bar message."""
         self.status_bar.showMessage(message, 5000)
+
+    def _refresh_stats(self):
+        """Refresh stats labels in status bar."""
+        db_stats = database.get_stats()
+        idx_stats = nyx_search.get_stats()
+        self.search_stats_label.setText(
+            f"DB: {db_stats['total']} sites "
+            f"({db_stats['discovered']} discovered) | "
+            f"Index: {idx_stats['indexed_pages']} pages"
+        )
 
     # ═══════════════════════════════════════════════════════════════════
     #  TOGGLE FEATURES
@@ -639,12 +672,25 @@ class OynixBrowser(QMainWindow):
         )
 
     def manage_database(self):
-        stats = nyx_search.get_stats()
+        db_stats = database.get_stats()
+        idx_stats = nyx_search.get_stats()
+        expand = "ON" if self.config.get('auto_expand_database') else "OFF"
         QMessageBox.information(
-            self, "Database Manager",
-            f"Curated Sites: {stats['database_sites']}\n"
-            f"Indexed Pages: {stats['indexed_pages']}\n"
-            f"Search Backend: {stats['backend']}"
+            self, "OyNIx Database Manager",
+            f"Curated Sites:    {db_stats['curated']}\n"
+            f"Discovered Sites: {db_stats['discovered']}\n"
+            f"Total Sites:      {db_stats['total']}\n"
+            f"Categories:       {db_stats['categories']}\n"
+            f"Indexed Pages:    {idx_stats['indexed_pages']}\n"
+            f"Search Backend:   {idx_stats['backend']}\n"
+            f"Auto-Expand:      {expand}\n"
+            f"\n"
+            f"Auto-expand adds sites you visit and sites\n"
+            f"found via DuckDuckGo to the local database.\n"
+            f"Toggle this in Settings > Search.\n"
+            f"\n"
+            f"This is a native desktop application.\n"
+            f"Coded by Claude (Anthropic) for the OyNIx project."
         )
 
     def open_ai_chat(self):
@@ -794,12 +840,21 @@ class OynixBrowser(QMainWindow):
 
     def check_updates(self):
         QMessageBox.information(self, "Updates",
-                                "You're running OyNIx v1.0.0")
+                                "You're running OyNIx v1.1.0")
 
     def show_release_notes(self):
         notes = (
-            "OyNIx Browser v1.0.0\n\n"
-            "What's New:\n"
+            "OyNIx Browser v1.1.0\n\n"
+            "What's New in v1.1:\n"
+            "- Auto-expanding database (learns from browsing + search)\n"
+            "- Animated particle canvas homepage\n"
+            "- Smooth animations on all actions\n"
+            "- Smart auto-categorization of discovered sites\n"
+            "- Category browser page\n"
+            "- History tracking\n"
+            "- Enhanced credits & about info\n"
+            "\n"
+            "v1.0 Features:\n"
             "- Tree-style tabs with graph view\n"
             "- Medium purple + black Nyx theme\n"
             "- Local LLM AI assistant (auto-downloads)\n"
@@ -808,25 +863,33 @@ class OynixBrowser(QMainWindow):
             "- GitHub database sync\n"
             "- 1400+ curated site database\n"
             "- Smart security prompts\n"
-            "- Complete UI redesign\n"
+            "\n"
+            "Coded by Claude (Anthropic)\n"
         )
         QMessageBox.information(self, "Release Notes", notes)
 
     def show_about(self):
+        db_stats = database.get_stats()
         about = (
-            "OyNIx Browser v1.0.0\n"
-            "The Nyx-Powered Local AI Browser\n\n"
+            "OyNIx Browser v1.1.0\n"
+            "The Nyx-Powered Local AI Browser\n"
+            "Native Desktop Application (NOT a web app)\n"
+            "\n"
             "Features:\n"
             "- Tree-style & normal tabs\n"
-            "- Local LLM (auto-downloads, runs on CPU)\n"
-            "- Nyx search with auto-indexing\n"
-            "- DuckDuckGo + Google + Brave\n"
-            "- 1400+ curated sites database\n"
+            "- Local LLM AI (auto-downloads, runs on CPU)\n"
+            "- Nyx search engine with auto-indexing\n"
+            "- Auto-expanding database (learns as you browse)\n"
+            "- DuckDuckGo + Google + Brave search\n"
+            f"- {db_stats['total']}+ site database ({db_stats['discovered']} discovered)\n"
             "- GitHub database sync\n"
-            "- Security prompts\n"
-            "- Beautiful purple/black theme\n\n"
-            "License: MIT\n"
-            "Author: OyNIx Team"
+            "- Smart security prompts\n"
+            "- Beautiful Nyx purple/black theme\n"
+            "- Animated UI with smooth transitions\n"
+            "\n"
+            "Coded by Claude (Anthropic)\n"
+            "For the OyNIx project\n"
+            "License: MIT"
         )
         QMessageBox.about(self, "About OyNIx", about)
 
