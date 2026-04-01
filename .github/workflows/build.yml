@@ -185,7 +185,7 @@ jobs:
   # ── Create GitHub Release ────────────────────────────────────────────
   release:
     needs: [build-deb, build-exe, build-pacman]
-    if: always() && github.ref_type == 'tag' && needs.build-deb.result != 'cancelled'
+    if: ${{ always() && !cancelled() && (needs.build-deb.result == 'success' || needs.build-exe.result == 'success' || needs.build-pacman.result == 'success') }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
@@ -195,7 +195,9 @@ jobs:
       - name: List artifacts
         run: ls -la
 
-      - uses: softprops/action-gh-release@v2
+      - name: Create release (tag push)
+        if: github.ref_type == 'tag'
+        uses: softprops/action-gh-release@v2
         with:
           files: |
             *.deb
@@ -203,3 +205,11 @@ jobs:
             *.pkg*
           generate_release_notes: true
           fail_on_unmatched_files: false
+
+      - name: Upload summary (manual run)
+        if: github.ref_type != 'tag'
+        run: |
+          echo "## Build Artifacts" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          ls -lh *.deb *.exe *.pkg* 2>/dev/null || echo "See uploaded artifacts"
+          echo '```' >> $GITHUB_STEP_SUMMARY
