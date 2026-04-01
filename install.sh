@@ -38,7 +38,7 @@ echo "  Found Python $PYTHON_VERSION"
 # Install pip dependencies
 echo -e "${PURPLE}[2/4]${NC} Installing dependencies..."
 $PYTHON_CMD -m pip install --upgrade pip
-$PYTHON_CMD -m pip install -r requirements.txt
+$PYTHON_CMD -m pip install -r requirements.txt --break-system-packages
 
 # Create data directories
 echo -e "${PURPLE}[3/4]${NC} Setting up data directories..."
