@@ -34,7 +34,7 @@ pip install --break-system-packages -r requirements.txt
 # or use a venv:
 python3 -m venv .venv && source .venv/bin/activate && pip install -r requirements.txt
 
-python -m oynix.oynix
+python3 -m oynix
 ```
 
 ### Requirements
@@ -52,7 +52,7 @@ python -m oynix.oynix
 oynix
 
 # Or run directly
-python -m oynix.oynix
+python3 -m oynix
 ```
 
 ### Keyboard Shortcuts
