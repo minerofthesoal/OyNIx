@@ -232,6 +232,105 @@ class GitHubSync(QObject):
         """Check if GitHub sync is configured."""
         return bool(self.config.get('token') and self.config.get('repo'))
 
+    # ── Community Auto-Upload ────────────────────────────────────────
+    def community_upload(self, new_sites, callback=None):
+        """
+        Upload newly discovered sites to the shared GitHub repo
+        so future OyNIx users benefit from a growing database.
+
+        Args:
+            new_sites: list of dicts with url, title, description, category
+            callback: optional (success, message) callback
+        """
+        if not self.is_configured() or not new_sites:
+            return
+
+        self._community_thread = CommunityUploader(
+            self.config['token'], self.config['repo'], new_sites,
+        )
+        self._community_thread.progress.connect(self.status_update.emit)
+        if callback:
+            self._community_thread.finished.connect(callback)
+        self._community_thread.start()
+
+
+class CommunityUploader(QThread):
+    """Batch-upload discovered sites to shared GitHub database."""
+    progress = pyqtSignal(str)
+    finished = pyqtSignal(bool, str)
+
+    TARGET = "database/community_sites.json"
+
+    def __init__(self, token, repo, sites):
+        super().__init__()
+        self.token = token
+        self.repo = repo
+        self.sites = sites
+
+    def run(self):
+        if not HAS_REQUESTS:
+            self.finished.emit(False, "requests not installed")
+            return
+        try:
+            import base64
+            headers = {
+                'Authorization': f'token {self.token}',
+                'Accept': 'application/vnd.github.v3+json',
+            }
+            api_url = (f"https://api.github.com/repos/{self.repo}"
+                       f"/contents/{self.TARGET}")
+
+            # Fetch existing community file
+            self.progress.emit("Fetching community database...")
+            existing = []
+            sha = None
+            resp = requests.get(api_url, headers=headers, timeout=10)
+            if resp.status_code == 200:
+                sha = resp.json().get('sha')
+                content = base64.b64decode(
+                    resp.json()['content']).decode()
+                existing = json.loads(content)
+
+            # Merge: only add URLs not already present
+            known = {s.get('url', '') for s in existing}
+            added = 0
+            for s in self.sites:
+                if s.get('url') and s['url'] not in known:
+                    existing.append({
+                        'url': s['url'],
+                        'title': s.get('title', ''),
+                        'description': s.get('description', ''),
+                        'category': s.get('category', 'General'),
+                        'source': 'community',
+                    })
+                    known.add(s['url'])
+                    added += 1
+
+            if added == 0:
+                self.finished.emit(True, "No new sites to upload")
+                return
+
+            # Upload merged file
+            self.progress.emit(f"Uploading {added} new sites...")
+            encoded = base64.b64encode(
+                json.dumps(existing, indent=2).encode()).decode()
+            data = {
+                'message': f'Community: +{added} sites - {time.strftime("%Y-%m-%d")}',
+                'content': encoded,
+            }
+            if sha:
+                data['sha'] = sha
+
+            resp = requests.put(api_url, headers=headers,
+                                json=data, timeout=30)
+            if resp.status_code in (200, 201):
+                self.finished.emit(True, f"Uploaded {added} sites to community DB")
+            else:
+                self.finished.emit(False, f"GitHub API: {resp.status_code}")
+
+        except Exception as e:
+            self.finished.emit(False, f"Community upload error: {e}")
+
 
 # Singleton
 github_sync = GitHubSync()

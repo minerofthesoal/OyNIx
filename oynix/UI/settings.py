@@ -119,6 +119,61 @@ class SettingsDialog(QDialog):
         g.setLayout(gl)
         layout.addWidget(g)
 
+        # Auto-expand database
+        g_expand = QGroupBox("Auto-Expand Database")
+        g_expand_l = QVBoxLayout()
+
+        auto_expand = QCheckBox(
+            "Auto-add visited websites and DuckDuckGo results to database")
+        auto_expand.setChecked(self.config.get('auto_expand_database', True))
+        auto_expand.stateChanged.connect(
+            lambda s: self.temp_config.update(
+                {'auto_expand_database': s == Qt.CheckState.Checked.value}))
+        g_expand_l.addWidget(auto_expand)
+
+        expand_desc = QLabel(
+            "When enabled, websites you visit and sites shown in\n"
+            "DuckDuckGo search results are automatically added to\n"
+            "the local database. Sites are smart-categorized by domain.\n"
+            "This is a native desktop feature - NOT a web app.\n\n"
+            "Coded by Claude (Anthropic) for the OyNIx project."
+        )
+        expand_desc.setWordWrap(True)
+        expand_desc.setStyleSheet(
+            "color: #706880; padding: 8px; "
+            "background: #1a1a24; border-radius: 6px;")
+        g_expand_l.addWidget(expand_desc)
+
+        g_expand.setLayout(g_expand_l)
+        layout.addWidget(g_expand)
+
+        # Community upload
+        g_comm = QGroupBox("Community Upload")
+        g_comm_l = QVBoxLayout()
+
+        comm_upload = QCheckBox(
+            "Auto-upload new/unknown sites to shared GitHub repo")
+        comm_upload.setChecked(self.config.get('community_upload', False))
+        comm_upload.stateChanged.connect(
+            lambda s: self.temp_config.update(
+                {'community_upload': s == Qt.CheckState.Checked.value}))
+        g_comm_l.addWidget(comm_upload)
+
+        comm_desc = QLabel(
+            "When enabled, newly discovered sites are periodically\n"
+            "uploaded to the configured GitHub repository so future\n"
+            "OyNIx users benefit from a growing shared database.\n"
+            "Requires GitHub sync to be configured."
+        )
+        comm_desc.setWordWrap(True)
+        comm_desc.setStyleSheet(
+            "color: #706880; padding: 8px; "
+            "background: #1a1a24; border-radius: 6px;")
+        g_comm_l.addWidget(comm_desc)
+
+        g_comm.setLayout(g_comm_l)
+        layout.addWidget(g_comm)
+
         # Default engine
         g2 = QGroupBox("Default Search Engine")
         g2l = QGridLayout()

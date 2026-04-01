@@ -1,0 +1,188 @@
+name: Build Packages
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  # ── Debian .deb ──────────────────────────────────────────────────────
+  build-deb:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y dpkg-dev fakeroot
+          pip install -r requirements.txt pyinstaller
+
+      - name: Build binary
+        run: |
+          pyinstaller --onedir --name oynix \
+            --add-data "oynix:oynix" \
+            --hidden-import PyQt6.QtWebEngineWidgets \
+            --hidden-import PyQt6.QtWebEngineCore \
+            oynix/oynix.py
+
+      - name: Package .deb
+        run: |
+          PKG=oynix_${{ github.ref_name }}_amd64
+          mkdir -p $PKG/DEBIAN
+          mkdir -p $PKG/usr/lib/oynix
+          mkdir -p $PKG/usr/bin
+          mkdir -p $PKG/usr/share/applications
+
+          cp -r dist/oynix/* $PKG/usr/lib/oynix/
+          cat > $PKG/usr/bin/oynix << 'LAUNCHER'
+          #!/bin/bash
+          exec /usr/lib/oynix/oynix "$@"
+          LAUNCHER
+          chmod +x $PKG/usr/bin/oynix
+
+          cat > $PKG/usr/share/applications/oynix.desktop << 'DESKTOP'
+          [Desktop Entry]
+          Name=OyNIx Browser
+          Comment=Nyx-themed browser with local AI
+          Exec=oynix
+          Type=Application
+          Categories=Network;WebBrowser;
+          DESKTOP
+
+          cat > $PKG/DEBIAN/control << CTRL
+          Package: oynix
+          Version: ${{ github.ref_name }}
+          Architecture: amd64
+          Maintainer: OyNIx Project
+          Description: Nyx-themed desktop browser with local AI assistant
+           Custom Firefox-inspired browser with tree tabs, local LLM,
+           auto-indexing Nyx search engine, and purple/black theme.
+          Depends: libgl1, libxkbcommon0, libnss3, libxcomposite1
+          CTRL
+
+          dpkg-deb --build $PKG
+          mv ${PKG}.deb oynix-${{ github.ref_name }}-amd64.deb
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: deb-package
+          path: '*.deb'
+
+  # ── Windows .exe ─────────────────────────────────────────────────────
+  build-exe:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt pyinstaller
+
+      - name: Build .exe
+        run: |
+          pyinstaller --onefile --name OyNIx `
+            --add-data "oynix;oynix" `
+            --hidden-import PyQt6.QtWebEngineWidgets `
+            --hidden-import PyQt6.QtWebEngineCore `
+            oynix/oynix.py
+
+      - name: Rename artifact
+        run: mv dist/OyNIx.exe OyNIx-${{ github.ref_name }}.exe
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: exe-package
+          path: '*.exe'
+
+  # ── Arch Linux pacman ────────────────────────────────────────────────
+  build-pacman:
+    runs-on: ubuntu-22.04
+    container: archlinux:latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup build environment
+        run: |
+          pacman -Syu --noconfirm base-devel python python-pip git
+
+      - name: Create PKGBUILD
+        run: |
+          mkdir -p pkg && cd pkg
+          cat > PKGBUILD << 'PKGBUILD_EOF'
+          pkgname=oynix
+          pkgver=${GITHUB_REF_NAME#v}
+          pkgrel=1
+          pkgdesc="Nyx-themed desktop browser with local AI assistant"
+          arch=('x86_64')
+          depends=('python' 'python-pyqt6' 'python-pyqt6-webengine' 'qt6-webengine')
+          makedepends=('python-build' 'python-installer' 'python-setuptools')
+
+          package() {
+            cd "$srcdir"
+            install -dm755 "$pkgdir/usr/lib/oynix"
+            cp -r "$startdir/../oynix" "$pkgdir/usr/lib/oynix/"
+            cp "$startdir/../requirements.txt" "$pkgdir/usr/lib/oynix/"
+
+            install -dm755 "$pkgdir/usr/bin"
+            cat > "$pkgdir/usr/bin/oynix" << 'LAUNCHER'
+          #!/bin/bash
+          exec python /usr/lib/oynix/oynix/oynix.py "$@"
+          LAUNCHER
+            chmod +x "$pkgdir/usr/bin/oynix"
+
+            install -Dm644 /dev/stdin "$pkgdir/usr/share/applications/oynix.desktop" << 'DESKTOP'
+          [Desktop Entry]
+          Name=OyNIx Browser
+          Comment=Nyx-themed browser with local AI
+          Exec=oynix
+          Type=Application
+          Categories=Network;WebBrowser;
+          DESKTOP
+          }
+          PKGBUILD_EOF
+
+      - name: Build package
+        run: |
+          cd pkg
+          useradd -m builder
+          chown -R builder:builder .
+          su builder -c "makepkg -sf --noconfirm" || \
+          su builder -c "makepkg -sf --noconfirm --skipinteg"
+
+      - name: Collect artifact
+        run: |
+          cp pkg/*.pkg.tar.zst oynix-${{ github.ref_name }}.pkg.tar.zst 2>/dev/null || \
+          cp pkg/*.pkg.tar.xz oynix-${{ github.ref_name }}.pkg.tar.xz 2>/dev/null || true
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pacman-package
+          path: 'oynix-*pkg*'
+
+  # ── Create GitHub Release ────────────────────────────────────────────
+  release:
+    needs: [build-deb, build-exe, build-pacman]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          merge-multiple: true
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            *.deb
+            *.exe
+            *.pkg*
+          generate_release_notes: true
