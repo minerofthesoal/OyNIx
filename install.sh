@@ -37,8 +37,22 @@ echo "  Found Python $PYTHON_VERSION"
 
 # Install pip dependencies
 echo -e "${PURPLE}[2/4]${NC} Installing dependencies..."
-$PYTHON_CMD -m pip install --upgrade pip
-$PYTHON_CMD -m pip install -r requirements.txt --break-system-packages
+
+# Prefer pipx if available, otherwise pip with --break-system-packages
+if command -v pipx &> /dev/null; then
+    echo "  Using pipx..."
+    # pipx is for apps; for libraries we still need pip but in a venv
+    $PYTHON_CMD -m venv .venv 2>/dev/null && source .venv/bin/activate 2>/dev/null
+    pip install --upgrade pip
+    pip install -r requirements.txt
+elif $PYTHON_CMD -m pip install --help 2>&1 | grep -q "break-system-packages"; then
+    echo "  Using pip with --break-system-packages..."
+    $PYTHON_CMD -m pip install --break-system-packages --upgrade pip
+    $PYTHON_CMD -m pip install --break-system-packages -r requirements.txt
+else
+    $PYTHON_CMD -m pip install --upgrade pip
+    $PYTHON_CMD -m pip install -r requirements.txt
+fi
 
 # Create data directories
 echo -e "${PURPLE}[3/4]${NC} Setting up data directories..."

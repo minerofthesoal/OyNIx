@@ -58,7 +58,7 @@ class ModelDownloader(QThread):
         if not HAS_HF:
             self.error.emit(
                 "huggingface_hub not installed. "
-                "Run: pip install huggingface-hub"
+                "Run: pip install --break-system-packages huggingface-hub"
             )
             return
 
@@ -118,7 +118,7 @@ class ModelLoader(QThread):
         if not HAS_LLAMA:
             self.error.emit(
                 "llama-cpp-python not installed. "
-                "Run: pip install llama-cpp-python"
+                "Run: pip install --break-system-packages llama-cpp-python"
             )
             return
 
