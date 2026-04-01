@@ -68,7 +68,8 @@ try:
     print(f"  {PURPLE}+{RESET} PyQt6 loaded")
 except ImportError:
     print("ERROR: PyQt6 not installed")
-    print("Run: pip install PyQt6 PyQt6-WebEngine")
+    print("Run: pip install --break-system-packages PyQt6 PyQt6-WebEngine")
+    print("  or: pipx install PyQt6 PyQt6-WebEngine")
     sys.exit(1)
 
 # Import browser core

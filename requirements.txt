@@ -1,5 +1,6 @@
 # OyNIx Browser - Dependencies
-# Install: pip install -r requirements.txt
+# Install: pip install --break-system-packages -r requirements.txt
+# Or use a venv: python3 -m venv .venv && source .venv/bin/activate && pip install -r requirements.txt
 
 # Core Browser Engine
 PyQt6>=6.5.0

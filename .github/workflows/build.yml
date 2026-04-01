@@ -22,7 +22,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y dpkg-dev fakeroot
-          pip install -r requirements.txt pyinstaller
+          pip install --break-system-packages -r requirements.txt pyinstaller
 
       - name: Build binary
         run: |
@@ -87,7 +87,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install -r requirements.txt pyinstaller
+          pip install --break-system-packages -r requirements.txt pyinstaller
 
       - name: Build .exe
         run: |
