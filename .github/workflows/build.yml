@@ -8,6 +8,9 @@ on:
 permissions:
   contents: write
 
+env:
+  APP_VERSION: ${{ github.ref_type == 'tag' && github.ref_name || '1.1.0-dev' }}
+
 jobs:
   # ── Debian .deb ──────────────────────────────────────────────────────
   build-deb:
@@ -35,7 +38,7 @@ jobs:
 
       - name: Package .deb
         run: |
-          VERSION="${GITHUB_REF_NAME}"
+          VERSION="${APP_VERSION#v}"
           PKG="oynix_${VERSION}_amd64"
           mkdir -p "${PKG}/DEBIAN"
           mkdir -p "${PKG}/usr/lib/oynix"
@@ -100,7 +103,7 @@ jobs:
             oynix/oynix.py
 
       - name: Rename artifact
-        run: Move-Item dist/OyNIx.exe "OyNIx-${{ github.ref_name }}.exe"
+        run: Move-Item dist/OyNIx.exe "OyNIx-${{ env.APP_VERSION }}.exe"
 
       - uses: actions/upload-artifact@v4
         with:
@@ -133,11 +136,9 @@ jobs:
             oynix/oynix.py
 
       - name: Create PKGBUILD
-        env:
-          TAG_NAME: ${{ github.ref_name }}
         run: |
           mkdir -p pkg
-          PKGVER="${TAG_NAME#v}"
+          PKGVER="${APP_VERSION#v}"
           cat > pkg/PKGBUILD <<EOF
           pkgname=oynix
           pkgver=${PKGVER}
@@ -172,8 +173,8 @@ jobs:
 
       - name: Collect artifact
         run: |
-          cp pkg/*.pkg.tar.zst "oynix-${{ github.ref_name }}.pkg.tar.zst" 2>/dev/null || \
-          cp pkg/*.pkg.tar.xz "oynix-${{ github.ref_name }}.pkg.tar.xz" 2>/dev/null || true
+          cp pkg/*.pkg.tar.zst "oynix-${APP_VERSION}.pkg.tar.zst" 2>/dev/null || \
+          cp pkg/*.pkg.tar.xz "oynix-${APP_VERSION}.pkg.tar.xz" 2>/dev/null || true
 
       - uses: actions/upload-artifact@v4
         with:
@@ -184,7 +185,7 @@ jobs:
   # ── Create GitHub Release ────────────────────────────────────────────
   release:
     needs: [build-deb, build-exe, build-pacman]
-    if: always() && needs.build-deb.result != 'cancelled'
+    if: always() && github.ref_type == 'tag' && needs.build-deb.result != 'cancelled'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
