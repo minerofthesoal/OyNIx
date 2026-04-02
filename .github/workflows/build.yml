@@ -109,7 +109,7 @@ jobs:
       - name: Install build tools
         run: |
           pacman -Syu --noconfirm
-          pacman -S --noconfirm --needed base-devel git python python-pip gcc
+          pacman -S --noconfirm --needed base-devel git python gcc
 
       - uses: actions/checkout@v4
 
