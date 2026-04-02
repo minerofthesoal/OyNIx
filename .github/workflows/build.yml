@@ -13,12 +13,25 @@ on:
 permissions:
   contents: write
 
-env:
-  RAW_VERSION: ${{ github.ref_type == 'tag' && github.ref_name || format('v{0}', github.event.inputs.version || '1.1.0') }}
-
 jobs:
+  # ── Compute version string ──────────────────────────────────────────
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.ver.outputs.version }}
+    steps:
+      - name: Compute version
+        id: ver
+        run: |
+          if [ "${{ github.ref_type }}" = "tag" ]; then
+            echo "version=${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "version=v${{ github.event.inputs.version || '1.1.0' }}" >> "$GITHUB_OUTPUT"
+          fi
+
   # ── Debian .deb ──────────────────────────────────────────────────────
   build-deb:
+    needs: prepare
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
@@ -31,7 +44,7 @@ jobs:
       - name: Build .deb
         run: |
           chmod +x scripts/build-deb.sh
-          ./scripts/build-deb.sh "${{ env.RAW_VERSION }}"
+          ./scripts/build-deb.sh "${{ needs.prepare.outputs.version }}"
 
       - uses: actions/upload-artifact@v4
         with:
@@ -40,6 +53,7 @@ jobs:
 
   # ── Windows .exe ─────────────────────────────────────────────────────
   build-exe:
+    needs: prepare
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -56,7 +70,6 @@ jobs:
         run: |
           @"
           import sys, os
-          # Ensure package is findable
           base = os.path.dirname(os.path.abspath(__file__))
           if hasattr(sys, '_MEIPASS'):
               base = sys._MEIPASS
@@ -78,7 +91,7 @@ jobs:
       - name: Rename
         shell: pwsh
         run: |
-          $v = "${{ env.RAW_VERSION }}" -replace '^v',''
+          $v = "${{ needs.prepare.outputs.version }}" -replace '^v',''
           Move-Item dist/OyNIx.exe "OyNIx-${v}-windows.exe"
 
       - uses: actions/upload-artifact@v4
@@ -88,19 +101,22 @@ jobs:
 
   # ── Arch Linux pacman ────────────────────────────────────────────────
   build-pacman:
+    needs: prepare
     runs-on: ubuntu-22.04
     container:
       image: archlinux:latest
     steps:
-      - name: Install base tools
-        run: pacman -Syu --noconfirm base-devel git
+      - name: Install build tools
+        run: |
+          pacman -Syu --noconfirm
+          pacman -S --noconfirm --needed base-devel git python python-pip gcc
 
       - uses: actions/checkout@v4
 
       - name: Build pacman package
         run: |
           chmod +x scripts/build-pacman.sh
-          ./scripts/build-pacman.sh "${{ env.RAW_VERSION }}"
+          ./scripts/build-pacman.sh "${{ needs.prepare.outputs.version }}"
 
       - uses: actions/upload-artifact@v4
         with:
@@ -110,19 +126,37 @@ jobs:
 
   # ── Release ──────────────────────────────────────────────────────────
   release:
-    needs: [build-deb, build-exe, build-pacman]
-    if: ${{ always() && !cancelled() && (needs.build-deb.result == 'success' || needs.build-exe.result == 'success' || needs.build-pacman.result == 'success') }}
+    needs: [prepare, build-deb, build-exe, build-pacman]
+    if: always()
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/download-artifact@v4
+      - name: Check if any build succeeded
+        id: check
+        run: |
+          deb="${{ needs.build-deb.result }}"
+          exe="${{ needs.build-exe.result }}"
+          pac="${{ needs.build-pacman.result }}"
+          echo "deb=$deb exe=$exe pac=$pac"
+          if [ "$deb" = "success" ] || [ "$exe" = "success" ] || [ "$pac" = "success" ]; then
+            echo "has_artifacts=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_artifacts=false" >> "$GITHUB_OUTPUT"
+            echo "All builds failed, skipping release."
+          fi
+
+      - name: Download artifacts
+        if: steps.check.outputs.has_artifacts == 'true'
+        uses: actions/download-artifact@v4
         with:
           merge-multiple: true
+        continue-on-error: true
 
       - name: List built artifacts
+        if: steps.check.outputs.has_artifacts == 'true'
         run: ls -lh *.deb *.exe *.pkg.tar.* 2>/dev/null || echo "Some artifacts missing"
 
       - name: Create GitHub Release
-        if: ${{ startsWith(github.ref, 'refs/tags/') }}
+        if: steps.check.outputs.has_artifacts == 'true' && startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}
@@ -131,12 +165,9 @@ jobs:
             ## OyNIx Browser ${{ github.ref_name }}
 
             ### Downloads
-            - **Debian/Ubuntu**: `.deb` package (install with `sudo dpkg -i`)
-            - **Windows**: `.exe` standalone installer
-            - **Arch Linux**: `.pkg.tar.zst` package (install with `sudo pacman -U`)
-
-            ### What's New
-            See commit history for changes.
+            - **Debian/Ubuntu**: `.deb` package — `sudo dpkg -i oynix-*.deb`
+            - **Windows**: `.exe` standalone binary
+            - **Arch Linux**: `.pkg.tar.zst` — `sudo pacman -U oynix-*.pkg.tar.zst`
 
             ---
             *Coded by Claude (Anthropic)*
@@ -147,7 +178,7 @@ jobs:
           fail_on_unmatched_files: false
 
       - name: Summary (non-tag builds)
-        if: ${{ !startsWith(github.ref, 'refs/tags/') }}
+        if: steps.check.outputs.has_artifacts == 'true' && !startsWith(github.ref, 'refs/tags/')
         run: |
           echo "## Build Artifacts" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
@@ -158,3 +189,15 @@ jobs:
           done
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "*Download from the Actions artifacts above.*" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Fail summary
+        if: steps.check.outputs.has_artifacts != 'true'
+        run: |
+          echo "## Build Failed" >> "$GITHUB_STEP_SUMMARY"
+          echo "All platform builds failed. Check individual job logs." >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Job | Result |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|-----|--------|" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Debian | ${{ needs.build-deb.result }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Windows | ${{ needs.build-exe.result }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Arch | ${{ needs.build-pacman.result }} |" >> "$GITHUB_STEP_SUMMARY"
