@@ -432,6 +432,14 @@ class TabManager(QWidget):
         """Get the currently active browser view."""
         return self.current_view
 
+    def toggle_mode(self):
+        """Toggle between tree tabs and normal tabs."""
+        self.set_tree_tabs_enabled(not self.use_tree_tabs)
+
+    def tab_count(self):
+        """Return the total number of open tabs."""
+        return len(self.views)
+
     def _on_tab_selected(self, browser_view):
         """Handle tab selection from tree sidebar."""
         if browser_view and browser_view in self.views:

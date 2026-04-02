@@ -724,3 +724,178 @@ body {{
     {"<div class='no-results'>No results found. Try different keywords.</div>" if total == 0 else ""}
 </div>
 </body></html>'''
+
+
+def get_external_search_theme_css():
+    """CSS to inject into external search engines (DDG, Google, Brave) for Nyx theming."""
+    c = NYX_COLORS
+    return f"""
+    body, html {{
+        background-color: {c['bg_darkest']} !important;
+        color: {c['text_primary']} !important;
+    }}
+    a {{ color: {c['purple_light']} !important; }}
+    a:visited {{ color: {c['purple_soft']} !important; }}
+    a:hover {{ color: {c['purple_glow']} !important; }}
+    input, textarea, select {{
+        background-color: {c['bg_mid']} !important;
+        color: {c['text_primary']} !important;
+        border: 1px solid {c['border']} !important;
+        border-radius: 8px !important;
+    }}
+    input:focus, textarea:focus {{
+        border-color: {c['purple_mid']} !important;
+        box-shadow: 0 0 12px rgba(123,79,191,0.3) !important;
+    }}
+    button, [type="submit"] {{
+        background-color: {c['purple_dark']} !important;
+        color: {c['purple_pale']} !important;
+        border: 1px solid {c['purple_mid']} !important;
+        border-radius: 6px !important;
+    }}
+    /* DuckDuckGo specific */
+    .result, .nrn-react-div, .results--main {{
+        background-color: {c['bg_dark']} !important;
+    }}
+    .result__body, .result__snippet {{
+        color: {c['text_secondary']} !important;
+    }}
+    .result__a {{
+        color: {c['purple_light']} !important;
+    }}
+    .result__url {{
+        color: {c['text_muted']} !important;
+    }}
+    .header, .header--aside {{
+        background-color: {c['bg_darkest']} !important;
+    }}
+    /* Google specific */
+    #search, #main, .g, .hlcw0c {{
+        background-color: {c['bg_dark']} !important;
+    }}
+    .LC20lb {{ color: {c['purple_light']} !important; }}
+    .VwiC3b {{ color: {c['text_secondary']} !important; }}
+    .yuRUbf a {{ color: {c['purple_light']} !important; }}
+    #searchform, .sfbg {{
+        background-color: {c['bg_darkest']} !important;
+    }}
+    /* Brave specific */
+    .snippet, .card {{
+        background-color: {c['bg_mid']} !important;
+        border-color: {c['border']} !important;
+    }}
+    .snippet-title {{ color: {c['purple_light']} !important; }}
+    .snippet-description {{ color: {c['text_secondary']} !important; }}
+    /* General overrides */
+    div, section, article, aside, nav, header, footer, main {{
+        background-color: inherit !important;
+        color: inherit !important;
+    }}
+    img {{ opacity: 0.9; }}
+    * {{
+        scrollbar-color: {c['scrollbar']} {c['bg_dark']} !important;
+    }}
+    ::-webkit-scrollbar {{ width: 8px; background: {c['bg_dark']}; }}
+    ::-webkit-scrollbar-thumb {{ background: {c['scrollbar']}; border-radius: 4px; }}
+    ::-webkit-scrollbar-thumb:hover {{ background: {c['scrollbar_hover']}; }}
+    """
+
+
+def get_categories_html(categories_data, colors=None):
+    """Generate browse-by-category page."""
+    c = colors or NYX_COLORS
+    cards = ""
+    for i, (cat, sites) in enumerate(sorted(categories_data.items())):
+        count = len(sites)
+        cards += f'''
+        <div class="cat-card" style="animation-delay:{i*0.05}s" onclick="toggle(this)">
+            <div class="cat-header">
+                <span class="cat-name">{cat.replace('_',' ').title()}</span>
+                <span class="cat-count">{count}</span>
+            </div>
+            <div class="cat-sites" style="display:none">
+                {''.join(f'<a class="site" href="{s[1]}">{s[0]}</a>' for s in sites[:20])}
+                {f'<div class="more">+{count-20} more</div>' if count > 20 else ''}
+            </div>
+        </div>'''
+
+    return f'''<!DOCTYPE html><html><head><meta charset="utf-8"><title>Browse Categories</title>
+<style>
+*{{margin:0;padding:0;box-sizing:border-box}}
+body{{background:{c['bg_darkest']};color:{c['text_primary']};font-family:'Segoe UI',sans-serif;padding:30px}}
+h1{{text-align:center;font-size:2em;margin-bottom:30px;background:linear-gradient(135deg,{c['purple_mid']},{c['purple_glow']});-webkit-background-clip:text;-webkit-text-fill-color:transparent}}
+.grid{{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;max-width:1200px;margin:0 auto}}
+.cat-card{{background:{c['bg_mid']};border:1px solid {c['border']};border-radius:12px;padding:16px;cursor:pointer;transition:all .3s;opacity:0;animation:fadeUp .4s ease forwards}}
+.cat-card:hover{{border-color:{c['purple_mid']};transform:translateY(-2px)}}
+@keyframes fadeUp{{from{{opacity:0;transform:translateY(10px)}}to{{opacity:1;transform:translateY(0)}}}}
+.cat-header{{display:flex;justify-content:space-between;align-items:center}}
+.cat-name{{font-weight:600;color:{c['purple_light']};font-size:1.05em}}
+.cat-count{{background:{c['purple_dark']};color:{c['purple_pale']};border-radius:10px;padding:2px 10px;font-size:.8em}}
+.cat-sites{{margin-top:12px;display:flex;flex-direction:column;gap:4px}}
+.site{{color:{c['text_secondary']};text-decoration:none;padding:4px 8px;border-radius:6px;font-size:.85em;transition:all .2s}}
+.site:hover{{background:{c['bg_lighter']};color:{c['purple_light']}}}
+.more{{color:{c['text_muted']};font-size:.8em;text-align:center;padding:4px}}
+</style></head><body>
+<h1>Browse Categories</h1>
+<div class="grid">{cards}</div>
+<script>function toggle(el){{var s=el.querySelector('.cat-sites');s.style.display=s.style.display==='none'?'flex':'none'}}</script>
+</body></html>'''
+
+
+def get_history_html(history_entries, colors=None):
+    """Generate history page grouped by date."""
+    c = colors or NYX_COLORS
+    from datetime import datetime
+
+    # Group by date
+    grouped = {}
+    for entry in history_entries:
+        ts = entry.get('timestamp', 0)
+        try:
+            date_key = datetime.fromtimestamp(ts).strftime('%Y-%m-%d')
+            date_label = datetime.fromtimestamp(ts).strftime('%B %d, %Y')
+        except (ValueError, OSError):
+            date_key = 'Unknown'
+            date_label = 'Unknown Date'
+        grouped.setdefault((date_key, date_label), []).append(entry)
+
+    sections = ""
+    for i, ((date_key, date_label), entries) in enumerate(
+            sorted(grouped.items(), key=lambda x: x[0][0], reverse=True)):
+        items = ""
+        for e in entries:
+            title = e.get('title', e.get('url', ''))
+            url = e.get('url', '')
+            visits = e.get('visit_count', 1)
+            items += f'''<a class="h-item" href="{url}">
+                <span class="h-title">{title}</span>
+                <span class="h-url">{url}</span>
+                <span class="h-visits">{visits}x</span>
+            </a>'''
+        sections += f'''
+        <div class="h-section" style="animation-delay:{i*0.1}s">
+            <div class="h-date" onclick="this.parentElement.classList.toggle('collapsed')">{date_label}</div>
+            <div class="h-entries">{items}</div>
+        </div>'''
+
+    return f'''<!DOCTYPE html><html><head><meta charset="utf-8"><title>History</title>
+<style>
+*{{margin:0;padding:0;box-sizing:border-box}}
+body{{background:{c['bg_darkest']};color:{c['text_primary']};font-family:'Segoe UI',sans-serif;padding:30px}}
+h1{{text-align:center;font-size:2em;margin-bottom:30px;background:linear-gradient(135deg,{c['purple_mid']},{c['purple_glow']});-webkit-background-clip:text;-webkit-text-fill-color:transparent}}
+.container{{max-width:900px;margin:0 auto}}
+.h-section{{margin-bottom:16px;opacity:0;animation:fadeUp .4s ease forwards}}
+.h-section.collapsed .h-entries{{display:none}}
+@keyframes fadeUp{{from{{opacity:0;transform:translateY(10px)}}to{{opacity:1;transform:translateY(0)}}}}
+.h-date{{font-size:1.1em;font-weight:600;color:{c['purple_light']};padding:10px 16px;background:{c['bg_mid']};border-radius:10px;cursor:pointer;margin-bottom:6px;transition:all .2s}}
+.h-date:hover{{background:{c['bg_light']}}}
+.h-entries{{display:flex;flex-direction:column;gap:2px;padding-left:12px}}
+.h-item{{display:flex;align-items:center;gap:12px;padding:8px 14px;border-radius:8px;text-decoration:none;transition:all .2s}}
+.h-item:hover{{background:{c['bg_lighter']}}}
+.h-title{{color:{c['text_primary']};font-size:.9em;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}}
+.h-url{{color:{c['text_muted']};font-size:.75em;max-width:250px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}}
+.h-visits{{color:{c['purple_soft']};font-size:.75em;background:{c['purple_dark']};padding:2px 8px;border-radius:8px}}
+</style></head><body>
+<h1>Browsing History</h1>
+<div class="container">{sections}</div>
+</body></html>'''

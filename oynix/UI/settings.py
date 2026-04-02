@@ -174,6 +174,51 @@ class SettingsDialog(QDialog):
         g_comm.setLayout(g_comm_l)
         layout.addWidget(g_comm)
 
+        # Force Nyx Theme on External Search Engines
+        g_theme = QGroupBox("External Search Theme")
+        g_theme_l = QVBoxLayout()
+
+        force_theme = QCheckBox("Force Nyx purple/black theme on external search engines")
+        force_theme.setChecked(self.config.get('force_nyx_theme_external', True))
+        force_theme.stateChanged.connect(
+            lambda s: self.temp_config.update(
+                {'force_nyx_theme_external': s == Qt.CheckState.Checked.value}))
+        g_theme_l.addWidget(force_theme)
+
+        force_desc = QLabel(
+            "Injects the Nyx purple/black CSS into DuckDuckGo, Google,\n"
+            "and Brave search results for a consistent browsing experience."
+        )
+        force_desc.setWordWrap(True)
+        force_desc.setStyleSheet(
+            "color: #706880; padding: 8px; "
+            "background: #1a1a24; border-radius: 6px;")
+        g_theme_l.addWidget(force_desc)
+
+        g_theme.setLayout(g_theme_l)
+        layout.addWidget(g_theme)
+
+        # Auto-Compare Sites
+        g_compare = QGroupBox("Site Comparison")
+        g_compare_l = QVBoxLayout()
+
+        auto_compare = QCheckBox("Auto-compare visited sites to known database")
+        auto_compare.setChecked(self.config.get('auto_compare_sites', True))
+        auto_compare.stateChanged.connect(
+            lambda s: self.temp_config.update(
+                {'auto_compare_sites': s == Qt.CheckState.Checked.value}))
+        g_compare_l.addWidget(auto_compare)
+
+        auto_update_repo = QCheckBox("Auto-update repository database with new sites")
+        auto_update_repo.setChecked(self.config.get('auto_update_repo_db', False))
+        auto_update_repo.stateChanged.connect(
+            lambda s: self.temp_config.update(
+                {'auto_update_repo_db': s == Qt.CheckState.Checked.value}))
+        g_compare_l.addWidget(auto_update_repo)
+
+        g_compare.setLayout(g_compare_l)
+        layout.addWidget(g_compare)
+
         # Default engine
         g2 = QGroupBox("Default Search Engine")
         g2l = QGridLayout()

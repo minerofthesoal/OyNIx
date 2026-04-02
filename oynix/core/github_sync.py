@@ -232,6 +232,78 @@ class GitHubSync(QObject):
         """Check if GitHub sync is configured."""
         return bool(self.config.get('token') and self.config.get('repo'))
 
+    # ── Auto-Compare and Update ────────────────────────────────────
+    def auto_compare_and_update(self, current_url, current_title, database_ref):
+        """
+        Compare the current site against the known database.
+        If it's a new site, add it to the local DB and optionally
+        queue it for community upload.
+
+        Args:
+            current_url: URL currently being visited
+            current_title: page title
+            database_ref: reference to the OynixDatabase instance
+
+        Returns:
+            dict with comparison results or None
+        """
+        if not current_url or not current_url.startswith('http'):
+            return None
+
+        comparison = database_ref.compare_site(current_url, current_title)
+
+        if not comparison['is_known']:
+            # New site — add to local discovered database
+            database_ref.add_sites_batch([{
+                'url': current_url,
+                'title': current_title,
+                'description': '',
+            }], source='browsing')
+
+            self.status_update.emit(
+                f"New site discovered: {comparison['domain']} "
+                f"(category: {comparison['category_guess']})"
+            )
+
+        return comparison
+
+    def queue_for_community_upload(self, sites):
+        """Queue newly discovered sites for periodic community upload."""
+        queue_file = os.path.join(SYNC_DIR, "upload_queue.json")
+        os.makedirs(SYNC_DIR, exist_ok=True)
+        existing = []
+        try:
+            with open(queue_file, 'r') as f:
+                existing = json.load(f)
+        except (FileNotFoundError, json.JSONDecodeError):
+            pass
+
+        known_urls = {s['url'] for s in existing}
+        for site in sites:
+            if site.get('url') and site['url'] not in known_urls:
+                existing.append(site)
+                known_urls.add(site['url'])
+
+        with open(queue_file, 'w') as f:
+            json.dump(existing, f, indent=2)
+
+    def flush_upload_queue(self, callback=None):
+        """Upload all queued sites to the community database."""
+        queue_file = os.path.join(SYNC_DIR, "upload_queue.json")
+        try:
+            with open(queue_file, 'r') as f:
+                queued = json.load(f)
+        except (FileNotFoundError, json.JSONDecodeError):
+            queued = []
+
+        if not queued:
+            return
+
+        self.community_upload(queued, callback=callback)
+        # Clear queue after upload
+        with open(queue_file, 'w') as f:
+            json.dump([], f)
+
     # ── Community Auto-Upload ────────────────────────────────────────
     def community_upload(self, new_sites, callback=None):
         """

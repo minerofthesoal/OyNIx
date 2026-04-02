@@ -316,11 +316,12 @@ class NyxSearchEngine(QObject):
             engine: 'nyx' (local + DDG), 'duckduckgo', 'google', 'brave'
 
         Returns:
-            dict with 'local', 'database', keys.
+            dict with 'local', 'database', 'relevant_sites' keys.
             Web results arrive async via web_results_ready signal.
         """
         local_results = []
         db_results = []
+        relevant_sites = []
 
         if engine in ('nyx', 'duckduckgo'):
             # Search local Nyx index
@@ -338,6 +339,13 @@ class NyxSearchEngine(QObject):
                     'source': 'database',
                 })
 
+            # Filter and rank: deduplicate, score by relevance
+            local_results = self._rank_and_filter(local_results, query)
+            db_results = self._rank_and_filter(db_results, query)
+
+            # Find relevant sites from DB that relate to the query topic
+            relevant_sites = self._find_relevant_sites(query, db_results)
+
         # Start web search in background
         if engine == 'nyx' or engine == 'duckduckgo':
             self._ddg_thread = DuckDuckGoFetcher(query)
@@ -348,7 +356,107 @@ class NyxSearchEngine(QObject):
         return {
             'local': local_results,
             'database': db_results,
+            'relevant_sites': relevant_sites,
         }
+
+    def _rank_and_filter(self, results, query):
+        """Score, deduplicate, and rank results by relevance to query."""
+        if not results:
+            return results
+
+        query_terms = set(query.lower().split())
+        seen_urls = set()
+        scored = []
+
+        for r in results:
+            url = r.get('url', '')
+            if url in seen_urls:
+                continue
+            seen_urls.add(url)
+
+            score = 0.0
+            title = (r.get('title') or '').lower()
+            desc = (r.get('description') or '').lower()
+            domain = urlparse(url).netloc.lower()
+
+            for term in query_terms:
+                # Title match (highest weight)
+                if term in title:
+                    score += 10.0
+                    if title.startswith(term):
+                        score += 5.0
+                # Domain match
+                if term in domain:
+                    score += 8.0
+                # Description match
+                if term in desc:
+                    score += 3.0
+                # URL path match
+                if term in url.lower():
+                    score += 2.0
+
+            # Boost rated sites
+            rating = r.get('rating', '')
+            if rating:
+                try:
+                    score += float(rating) * 2
+                except (ValueError, TypeError):
+                    pass
+
+            r['_score'] = score
+            scored.append(r)
+
+        # Sort by score descending
+        scored.sort(key=lambda x: x.get('_score', 0), reverse=True)
+        # Remove internal score key
+        for r in scored:
+            r.pop('_score', None)
+        return scored
+
+    def _find_relevant_sites(self, query, already_found):
+        """Find related sites from the database that the user might want."""
+        already_urls = {r['url'] for r in already_found}
+        relevant = []
+
+        # Extract likely categories from query
+        query_lower = query.lower()
+        category_hints = {
+            'python': 'development', 'javascript': 'development', 'code': 'development',
+            'programming': 'development', 'github': 'development', 'api': 'development',
+            'react': 'development', 'rust': 'development', 'linux': 'development',
+            'news': 'news', 'reddit': 'social', 'twitter': 'social',
+            'youtube': 'media', 'video': 'media', 'music': 'media',
+            'email': 'productivity', 'docs': 'productivity', 'office': 'productivity',
+            'game': 'gaming', 'steam': 'gaming',
+            'shop': 'shopping', 'buy': 'shopping', 'amazon': 'shopping',
+            'learn': 'education', 'course': 'education', 'tutorial': 'education',
+            'ai': 'ai_ml', 'machine learning': 'ai_ml', 'chatgpt': 'ai_ml',
+        }
+
+        matched_categories = set()
+        for keyword, cat in category_hints.items():
+            if keyword in query_lower:
+                matched_categories.add(cat)
+
+        if matched_categories:
+            all_sites = self.database.get_all_sites()
+            for site in all_sites:
+                url = site.get('url', '')
+                if url in already_urls:
+                    continue
+                cat = site.get('category', '').lower()
+                if cat in matched_categories:
+                    relevant.append({
+                        'url': url,
+                        'title': site.get('title', urlparse(url).netloc),
+                        'description': site.get('description', ''),
+                        'category': site.get('category', ''),
+                        'source': 'related',
+                    })
+                    if len(relevant) >= 8:
+                        break
+
+        return relevant
 
     def get_web_search_url(self, query, engine='duckduckgo'):
         """Get a direct web search URL for external engines."""
