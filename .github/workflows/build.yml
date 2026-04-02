@@ -4,12 +4,17 @@ on:
   push:
     tags: ['v*']
   workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version (e.g. 1.1.0)'
+        default: '1.1.0'
+        required: false
 
 permissions:
   contents: write
 
 env:
-  APP_VERSION: ${{ github.ref_type == 'tag' && github.ref_name || '1.1.0-dev' }}
+  RAW_VERSION: ${{ github.ref_type == 'tag' && github.ref_name || format('v{0}', github.event.inputs.version || '1.1.0') }}
 
 jobs:
   # ── Debian .deb ──────────────────────────────────────────────────────
@@ -18,64 +23,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-
-      - name: Install dependencies
+      - name: Install build tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y dpkg-dev fakeroot
-          pip install -r requirements.txt
+          sudo apt-get install -y dpkg-dev fakeroot gcc g++
 
-      - name: Package .deb
+      - name: Build .deb
         run: |
-          VERSION="${APP_VERSION#v}"
-          PKG="oynix_${VERSION}_amd64"
-          mkdir -p "${PKG}/DEBIAN"
-          mkdir -p "${PKG}/usr/lib/oynix"
-          mkdir -p "${PKG}/usr/bin"
-          mkdir -p "${PKG}/usr/share/applications"
-
-          cp -r oynix "${PKG}/usr/lib/oynix/"
-          cp requirements.txt "${PKG}/usr/lib/oynix/"
-
-          cat > "${PKG}/usr/bin/oynix" <<'LAUNCHER'
-#!/bin/bash
-cd /usr/lib/oynix
-exec python3 -m oynix "$@"
-LAUNCHER
-          chmod +x "${PKG}/usr/bin/oynix"
-
-          cat > "${PKG}/usr/share/applications/oynix.desktop" <<'DESKTOP'
-[Desktop Entry]
-Name=OyNIx Browser
-Comment=Nyx-themed browser with local AI
-Exec=oynix
-Type=Application
-Categories=Network;WebBrowser;
-DESKTOP
-
-          cat > "${PKG}/DEBIAN/control" <<CTRL
-Package: oynix
-Version: ${VERSION}
-Architecture: amd64
-Maintainer: OyNIx Project
-Description: Nyx-themed desktop browser with local AI assistant
- Custom Firefox-inspired browser with tree tabs, local LLM,
- auto-indexing Nyx search engine, and purple/black theme.
-Depends: python3, python3-pip, libgl1, libxkbcommon0, libnss3, libxcomposite1
-CTRL
-
-          cat > "${PKG}/DEBIAN/postinst" <<'POSTINST'
-#!/bin/bash
-pip install --break-system-packages -r /usr/lib/oynix/requirements.txt 2>/dev/null || \
-pip install -r /usr/lib/oynix/requirements.txt 2>/dev/null || true
-POSTINST
-          chmod +x "${PKG}/DEBIAN/postinst"
-
-          dpkg-deb --build "${PKG}"
-          mv "${PKG}.deb" "oynix-${VERSION}-amd64.deb"
+          chmod +x scripts/build-deb.sh
+          ./scripts/build-deb.sh "${{ env.RAW_VERSION }}"
 
       - uses: actions/upload-artifact@v4
         with:
@@ -95,14 +51,20 @@ POSTINST
       - name: Install dependencies
         run: pip install -r requirements.txt pyinstaller
 
-      - name: Create launcher script
+      - name: Create entry script
+        shell: pwsh
         run: |
-          Set-Content -Path "run_oynix.py" -Value @"
+          @"
           import sys, os
-          sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+          # Ensure package is findable
+          base = os.path.dirname(os.path.abspath(__file__))
+          if hasattr(sys, '_MEIPASS'):
+              base = sys._MEIPASS
+          if base not in sys.path:
+              sys.path.insert(0, base)
           from oynix.oynix import main
           main()
-          "@
+          "@ | Set-Content -Path "run_oynix.py" -Encoding UTF8
 
       - name: Build .exe
         run: |
@@ -113,8 +75,11 @@ POSTINST
             --hidden-import PyQt6.sip `
             run_oynix.py
 
-      - name: Rename artifact
-        run: Move-Item dist/OyNIx.exe "OyNIx-${{ env.APP_VERSION }}.exe"
+      - name: Rename
+        shell: pwsh
+        run: |
+          $v = "${{ env.RAW_VERSION }}" -replace '^v',''
+          Move-Item dist/OyNIx.exe "OyNIx-${v}-windows.exe"
 
       - uses: actions/upload-artifact@v4
         with:
@@ -127,61 +92,23 @@ POSTINST
     container:
       image: archlinux:latest
     steps:
-      - name: Setup build environment
-        run: |
-          pacman -Syu --noconfirm base-devel python python-pip git \
-            python-pyqt6 python-pyqt6-webengine qt6-webengine 2>/dev/null || \
-          pacman -Syu --noconfirm base-devel python python-pip git
+      - name: Install base tools
+        run: pacman -Syu --noconfirm base-devel git
 
       - uses: actions/checkout@v4
 
-      - name: Create PKGBUILD
+      - name: Build pacman package
         run: |
-          mkdir -p pkg
-          PKGVER=$(echo "${APP_VERSION#v}" | tr -c '[:alnum:].' '.')
-          cat > pkg/PKGBUILD <<EOF
-pkgname=oynix
-pkgver=${PKGVER}
-pkgrel=1
-pkgdesc="Nyx-themed desktop browser with local AI assistant"
-arch=('x86_64')
-depends=('python' 'python-pip')
-
-package() {
-  install -dm755 "\$pkgdir/usr/lib/oynix"
-  cp -r "\$startdir/../oynix" "\$pkgdir/usr/lib/oynix/"
-  cp "\$startdir/../requirements.txt" "\$pkgdir/usr/lib/oynix/"
-
-  install -dm755 "\$pkgdir/usr/bin"
-  printf '#!/bin/bash\\ncd /usr/lib/oynix\\nexec python -m oynix "\$@"\\n' \\
-    > "\$pkgdir/usr/bin/oynix"
-  chmod +x "\$pkgdir/usr/bin/oynix"
-
-  install -dm755 "\$pkgdir/usr/share/applications"
-  printf '[Desktop Entry]\\nName=OyNIx Browser\\nComment=Nyx-themed browser with local AI\\nExec=oynix\\nType=Application\\nCategories=Network;WebBrowser;\\n' \\
-    > "\$pkgdir/usr/share/applications/oynix.desktop"
-}
-EOF
-
-      - name: Build package
-        run: |
-          cd pkg
-          useradd -m builder 2>/dev/null || true
-          chown -R builder:builder . ..
-          su builder -c "makepkg -sf --noconfirm --skipinteg"
-
-      - name: Collect artifact
-        run: |
-          cp pkg/*.pkg.tar.zst "oynix-${APP_VERSION}.pkg.tar.zst" 2>/dev/null || \
-          cp pkg/*.pkg.tar.xz "oynix-${APP_VERSION}.pkg.tar.xz" 2>/dev/null || true
+          chmod +x scripts/build-pacman.sh
+          ./scripts/build-pacman.sh "${{ env.RAW_VERSION }}"
 
       - uses: actions/upload-artifact@v4
         with:
           name: pacman-package
-          path: 'oynix-*pkg*'
+          path: '*.pkg.tar.*'
           if-no-files-found: warn
 
-  # ── Create GitHub Release ────────────────────────────────────────────
+  # ── Release ──────────────────────────────────────────────────────────
   release:
     needs: [build-deb, build-exe, build-pacman]
     if: ${{ always() && !cancelled() && (needs.build-deb.result == 'success' || needs.build-exe.result == 'success' || needs.build-pacman.result == 'success') }}
@@ -191,25 +118,43 @@ EOF
         with:
           merge-multiple: true
 
-      - name: List artifacts
-        run: ls -la
+      - name: List built artifacts
+        run: ls -lh *.deb *.exe *.pkg.tar.* 2>/dev/null || echo "Some artifacts missing"
 
-      - name: Create release (tag push)
+      - name: Create GitHub Release
         if: ${{ startsWith(github.ref, 'refs/tags/') }}
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}
+          name: "OyNIx ${{ github.ref_name }}"
+          body: |
+            ## OyNIx Browser ${{ github.ref_name }}
+
+            ### Downloads
+            - **Debian/Ubuntu**: `.deb` package (install with `sudo dpkg -i`)
+            - **Windows**: `.exe` standalone installer
+            - **Arch Linux**: `.pkg.tar.zst` package (install with `sudo pacman -U`)
+
+            ### What's New
+            See commit history for changes.
+
+            ---
+            *Coded by Claude (Anthropic)*
           files: |
             *.deb
             *.exe
-            *.pkg*
-          generate_release_notes: true
+            *.pkg.tar.*
           fail_on_unmatched_files: false
 
-      - name: Upload summary (manual run)
+      - name: Summary (non-tag builds)
         if: ${{ !startsWith(github.ref, 'refs/tags/') }}
         run: |
-          echo "## Build Artifacts" >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
-          ls -lh *.deb *.exe *.pkg* 2>/dev/null || echo "See uploaded artifacts"
-          echo '```' >> $GITHUB_STEP_SUMMARY
+          echo "## Build Artifacts" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "| File | Size |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|------|------|" >> "$GITHUB_STEP_SUMMARY"
+          for f in *.deb *.exe *.pkg.tar.*; do
+            [ -f "$f" ] && echo "| $f | $(du -h "$f" | cut -f1) |" >> "$GITHUB_STEP_SUMMARY"
+          done
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "*Download from the Actions artifacts above.*" >> "$GITHUB_STEP_SUMMARY"
