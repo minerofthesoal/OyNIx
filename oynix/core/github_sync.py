@@ -332,5 +332,18 @@ class CommunityUploader(QThread):
             self.finished.emit(False, f"Community upload error: {e}")
 
 
-# Singleton
-github_sync = GitHubSync()
+# Lazy singleton - must not create QObject before QApplication exists
+_github_sync = None
+
+def _get_github_sync():
+    global _github_sync
+    if _github_sync is None:
+        _github_sync = GitHubSync()
+    return _github_sync
+
+class _GitHubSyncProxy:
+    """Proxy that delays GitHubSync creation until first access."""
+    def __getattr__(self, name):
+        return getattr(_get_github_sync(), name)
+
+github_sync = _GitHubSyncProxy()

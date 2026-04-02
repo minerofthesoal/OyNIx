@@ -404,5 +404,18 @@ class OynixAIManager(QObject):
             return {'status': 'fallback', 'model': 'rule-based'}
 
 
-# Singleton
-ai_manager = OynixAIManager()
+# Lazy singleton - must not create QObject before QApplication exists
+_ai_manager = None
+
+def _get_ai_manager():
+    global _ai_manager
+    if _ai_manager is None:
+        _ai_manager = OynixAIManager()
+    return _ai_manager
+
+class _AIManagerProxy:
+    """Proxy that delays OynixAIManager creation until first access."""
+    def __getattr__(self, name):
+        return getattr(_get_ai_manager(), name)
+
+ai_manager = _AIManagerProxy()

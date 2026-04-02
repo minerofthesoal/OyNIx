@@ -41,6 +41,22 @@ fi
 PYVER=$($PYTHON_CMD -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')
 echo -e "  Found ${BOLD}Python ${PYVER}${NC} ($PYTHON_CMD)"
 
+# ── Step 1.5: System libraries ──────────────────────────────────
+echo -e "${PURPLE}[1.5/5]${NC} Checking system libraries..."
+if ! $PYTHON_CMD -c "from ctypes import cdll; cdll.LoadLibrary('libEGL.so.1')" 2>/dev/null; then
+    echo -e "  ${DIM}Installing missing system libraries...${NC}"
+    if command -v apt-get &>/dev/null; then
+        sudo apt-get install -y libegl1 libgl1 libxkbcommon0 libnss3 libxcomposite1 2>/dev/null || \
+            echo -e "  ${DIM}Could not auto-install. Run: sudo apt install libegl1 libgl1 libxkbcommon0${NC}"
+    elif command -v pacman &>/dev/null; then
+        sudo pacman -S --noconfirm --needed libglvnd nss libxcomposite 2>/dev/null || true
+    elif command -v dnf &>/dev/null; then
+        sudo dnf install -y mesa-libEGL mesa-libGL libxkbcommon nss 2>/dev/null || true
+    fi
+else
+    echo -e "  ${DIM}System libraries OK${NC}"
+fi
+
 # ── Step 2: Python dependencies ─────────────────────────────────
 echo -e "${PURPLE}[2/5]${NC} Installing Python dependencies..."
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-OyNIx Browser v1.0.0 - The Nyx-Powered Local AI Browser
+OyNIx Browser v1.1.0 - The Nyx-Powered Local AI Browser
 Main Launcher and Entry Point
 
 Features:
@@ -31,7 +31,7 @@ Architecture:
 
 Author: OyNIx Team
 License: MIT
-Version: 1.0.0
+Version: 1.1.0
 """
 
 import sys
@@ -50,7 +50,7 @@ DIM = "\033[2m"
 
 print()
 print(f"{PURPLE}{BOLD}  ╔═══════════════════════════════════════════════╗{RESET}")
-print(f"{PURPLE}{BOLD}  ║         OyNIx Browser v1.0.0                 ║{RESET}")
+print(f"{PURPLE}{BOLD}  ║         OyNIx Browser v1.1.0                 ║{RESET}")
 print(f"{PURPLE}{BOLD}  ║    The Nyx-Powered Local AI Browser          ║{RESET}")
 print(f"{PURPLE}{BOLD}  ╚═══════════════════════════════════════════════╝{RESET}")
 print()
@@ -66,38 +66,43 @@ try:
     from PyQt6.QtWidgets import QApplication
     from PyQt6.QtCore import Qt
     print(f"  {PURPLE}+{RESET} PyQt6 loaded")
-except ImportError:
-    print("ERROR: PyQt6 not installed")
-    print("Run: pip install --break-system-packages PyQt6 PyQt6-WebEngine")
-    print("  or: pipx install PyQt6 PyQt6-WebEngine")
-    sys.exit(1)
-
-# Import browser core
-try:
-    from oynix.core.browser import OynixBrowser
-    print(f"  {PURPLE}+{RESET} Browser core loaded")
 except ImportError as e:
-    print(f"ERROR: Failed to load browser core: {e}")
-    import traceback
-    traceback.print_exc()
+    err = str(e)
+    if 'libEGL' in err or 'libGL' in err or '.so' in err:
+        print(f"ERROR: Missing system library: {err}")
+        print("Fix:  sudo apt install libegl1 libgl1 libxkbcommon0")
+        print("      (or equivalent for your distro)")
+    else:
+        print("ERROR: PyQt6 not installed")
+        print("Run: pip install --break-system-packages PyQt6 PyQt6-WebEngine")
     sys.exit(1)
-
 
 def main():
     """Main entry point."""
     print()
     print(f"{DIM}  Initializing...{RESET}")
 
-    # Create application
+    # Create QApplication FIRST - required before any QObject/QWidget
     app = QApplication(sys.argv)
     app.setApplicationName("OyNIx Browser")
-    app.setApplicationVersion("1.0.0")
+    app.setApplicationVersion("1.1.0")
     app.setOrganizationName("OyNIx")
 
     # Create data directories
     config_dir = os.path.expanduser("~/.config/oynix")
     for subdir in ['models', 'search_index', 'database', 'cache', 'sync']:
         os.makedirs(os.path.join(config_dir, subdir), exist_ok=True)
+
+    # Import browser core AFTER QApplication exists
+    # (modules contain QObject singletons that need it)
+    try:
+        from oynix.core.browser import OynixBrowser
+        print(f"  {PURPLE}+{RESET} Browser core loaded")
+    except ImportError as e:
+        print(f"ERROR: Failed to load browser core: {e}")
+        import traceback
+        traceback.print_exc()
+        sys.exit(1)
 
     # Create and show browser
     print(f"  {PURPLE}+{RESET} Creating browser window...")

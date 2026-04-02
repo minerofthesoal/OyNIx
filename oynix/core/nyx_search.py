@@ -384,5 +384,18 @@ class NyxSearchEngine(QObject):
         return self.indexer.export_index(filepath)
 
 
-# Singleton
-nyx_search = NyxSearchEngine()
+# Lazy singleton - must not create QObject before QApplication exists
+_nyx_search = None
+
+def _get_nyx_search():
+    global _nyx_search
+    if _nyx_search is None:
+        _nyx_search = NyxSearchEngine()
+    return _nyx_search
+
+class _NyxSearchProxy:
+    """Proxy that delays NyxSearchEngine creation until first access."""
+    def __getattr__(self, name):
+        return getattr(_get_nyx_search(), name)
+
+nyx_search = _NyxSearchProxy()

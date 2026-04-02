@@ -71,7 +71,7 @@ Description: Nyx-themed desktop browser with local AI assistant
  Custom Firefox-inspired browser with tree tabs, local LLM,
  auto-indexing Nyx search engine, and purple/black theme.
  Coded by Claude (Anthropic).
-Depends: python3 (>= 3.10), python3-pip, libgl1, libxkbcommon0, libnss3, libxcomposite1
+Depends: python3 (>= 3.10), python3-pip, python3-venv, libegl1, libgl1, libxkbcommon0, libnss3, libxcomposite1, libxdamage1, libxrandr2
 Recommends: g++, gcc
 CTRL
 
