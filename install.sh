@@ -181,14 +181,48 @@ LAUNCHER
     echo "  Using shell launcher"
 fi
 
+# ── Verify installation ─────────────────────────────────────────
+echo -e "${PURPLE}[verify]${NC} Checking installation..."
+
+# Detect Qt6 lib path for verification
+QT6_LIB_CHECK=$($PYTHON_CMD -c "import PyQt6,os; print(os.path.join(os.path.dirname(PyQt6.__file__),'Qt6','lib'))" 2>/dev/null || echo "")
+VERIFY_LD="${QT6_LIB_CHECK}${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+
+VERIFY_OK=1
+# Check PyQt6
+if LD_LIBRARY_PATH="$VERIFY_LD" $PYTHON_CMD -c "from PyQt6.QtWidgets import QApplication" 2>/dev/null; then
+    echo -e "  ${BOLD}+${NC} PyQt6.QtWidgets: OK"
+else
+    echo -e "  ${BOLD}x${NC} PyQt6.QtWidgets: MISSING"
+    echo "    Fix: $PYTHON_CMD -m pip install --break-system-packages PyQt6"
+    VERIFY_OK=0
+fi
+
+# Check PyQt6-WebEngine
+if LD_LIBRARY_PATH="$VERIFY_LD" $PYTHON_CMD -c "from PyQt6.QtWebEngineWidgets import QWebEngineView" 2>/dev/null; then
+    echo -e "  ${BOLD}+${NC} PyQt6.QtWebEngineWidgets: OK"
+else
+    echo -e "  ${BOLD}x${NC} PyQt6.QtWebEngineWidgets: MISSING"
+    echo "    Fix: $PYTHON_CMD -m pip install --break-system-packages PyQt6-WebEngine PyQt6-WebEngine-Qt6"
+    echo "    And: sudo apt install libqt6webchannel6 libqt6webenginecore6 libqt6webenginewidgets6"
+    VERIFY_OK=0
+fi
+
 echo ""
-echo -e "${PURPLE}${BOLD}  Installation complete!${NC}"
+if [ "$VERIFY_OK" = "1" ]; then
+    echo -e "${PURPLE}${BOLD}  Installation complete!${NC}"
+else
+    echo -e "${BOLD}  Installation finished with warnings (see above).${NC}"
+fi
 echo ""
 echo "  To run OyNIx Browser:"
 echo "    ./oynix-browser"
 echo ""
 echo "  Or directly:"
 echo "    $PYTHON_CMD -m oynix"
+echo ""
+echo "  To diagnose issues:"
+echo "    $PYTHON_CMD -m oynix --diagnose"
 echo ""
 echo -e "${DIM}  The LLM model will auto-download on first launch (~700MB).${NC}"
 echo -e "${DIM}  Coded by Claude (Anthropic)${NC}"

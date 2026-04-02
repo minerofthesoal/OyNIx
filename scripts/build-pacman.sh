@@ -62,6 +62,12 @@ package() {
   if [ ! -f "\${pkgdir}/usr/bin/oynix" ]; then
     cat > "\${pkgdir}/usr/bin/oynix" <<'SH'
 #!/bin/bash
+# Set LD_LIBRARY_PATH for pip-installed Qt6 WebEngine libraries
+QT6_LIB=\$(python3 -c "import PyQt6,os; print(os.path.join(os.path.dirname(PyQt6.__file__),'Qt6','lib'))" 2>/dev/null)
+if [ -n "\$QT6_LIB" ] && [ -d "\$QT6_LIB" ]; then
+    export LD_LIBRARY_PATH="\${QT6_LIB}\${LD_LIBRARY_PATH:+:\$LD_LIBRARY_PATH}"
+fi
+export PYTHONPATH="/usr/lib/oynix\${PYTHONPATH:+:\$PYTHONPATH}"
 cd /usr/lib/oynix
 exec python3 -m oynix "\$@"
 SH
