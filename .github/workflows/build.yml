@@ -155,14 +155,21 @@ jobs:
         if: steps.check.outputs.has_artifacts == 'true'
         run: ls -lh *.deb *.exe *.pkg.tar.* 2>/dev/null || echo "Some artifacts missing"
 
+      - name: Create or get tag
+        if: steps.check.outputs.has_artifacts == 'true'
+        id: tag
+        run: |
+          VERSION="${{ needs.prepare.outputs.version }}"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
       - name: Create GitHub Release
-        if: steps.check.outputs.has_artifacts == 'true' && startsWith(github.ref, 'refs/tags/')
+        if: steps.check.outputs.has_artifacts == 'true'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.ref_name }}
-          name: "OyNIx ${{ github.ref_name }}"
+          tag_name: ${{ steps.tag.outputs.version }}
+          name: "OyNIx ${{ steps.tag.outputs.version }}"
           body: |
-            ## OyNIx Browser ${{ github.ref_name }}
+            ## OyNIx Browser ${{ steps.tag.outputs.version }}
 
             ### Downloads
             - **Debian/Ubuntu**: `.deb` package — `sudo dpkg -i oynix-*.deb`
@@ -176,19 +183,7 @@ jobs:
             *.exe
             *.pkg.tar.*
           fail_on_unmatched_files: false
-
-      - name: Summary (non-tag builds)
-        if: steps.check.outputs.has_artifacts == 'true' && !startsWith(github.ref, 'refs/tags/')
-        run: |
-          echo "## Build Artifacts" >> "$GITHUB_STEP_SUMMARY"
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "| File | Size |" >> "$GITHUB_STEP_SUMMARY"
-          echo "|------|------|" >> "$GITHUB_STEP_SUMMARY"
-          for f in *.deb *.exe *.pkg.tar.*; do
-            [ -f "$f" ] && echo "| $f | $(du -h "$f" | cut -f1) |" >> "$GITHUB_STEP_SUMMARY"
-          done
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "*Download from the Actions artifacts above.*" >> "$GITHUB_STEP_SUMMARY"
+          make_latest: true
 
       - name: Fail summary
         if: steps.check.outputs.has_artifacts != 'true'
