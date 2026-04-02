@@ -5,8 +5,6 @@
 #  Coded by Claude (Anthropic)
 # ============================================================
 
-set -e
-
 PURPLE='\033[0;35m'
 BOLD='\033[1m'
 DIM='\033[2m'
@@ -36,7 +34,7 @@ done
 
 if [ -z "$PYTHON_CMD" ]; then
     echo "ERROR: Python 3.10+ is required but not found."
-    echo "Install Python from https://python.org"
+    echo "Install: sudo apt install python3 python3-pip python3-venv"
     exit 1
 fi
 
@@ -46,31 +44,65 @@ echo -e "  Found ${BOLD}Python ${PYVER}${NC} ($PYTHON_CMD)"
 # ── Step 2: Python dependencies ─────────────────────────────────
 echo -e "${PURPLE}[2/5]${NC} Installing Python dependencies..."
 
+INSTALLED=0
+
+# Method 1: Try existing venv
 if [ -d ".venv" ] && [ -f ".venv/bin/activate" ]; then
     echo -e "  ${DIM}Using existing venv${NC}"
     source .venv/bin/activate
-elif command -v pipx &>/dev/null || $PYTHON_CMD -c "import venv" 2>/dev/null; then
-    echo -e "  ${DIM}Creating virtual environment...${NC}"
-    $PYTHON_CMD -m venv .venv 2>/dev/null && source .venv/bin/activate 2>/dev/null
+    pip install --upgrade pip 2>/dev/null
+    pip install -r requirements.txt && INSTALLED=1
 fi
 
-# Install with best available method
-if [ -n "$VIRTUAL_ENV" ]; then
-    pip install --upgrade pip
-    pip install -r requirements.txt
-else
-    $PYTHON_CMD -m pip install --break-system-packages --upgrade pip 2>/dev/null || \
-        $PYTHON_CMD -m pip install --upgrade pip
-    $PYTHON_CMD -m pip install --break-system-packages -r requirements.txt 2>/dev/null || \
-        $PYTHON_CMD -m pip install -r requirements.txt
+# Method 2: Try creating a new venv
+if [ "$INSTALLED" = "0" ]; then
+    if $PYTHON_CMD -m venv .venv 2>/dev/null; then
+        echo -e "  ${DIM}Created virtual environment${NC}"
+        source .venv/bin/activate
+        pip install --upgrade pip 2>/dev/null
+        pip install -r requirements.txt && INSTALLED=1
+    fi
 fi
+
+# Method 3: pip with --break-system-packages
+if [ "$INSTALLED" = "0" ]; then
+    echo -e "  ${DIM}Trying pip with --break-system-packages...${NC}"
+    if $PYTHON_CMD -m pip install --break-system-packages -r requirements.txt 2>/dev/null; then
+        INSTALLED=1
+    fi
+fi
+
+# Method 4: plain pip (older systems)
+if [ "$INSTALLED" = "0" ]; then
+    echo -e "  ${DIM}Trying plain pip...${NC}"
+    if $PYTHON_CMD -m pip install -r requirements.txt 2>/dev/null; then
+        INSTALLED=1
+    fi
+fi
+
+if [ "$INSTALLED" = "0" ]; then
+    echo ""
+    echo -e "  ${BOLD}Could not install Python dependencies automatically.${NC}"
+    echo ""
+    echo "  Try one of these manually:"
+    echo "    sudo apt install python3-venv && $PYTHON_CMD -m venv .venv && source .venv/bin/activate && pip install -r requirements.txt"
+    echo "    $PYTHON_CMD -m pip install --break-system-packages -r requirements.txt"
+    echo ""
+    echo "  Then re-run: ./install.sh"
+    exit 1
+fi
+
+echo -e "  ${BOLD}Dependencies installed${NC}"
 
 # ── Step 3: Build native components ─────────────────────────────
 echo -e "${PURPLE}[3/5]${NC} Building native components..."
 
 if command -v make &>/dev/null && command -v gcc &>/dev/null; then
-    make all 2>/dev/null && echo "  Built C launcher + C++ indexer" || \
-    echo -e "  ${DIM}Native build optional, skipping${NC}"
+    if make all 2>/dev/null; then
+        echo "  Built C launcher + C++ indexer"
+    else
+        echo -e "  ${DIM}Native build skipped (optional)${NC}"
+    fi
 elif command -v gcc &>/dev/null; then
     mkdir -p build
     gcc -O2 -o build/oynix src/launcher.c 2>/dev/null && \
@@ -86,7 +118,11 @@ fi
 
 # ── Step 4: Data directories ────────────────────────────────────
 echo -e "${PURPLE}[4/5]${NC} Setting up data directories..."
-mkdir -p ~/.config/oynix/{models,search_index,database,cache,sync}
+mkdir -p ~/.config/oynix/models
+mkdir -p ~/.config/oynix/search_index
+mkdir -p ~/.config/oynix/database
+mkdir -p ~/.config/oynix/cache
+mkdir -p ~/.config/oynix/sync
 
 # ── Step 5: Create launcher ────────────────────────────────────
 echo -e "${PURPLE}[5/5]${NC} Creating launcher..."
@@ -97,22 +133,27 @@ if [ -f "build/oynix" ]; then
     chmod +x "$SCRIPT_DIR/oynix-browser"
     echo "  Using native C launcher"
 else
-    ACTIVATE=""
+    # Build shell launcher with venv activation if needed
     if [ -f "$SCRIPT_DIR/.venv/bin/activate" ]; then
-        ACTIVATE="source \"$SCRIPT_DIR/.venv/bin/activate\""
-    fi
-    cat > "$SCRIPT_DIR/oynix-browser" <<LAUNCHER
+        cat > "$SCRIPT_DIR/oynix-browser" <<LAUNCHER
 #!/bin/bash
 cd "$SCRIPT_DIR"
-${ACTIVATE}
+source "$SCRIPT_DIR/.venv/bin/activate"
 exec $PYTHON_CMD -m oynix "\$@"
 LAUNCHER
+    else
+        cat > "$SCRIPT_DIR/oynix-browser" <<LAUNCHER
+#!/bin/bash
+cd "$SCRIPT_DIR"
+exec $PYTHON_CMD -m oynix "\$@"
+LAUNCHER
+    fi
     chmod +x "$SCRIPT_DIR/oynix-browser"
     echo "  Using shell launcher"
 fi
 
 echo ""
-echo -e "${PURPLE}${BOLD}  ✓ Installation complete!${NC}"
+echo -e "${PURPLE}${BOLD}  Installation complete!${NC}"
 echo ""
 echo "  To run OyNIx Browser:"
 echo "    ./oynix-browser"
