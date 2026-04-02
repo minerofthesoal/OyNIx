@@ -96,6 +96,38 @@ except ImportError as e:
 
 def main():
     """Main entry point."""
+    # Diagnostic mode
+    if '--diagnose' in sys.argv:
+        print(f"\n{PURPLE}{BOLD}  OyNIx Diagnostics{RESET}\n")
+        print(f"  Python: {sys.version}")
+        print(f"  Executable: {sys.executable}")
+        print(f"  sys.path: {sys.path[:5]}")
+        print(f"  LD_LIBRARY_PATH: {os.environ.get('LD_LIBRARY_PATH', '(not set)')}")
+        for mod in ['PyQt6', 'PyQt6.QtWidgets', 'PyQt6.QtWebEngineWidgets',
+                     'PyQt6.QtWebEngineCore', 'llama_cpp', 'whoosh', 'bs4', 'PIL']:
+            try:
+                __import__(mod)
+                loc = getattr(sys.modules.get(mod), '__file__', '?')
+                print(f"  {PURPLE}+{RESET} {mod}: OK ({loc})")
+            except ImportError as e:
+                print(f"  {BOLD}x{RESET} {mod}: MISSING ({e})")
+        try:
+            import PyQt6
+            qt6_lib = os.path.join(os.path.dirname(PyQt6.__file__), 'Qt6', 'lib')
+            if os.path.isdir(qt6_lib):
+                import glob
+                sos = glob.glob(os.path.join(qt6_lib, 'libQt6*.so*'))
+                print(f"\n  Qt6 lib dir: {qt6_lib}")
+                print(f"  Qt6 .so files: {len(sos)}")
+                for s in sorted(sos)[:10]:
+                    print(f"    {os.path.basename(s)}")
+            else:
+                print(f"\n  Qt6 lib dir NOT found at: {qt6_lib}")
+        except ImportError:
+            pass
+        print()
+        return
+
     print()
     print(f"{DIM}  Initializing...{RESET}")
 
@@ -132,8 +164,16 @@ def main():
 
     # Create and show browser
     print(f"  {PURPLE}+{RESET} Creating browser window...")
-    browser = OynixBrowser()
-    browser.show()
+    try:
+        browser = OynixBrowser()
+        browser.show()
+    except Exception as e:
+        print(f"ERROR: Failed to create browser window: {e}")
+        import traceback
+        traceback.print_exc()
+        print()
+        print("  Try running: python3 -m oynix --diagnose")
+        sys.exit(1)
 
     print()
     print(f"{PURPLE}{BOLD}  OyNIx Browser is ready!{RESET}")

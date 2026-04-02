@@ -49,6 +49,7 @@ QT6_LIB=$(python3 -c "import PyQt6,os; print(os.path.join(os.path.dirname(PyQt6.
 if [ -n "$QT6_LIB" ] && [ -d "$QT6_LIB" ]; then
     export LD_LIBRARY_PATH="${QT6_LIB}${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 fi
+export PYTHONPATH="/usr/lib/oynix${PYTHONPATH:+:$PYTHONPATH}"
 cd /usr/lib/oynix
 exec python3 -m oynix "$@"
 LAUNCHER
@@ -83,11 +84,26 @@ CTRL
 # Post-install: install Python deps
 cat > "${PKG}/DEBIAN/postinst" <<'POSTINST'
 #!/bin/bash
-set -e
 echo "Installing OyNIx Python dependencies..."
-python3 -m pip install --break-system-packages -r /usr/lib/oynix/requirements.txt 2>/dev/null || \
-python3 -m pip install -r /usr/lib/oynix/requirements.txt 2>/dev/null || \
-echo "WARNING: Could not auto-install Python deps. Run: pip install -r /usr/lib/oynix/requirements.txt"
+
+# Try venv first, then --break-system-packages, then plain pip
+if python3 -m pip install --break-system-packages -r /usr/lib/oynix/requirements.txt 2>/dev/null; then
+    echo "  Dependencies installed (pip --break-system-packages)"
+elif python3 -m pip install -r /usr/lib/oynix/requirements.txt 2>/dev/null; then
+    echo "  Dependencies installed (pip)"
+else
+    echo ""
+    echo "WARNING: Could not auto-install Python deps."
+    echo "Run manually: pip install --break-system-packages -r /usr/lib/oynix/requirements.txt"
+    echo "Or use a venv: python3 -m venv /tmp/oynix-venv && source /tmp/oynix-venv/bin/activate && pip install -r /usr/lib/oynix/requirements.txt"
+fi
+
+# Verify critical deps
+if python3 -c "from PyQt6.QtWidgets import QApplication" 2>/dev/null; then
+    echo "  PyQt6: OK"
+else
+    echo "  WARNING: PyQt6 not working. Run: pip install --break-system-packages PyQt6 PyQt6-WebEngine"
+fi
 POSTINST
 chmod +x "${PKG}/DEBIAN/postinst"
 
