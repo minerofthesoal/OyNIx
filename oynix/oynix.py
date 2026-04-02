@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-OyNIx Browser v1.0.0 - The Nyx-Powered Local AI Browser
+OyNIx Browser v1.1.0 - The Nyx-Powered Local AI Browser
 Main Launcher and Entry Point
 
 Features:
@@ -31,7 +31,7 @@ Architecture:
 
 Author: OyNIx Team
 License: MIT
-Version: 1.0.0
+Version: 1.1.0
 """
 
 import sys
@@ -43,6 +43,23 @@ PACKAGE_ROOT = os.path.dirname(OYNIX_DIR)
 if PACKAGE_ROOT not in sys.path:
     sys.path.insert(0, PACKAGE_ROOT)
 
+# Fix LD_LIBRARY_PATH for pip-installed Qt6 libraries
+# pip's PyQt6-WebEngine-Qt6 bundles .so files that the system linker
+# can't find without this (e.g. libQt6WebChannel.so.6)
+try:
+    import PyQt6
+    _qt6_lib = os.path.join(os.path.dirname(PyQt6.__file__), 'Qt6', 'lib')
+    if os.path.isdir(_qt6_lib):
+        _ld_path = os.environ.get('LD_LIBRARY_PATH', '')
+        if _qt6_lib not in _ld_path:
+            os.environ['LD_LIBRARY_PATH'] = _qt6_lib + (':' + _ld_path if _ld_path else '')
+            # Re-exec to pick up new LD_LIBRARY_PATH (must happen before .so loading)
+            if not os.environ.get('_OYNIX_REEXEC'):
+                os.environ['_OYNIX_REEXEC'] = '1'
+                os.execv(sys.executable, [sys.executable] + sys.argv)
+except ImportError:
+    pass  # PyQt6 not installed, will be caught later
+
 PURPLE = "\033[95m"
 BOLD = "\033[1m"
 RESET = "\033[0m"
@@ -50,7 +67,7 @@ DIM = "\033[2m"
 
 print()
 print(f"{PURPLE}{BOLD}  ╔═══════════════════════════════════════════════╗{RESET}")
-print(f"{PURPLE}{BOLD}  ║         OyNIx Browser v1.0.0                 ║{RESET}")
+print(f"{PURPLE}{BOLD}  ║         OyNIx Browser v1.1.0                 ║{RESET}")
 print(f"{PURPLE}{BOLD}  ║    The Nyx-Powered Local AI Browser          ║{RESET}")
 print(f"{PURPLE}{BOLD}  ╚═══════════════════════════════════════════════╝{RESET}")
 print()
@@ -66,38 +83,52 @@ try:
     from PyQt6.QtWidgets import QApplication
     from PyQt6.QtCore import Qt
     print(f"  {PURPLE}+{RESET} PyQt6 loaded")
-except ImportError:
-    print("ERROR: PyQt6 not installed")
-    print("Run: pip install --break-system-packages PyQt6 PyQt6-WebEngine")
-    print("  or: pipx install PyQt6 PyQt6-WebEngine")
-    sys.exit(1)
-
-# Import browser core
-try:
-    from oynix.core.browser import OynixBrowser
-    print(f"  {PURPLE}+{RESET} Browser core loaded")
 except ImportError as e:
-    print(f"ERROR: Failed to load browser core: {e}")
-    import traceback
-    traceback.print_exc()
+    err = str(e)
+    if 'libEGL' in err or 'libGL' in err or '.so' in err:
+        print(f"ERROR: Missing system library: {err}")
+        print("Fix:  sudo apt install libegl1 libgl1 libxkbcommon0")
+        print("      (or equivalent for your distro)")
+    else:
+        print("ERROR: PyQt6 not installed")
+        print("Run: pip install --break-system-packages PyQt6 PyQt6-WebEngine")
     sys.exit(1)
-
 
 def main():
     """Main entry point."""
     print()
     print(f"{DIM}  Initializing...{RESET}")
 
-    # Create application
+    # Create QApplication FIRST - required before any QObject/QWidget
     app = QApplication(sys.argv)
     app.setApplicationName("OyNIx Browser")
-    app.setApplicationVersion("1.0.0")
+    app.setApplicationVersion("1.1.0")
     app.setOrganizationName("OyNIx")
 
     # Create data directories
     config_dir = os.path.expanduser("~/.config/oynix")
     for subdir in ['models', 'search_index', 'database', 'cache', 'sync']:
         os.makedirs(os.path.join(config_dir, subdir), exist_ok=True)
+
+    # Import browser core AFTER QApplication exists
+    # (modules contain QObject singletons that need it)
+    try:
+        from oynix.core.browser import OynixBrowser
+        print(f"  {PURPLE}+{RESET} Browser core loaded (Chromium WebEngine)")
+    except ImportError as e:
+        err = str(e)
+        print(f"ERROR: Failed to load browser core: {err}")
+        if 'WebChannel' in err or 'WebEngine' in err or '.so' in err:
+            print()
+            print("  Missing Qt6 WebEngine system libraries.")
+            print("  Fix with:")
+            print("    sudo apt install libqt6webchannel6 libqt6webenginecore6 libqt6webenginewidgets6")
+            print("  Or reinstall PyQt6-WebEngine:")
+            print("    pip install --break-system-packages --force-reinstall PyQt6-WebEngine PyQt6-WebEngine-Qt6")
+        else:
+            import traceback
+            traceback.print_exc()
+        sys.exit(1)
 
     # Create and show browser
     print(f"  {PURPLE}+{RESET} Creating browser window...")
