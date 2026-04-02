@@ -43,18 +43,26 @@ echo -e "  Found ${BOLD}Python ${PYVER}${NC} ($PYTHON_CMD)"
 
 # ── Step 1.5: System libraries ──────────────────────────────────
 echo -e "${PURPLE}[1.5/5]${NC} Checking system libraries..."
-if ! $PYTHON_CMD -c "from ctypes import cdll; cdll.LoadLibrary('libEGL.so.1')" 2>/dev/null; then
-    echo -e "  ${DIM}Installing missing system libraries...${NC}"
-    if command -v apt-get &>/dev/null; then
-        sudo apt-get install -y libegl1 libgl1 libxkbcommon0 libnss3 libxcomposite1 2>/dev/null || \
-            echo -e "  ${DIM}Could not auto-install. Run: sudo apt install libegl1 libgl1 libxkbcommon0${NC}"
-    elif command -v pacman &>/dev/null; then
-        sudo pacman -S --noconfirm --needed libglvnd nss libxcomposite 2>/dev/null || true
-    elif command -v dnf &>/dev/null; then
-        sudo dnf install -y mesa-libEGL mesa-libGL libxkbcommon nss 2>/dev/null || true
-    fi
-else
-    echo -e "  ${DIM}System libraries OK${NC}"
+echo -e "  ${DIM}Installing Qt6 and graphics libraries...${NC}"
+if command -v apt-get &>/dev/null; then
+    sudo apt-get install -y \
+        libegl1 libgl1 libxkbcommon0 libnss3 libxcomposite1 \
+        libxdamage1 libxrandr2 libxtst6 libasound2 \
+        qt6-base-dev libqt6webchannel6 libqt6webenginecore6 \
+        libqt6webenginequick6 libqt6webenginewidgets6 \
+        2>/dev/null || \
+    sudo apt-get install -y \
+        libegl1 libgl1 libxkbcommon0 libnss3 libxcomposite1 \
+        2>/dev/null || \
+    echo -e "  ${DIM}Could not auto-install. Run: sudo apt install libegl1 libgl1 libqt6webchannel6${NC}"
+elif command -v pacman &>/dev/null; then
+    sudo pacman -S --noconfirm --needed \
+        qt6-webengine qt6-webchannel libglvnd nss libxcomposite \
+        2>/dev/null || true
+elif command -v dnf &>/dev/null; then
+    sudo dnf install -y \
+        qt6-qtwebengine qt6-qtwebchannel mesa-libEGL mesa-libGL \
+        libxkbcommon nss 2>/dev/null || true
 fi
 
 # ── Step 2: Python dependencies ─────────────────────────────────
@@ -150,17 +158,22 @@ if [ -f "build/oynix" ]; then
     echo "  Using native C launcher"
 else
     # Build shell launcher with venv activation if needed
+    # Find Qt6 lib path for LD_LIBRARY_PATH
+    QT6_LIB=$($PYTHON_CMD -c "import PyQt6,os; print(os.path.join(os.path.dirname(PyQt6.__file__),'Qt6','lib'))" 2>/dev/null || echo "")
+
     if [ -f "$SCRIPT_DIR/.venv/bin/activate" ]; then
         cat > "$SCRIPT_DIR/oynix-browser" <<LAUNCHER
 #!/bin/bash
 cd "$SCRIPT_DIR"
 source "$SCRIPT_DIR/.venv/bin/activate"
+export LD_LIBRARY_PATH="${QT6_LIB}\${LD_LIBRARY_PATH:+:\$LD_LIBRARY_PATH}"
 exec $PYTHON_CMD -m oynix "\$@"
 LAUNCHER
     else
         cat > "$SCRIPT_DIR/oynix-browser" <<LAUNCHER
 #!/bin/bash
 cd "$SCRIPT_DIR"
+export LD_LIBRARY_PATH="${QT6_LIB}\${LD_LIBRARY_PATH:+:\$LD_LIBRARY_PATH}"
 exec $PYTHON_CMD -m oynix "\$@"
 LAUNCHER
     fi

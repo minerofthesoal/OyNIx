@@ -172,6 +172,35 @@ int main(int argc, char *argv[]) {
         }
     }
 
+    /* Set LD_LIBRARY_PATH for pip-installed Qt6 libraries */
+    /* pip's PyQt6-WebEngine-Qt6 bundles .so files the linker can't find */
+    char ld_cmd[MAX_PATH];
+    snprintf(ld_cmd, sizeof(ld_cmd),
+        "%s -c \"import PyQt6,os; print(os.path.join("
+        "os.path.dirname(PyQt6.__file__),'Qt6','lib'))\" 2>/dev/null",
+        python);
+
+    FILE *fp = popen(ld_cmd, "r");
+    if (fp) {
+        char qt6_lib[MAX_PATH];
+        if (fgets(qt6_lib, sizeof(qt6_lib), fp)) {
+            /* Strip newline */
+            qt6_lib[strcspn(qt6_lib, "\n")] = 0;
+            if (file_exists(qt6_lib)) {
+                const char *existing_ld = getenv("LD_LIBRARY_PATH");
+                char ld_path[MAX_PATH * 2];
+                if (existing_ld) {
+                    snprintf(ld_path, sizeof(ld_path), "%s:%s",
+                        qt6_lib, existing_ld);
+                } else {
+                    snprintf(ld_path, sizeof(ld_path), "%s", qt6_lib);
+                }
+                setenv("LD_LIBRARY_PATH", ld_path, 1);
+            }
+        }
+        pclose(fp);
+    }
+
     /* Build command: python -m oynix [args...] */
     /* Set PYTHONPATH to include our directory */
     char pythonpath[MAX_PATH * 2];

@@ -44,6 +44,11 @@ fi
 if [ ! -f "${PKG}/usr/bin/oynix" ]; then
     cat > "${PKG}/usr/bin/oynix" <<'LAUNCHER'
 #!/bin/bash
+# Set LD_LIBRARY_PATH for pip-installed Qt6 WebEngine libraries
+QT6_LIB=$(python3 -c "import PyQt6,os; print(os.path.join(os.path.dirname(PyQt6.__file__),'Qt6','lib'))" 2>/dev/null)
+if [ -n "$QT6_LIB" ] && [ -d "$QT6_LIB" ]; then
+    export LD_LIBRARY_PATH="${QT6_LIB}${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+fi
 cd /usr/lib/oynix
 exec python3 -m oynix "$@"
 LAUNCHER
@@ -71,8 +76,8 @@ Description: Nyx-themed desktop browser with local AI assistant
  Custom Firefox-inspired browser with tree tabs, local LLM,
  auto-indexing Nyx search engine, and purple/black theme.
  Coded by Claude (Anthropic).
-Depends: python3 (>= 3.10), python3-pip, python3-venv, libegl1, libgl1, libxkbcommon0, libnss3, libxcomposite1, libxdamage1, libxrandr2
-Recommends: g++, gcc
+Depends: python3 (>= 3.10), python3-pip, python3-venv, libegl1, libgl1, libxkbcommon0, libnss3, libxcomposite1, libxdamage1, libxrandr2, libxtst6, libasound2
+Recommends: libqt6webchannel6, libqt6webenginecore6, libqt6webenginewidgets6, g++, gcc
 CTRL
 
 # Post-install: install Python deps
