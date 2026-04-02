@@ -94,6 +94,21 @@ except ImportError as e:
         print("Run: pip install --break-system-packages PyQt6 PyQt6-WebEngine")
     sys.exit(1)
 
+# CRITICAL: QtWebEngineWidgets must be imported BEFORE QApplication is created.
+# Qt6 WebEngine requires AA_ShareOpenGLContexts set before the app starts.
+try:
+    Qt.ApplicationAttribute.AA_ShareOpenGLContexts
+    QApplication.setAttribute(Qt.ApplicationAttribute.AA_ShareOpenGLContexts)
+except AttributeError:
+    pass  # Older PyQt6 versions may not have this
+
+try:
+    import PyQt6.QtWebEngineWidgets  # noqa: F401 — must be imported before QApplication
+    print(f"  {PURPLE}+{RESET} QtWebEngine loaded")
+except ImportError as e:
+    print(f"  {BOLD}!{RESET} QtWebEngine not available: {e}")
+    print("    Fix: pip install --break-system-packages PyQt6-WebEngine PyQt6-WebEngine-Qt6")
+
 def main():
     """Main entry point."""
     # Diagnostic mode
