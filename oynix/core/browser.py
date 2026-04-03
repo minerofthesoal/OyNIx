@@ -479,18 +479,17 @@ class OynixBrowser(QMainWindow):
         text = self.url_bar.text().strip()
         if not text:
             return
+        tab = self.current_tab()
+        if not tab:
+            return
         if text.startswith('oyn://'):
-            self._handle_oyn_url(QUrl(text), self.current_tab())
+            self._handle_oyn_url(QUrl(text), tab)
         elif '.' in text and ' ' not in text:
             url = text if text.startswith(('http://', 'https://')) else f'https://{text}'
-            self.current_tab().setUrl(QUrl(url))
+            tab.setUrl(QUrl(url))
         else:
-            engine = self.config.get('default_search_engine', 'nyx')
-            if engine == 'nyx':
-                self._perform_search(text, 'nyx')
-            else:
-                url = self._get_search_url(engine, text)
-                self.current_tab().setUrl(QUrl(url))
+            # Always use Nyx search from URL bar — never navigate to external search sites
+            self._perform_search(text, 'nyx')
 
     def _get_search_url(self, engine, query):
         urls = {
@@ -534,14 +533,8 @@ class OynixBrowser(QMainWindow):
 
     # ── Search ─────────────────────────────────────────────────────
     def _perform_search(self, query, engine='nyx'):
-        # All engines use Nyx search; only brave/bing/google/custom navigate externally
-        if engine in ('nyx', 'duckduckgo'):
-            self._nyx_search(query)
-        else:
-            url = self._get_search_url(engine, query)
-            tab = self.current_tab()
-            if tab:
-                tab.setUrl(QUrl(url))
+        # All searches go through Nyx — never navigates to external search sites
+        self._nyx_search(query)
 
     def _nyx_search(self, query):
         """Nyx-first search: local index + database, then web fallback for extra results."""
@@ -626,13 +619,16 @@ class OynixBrowser(QMainWindow):
             self._refresh_stats()
 
     # ── Internal URL handler ───────────────────────────────────────
-    def _handle_oyn_url(self, url, browser):
+    def _handle_oyn_url(self, url, browser=None):
         # QUrl parses oyn://foo as host="foo", path=""
+        if browser is None:
+            browser = self.current_tab()
         path = url.host() or url.path().strip('/')
         query_str = url.query()
 
         if path in ("home", ""):
-            browser.setHtml(get_homepage_html(self.theme_colors), QUrl("oyn://home"))
+            if browser:
+                browser.setHtml(get_homepage_html(self.theme_colors), QUrl("oyn://home"))
 
         elif path in ("search", "nyx-search"):
             params = parse_qs(query_str)
