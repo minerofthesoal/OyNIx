@@ -74,6 +74,22 @@ SH
   fi
   chmod +x "\${pkgdir}/usr/bin/oynix"
 
+  # Icons
+  for size in 256 128 64 48; do
+    icon="\${startdir}/assets/icon-\${size}.png"
+    if [ -f "\$icon" ]; then
+      install -Dm644 "\$icon" "\${pkgdir}/usr/share/icons/hicolor/\${size}x\${size}/apps/oynix.png"
+    fi
+  done
+
+  # Build turbo indexer if g++ available
+  if command -v g++ &>/dev/null && [ -f "\${startdir}/src/native/turbo_index.cpp" ]; then
+    mkdir -p "\${pkgdir}/usr/lib/oynix/build"
+    g++ -O3 -shared -fPIC -std=c++17 -pthread \\
+      -o "\${pkgdir}/usr/lib/oynix/build/libturbo_index.so" \\
+      "\${startdir}/src/native/turbo_index.cpp" 2>/dev/null || true
+  fi
+
   # Desktop entry
   install -dm755 "\${pkgdir}/usr/share/applications"
   cat > "\${pkgdir}/usr/share/applications/oynix.desktop" <<'DESKTOP'

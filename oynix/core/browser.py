@@ -278,6 +278,20 @@ class OynixBrowser(QMainWindow):
         self.setWindowTitle("OyNIx Browser")
         self.setGeometry(80, 60, 1500, 950)
         self.setMinimumSize(900, 600)
+        # Set window icon from assets
+        icon_paths = [
+            os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(
+                os.path.abspath(__file__)))), 'assets', 'icon-256.png'),
+            os.path.join(os.path.dirname(os.path.dirname(
+                os.path.abspath(__file__))), 'assets', 'icon-256.png'),
+            '/usr/share/icons/hicolor/256x256/apps/oynix.png',
+            '/app/share/icons/hicolor/256x256/apps/io.github.oynix.browser.png',
+        ]
+        for ip in icon_paths:
+            if os.path.isfile(ip):
+                from PyQt6.QtGui import QIcon
+                self.setWindowIcon(QIcon(ip))
+                break
 
     def _setup_toolbar(self):
         tb = QToolBar("Navigation")

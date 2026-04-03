@@ -162,6 +162,48 @@ jobs:
           name: exe-package
           path: '*.exe'
 
+  # ── Flatpak ───────────────────────────────────────────────────────────
+  build-flatpak:
+    needs: prepare
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Flatpak tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y flatpak flatpak-builder
+          flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+
+      - name: Install KDE runtime + SDK
+        run: |
+          flatpak install --user -y --noninteractive flathub \
+            org.kde.Platform//6.7 \
+            org.kde.Sdk//6.7
+
+      - name: Build Flatpak
+        run: |
+          cd flatpak
+          flatpak-builder --user --install-deps-from=flathub \
+            --force-clean --disable-rofiles-fuse \
+            build io.github.oynix.browser.yml
+
+      - name: Export bundle
+        run: |
+          cd flatpak
+          flatpak build-export repo build
+          VERSION="${{ needs.prepare.outputs.version }}"
+          VERSION="${VERSION#v}"
+          flatpak build-bundle repo \
+            "OyNIx-${VERSION}.flatpak" \
+            io.github.oynix.browser
+          mv "OyNIx-${VERSION}.flatpak" ../
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: flatpak-package
+          path: '*.flatpak'
+
   # ── Arch Linux pacman ────────────────────────────────────────────────
   build-pacman:
     needs: prepare
@@ -189,7 +231,7 @@ jobs:
 
   # ── Release ──────────────────────────────────────────────────────────
   release:
-    needs: [prepare, build-deb, build-exe, build-pacman]
+    needs: [prepare, build-deb, build-exe, build-flatpak, build-pacman]
     if: always()
     runs-on: ubuntu-latest
     steps:
@@ -198,9 +240,10 @@ jobs:
         run: |
           deb="${{ needs.build-deb.result }}"
           exe="${{ needs.build-exe.result }}"
+          fpk="${{ needs.build-flatpak.result }}"
           pac="${{ needs.build-pacman.result }}"
-          echo "deb=$deb exe=$exe pac=$pac"
-          if [ "$deb" = "success" ] || [ "$exe" = "success" ] || [ "$pac" = "success" ]; then
+          echo "deb=$deb exe=$exe flatpak=$fpk pac=$pac"
+          if [ "$deb" = "success" ] || [ "$exe" = "success" ] || [ "$fpk" = "success" ] || [ "$pac" = "success" ]; then
             echo "has_artifacts=true" >> "$GITHUB_OUTPUT"
           else
             echo "has_artifacts=false" >> "$GITHUB_OUTPUT"
@@ -216,7 +259,7 @@ jobs:
 
       - name: List built artifacts
         if: steps.check.outputs.has_artifacts == 'true'
-        run: ls -lh *.deb *.exe *.pkg.tar.* 2>/dev/null || echo "Some artifacts missing"
+        run: ls -lh *.deb *.exe *.flatpak *.pkg.tar.* 2>/dev/null || echo "Some artifacts missing"
 
       - name: Create or get tag
         if: steps.check.outputs.has_artifacts == 'true'
@@ -237,6 +280,7 @@ jobs:
             ### Downloads
             - **Debian/Ubuntu**: `.deb` package — `sudo dpkg -i oynix-*.deb`
             - **Windows**: `.exe` standalone binary
+            - **Flatpak**: `.flatpak` bundle — `flatpak install --user OyNIx-*.flatpak`
             - **Arch Linux**: `.pkg.tar.zst` — `sudo pacman -U oynix-*.pkg.tar.zst`
 
             ---
@@ -244,6 +288,7 @@ jobs:
           files: |
             *.deb
             *.exe
+            *.flatpak
             *.pkg.tar.*
           fail_on_unmatched_files: false
           make_latest: true
@@ -258,4 +303,5 @@ jobs:
           echo "|-----|--------|" >> "$GITHUB_STEP_SUMMARY"
           echo "| Debian | ${{ needs.build-deb.result }} |" >> "$GITHUB_STEP_SUMMARY"
           echo "| Windows | ${{ needs.build-exe.result }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Flatpak | ${{ needs.build-flatpak.result }} |" >> "$GITHUB_STEP_SUMMARY"
           echo "| Arch | ${{ needs.build-pacman.result }} |" >> "$GITHUB_STEP_SUMMARY"

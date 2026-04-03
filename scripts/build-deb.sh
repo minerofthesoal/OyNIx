@@ -56,6 +56,25 @@ LAUNCHER
 fi
 chmod +x "${PKG}/usr/bin/oynix"
 
+# Icons
+if [ -d "assets" ]; then
+    for size in 256 128 64 48; do
+        icon="assets/icon-${size}.png"
+        if [ -f "$icon" ]; then
+            mkdir -p "${PKG}/usr/share/icons/hicolor/${size}x${size}/apps"
+            cp "$icon" "${PKG}/usr/share/icons/hicolor/${size}x${size}/apps/oynix.png"
+        fi
+    done
+fi
+
+# Build turbo indexer if g++ available
+if command -v g++ &>/dev/null && [ -f "src/native/turbo_index.cpp" ]; then
+    echo "  Building turbo indexer..."
+    g++ -O3 -shared -fPIC -std=c++17 -pthread \
+        -o "${PKG}/usr/lib/oynix/build/libturbo_index.so" \
+        src/native/turbo_index.cpp 2>/dev/null || echo "  (turbo indexer build skipped)"
+fi
+
 # Desktop entry
 cat > "${PKG}/usr/share/applications/oynix.desktop" <<'DESKTOP'
 [Desktop Entry]
