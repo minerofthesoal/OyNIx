@@ -44,6 +44,7 @@ from oynix.core.extensions import (
 from oynix.UI.ai_chat import AIChatPanel
 from oynix.core.credentials import credential_manager, CredentialDialog, SavePasswordBar
 from oynix.core.search_builder import SearchEngineBuilder, load_custom_engines, get_custom_search_url
+from oynix.core.nydta import export_nydta, import_nydta, PROFILE_PIC_PATH
 try:
     from oynix.UI.icons import svg_icon
 except ImportError:
@@ -360,27 +361,61 @@ class OynixBrowser(QMainWindow):
         self._refresh_stats()
 
     def _setup_shortcuts(self):
-        shortcuts = [
-            ('Ctrl+T', lambda: self.new_tab()),
-            ('Ctrl+W', self._close_current_tab),
-            ('Ctrl+L', lambda: (self.url_bar.setFocus(), self.url_bar.selectAll())),
-            ('Ctrl+F', self.show_find_dialog),
-            ('Ctrl+D', self.toggle_bookmark),
-            ('Ctrl+J', self.show_downloads),
-            ('Ctrl+H', self.show_history),
-            ('Ctrl+B', self.show_bookmarks),
-            ('Ctrl+K', self.show_command_palette),
-            ('Ctrl+Shift+A', self.toggle_ai_panel),
-            ('F5', self._reload),
-            ('F11', self.toggle_fullscreen),
-            ('Ctrl++', self.zoom_in),
-            ('Ctrl+-', self.zoom_out),
-            ('Ctrl+0', self.reset_zoom),
-            ('Ctrl+,', self.show_settings),
-            ('Escape', lambda: self.find_bar.hide_bar()),
-        ]
-        for key, callback in shortcuts:
-            QShortcut(QKeySequence(key), self).activated.connect(callback)
+        # Default shortcut -> action mapping
+        self._shortcut_actions = {
+            "New Tab":         lambda: self.new_tab(),
+            "Close Tab":       self._close_current_tab,
+            "Address Bar":     lambda: (self.url_bar.setFocus(), self.url_bar.selectAll()),
+            "Find in Page":    self.show_find_dialog,
+            "Bookmark":        self.toggle_bookmark,
+            "Downloads":       self.show_downloads,
+            "History":         self.show_history,
+            "Bookmarks":       self.show_bookmarks,
+            "Command Palette": self.show_command_palette,
+            "Toggle AI Panel": self.toggle_ai_panel,
+            "Audio Player":    self.toggle_audio_player,
+            "Reload":          self._reload,
+            "Full Screen":     self.toggle_fullscreen,
+            "Zoom In":         self.zoom_in,
+            "Zoom Out":        self.zoom_out,
+            "Reset Zoom":      self.reset_zoom,
+            "Settings":        self.show_settings,
+        }
+        self._default_keys = {
+            "New Tab": "Ctrl+T", "Close Tab": "Ctrl+W", "Address Bar": "Ctrl+L",
+            "Find in Page": "Ctrl+F", "Bookmark": "Ctrl+D", "Downloads": "Ctrl+J",
+            "History": "Ctrl+H", "Bookmarks": "Ctrl+B", "Command Palette": "Ctrl+K",
+            "Toggle AI Panel": "Ctrl+Shift+A", "Audio Player": "Ctrl+Shift+M",
+            "Reload": "F5", "Full Screen": "F11", "Zoom In": "Ctrl++",
+            "Zoom Out": "Ctrl+-", "Reset Zoom": "Ctrl+0", "Settings": "Ctrl+,",
+        }
+        custom = self.config.get('custom_shortcuts', {})
+        if not isinstance(custom, dict):
+            custom = {}
+
+        self._active_shortcuts = []
+        for action, default_key in self._default_keys.items():
+            key = custom.get(action, default_key)
+            if not key:
+                continue
+            callback = self._shortcut_actions.get(action)
+            if callback:
+                sc = QShortcut(QKeySequence(key), self)
+                sc.activated.connect(callback)
+                self._active_shortcuts.append(sc)
+
+        # Escape always closes find bar
+        esc = QShortcut(QKeySequence("Escape"), self)
+        esc.activated.connect(lambda: self.find_bar.hide_bar())
+        self._active_shortcuts.append(esc)
+
+    def reload_shortcuts(self):
+        """Reload shortcuts after settings change."""
+        for sc in self._active_shortcuts:
+            sc.setEnabled(False)
+            sc.deleteLater()
+        self._active_shortcuts.clear()
+        self._setup_shortcuts()
 
     def _apply_theme(self):
         self.theme_colors = get_theme(self.current_theme)
@@ -700,6 +735,7 @@ class OynixBrowser(QMainWindow):
             ("Passwords & Passkeys", ""), ("Import Chrome History", ""),
             ("Import Chrome Searches", ""), ("Import Google Takeout", ""),
             ("Search Engine Builder", ""),
+            ("Export Profile (.nydta)", ""), ("Import Profile (.nydta)", ""),
         ]
         palette = CommandPalette(commands, self)
         palette.command_selected.connect(self._run_command)
@@ -728,6 +764,8 @@ class OynixBrowser(QMainWindow):
             "Import Chrome Searches": self.import_chrome_searches,
             "Import Google Takeout": self.import_google_takeout,
             "Search Engine Builder": self.show_search_builder,
+            "Export Profile (.nydta)": self.export_nydta,
+            "Import Profile (.nydta)": self.import_nydta,
         }
         fn = mapping.get(name)
         if fn:
@@ -862,6 +900,7 @@ class OynixBrowser(QMainWindow):
             if new_theme != self.current_theme:
                 self.set_theme(new_theme)
             self.tab_manager.set_tree_mode(self.config.get('use_tree_tabs', True))
+            self.reload_shortcuts()
 
     def set_theme(self, name):
         self.current_theme = name
@@ -1381,6 +1420,135 @@ class OynixBrowser(QMainWindow):
         QMessageBox.information(self, "Trusted Domains",
             f"Trusted: {len(security_manager.trusted_domains)}\n"
             f"Blocked: {len(security_manager.blocked_domains)}")
+
+    # ── .nydta Profile Export / Import ────────────────────────────
+    def export_nydta(self):
+        """Export full browser profile as .nydta archive."""
+        path, _ = QFileDialog.getSaveFileName(
+            self, "Export OyNIx Profile", "oynix_profile.nydta",
+            "OyNIx Profile (*.nydta);;All Files (*)")
+        if not path:
+            return
+
+        def _get_db_entries():
+            """Get database entries for export."""
+            import tempfile
+            tmp = tempfile.NamedTemporaryFile(suffix='.json', delete=False)
+            tmp.close()
+            database.export_to_json(tmp.name)
+            try:
+                with open(tmp.name) as f:
+                    data = json.load(f)
+                # Flatten to list
+                entries = []
+                if isinstance(data, dict):
+                    for section in ('curated', 'discovered', 'sites'):
+                        if section in data and isinstance(data[section], dict):
+                            for cat, items in data[section].items():
+                                if isinstance(items, list):
+                                    for item in items:
+                                        if isinstance(item, dict):
+                                            item['_category'] = cat
+                                            entries.append(item)
+                        elif section in data and isinstance(data[section], list):
+                            entries.extend(data[section])
+                elif isinstance(data, list):
+                    entries = data
+                return entries
+            except Exception:
+                return []
+            finally:
+                os.unlink(tmp.name)
+
+        ok, msg = export_nydta(path, self._history, self.config, _get_db_entries)
+        if ok:
+            self._update_status(msg)
+            QMessageBox.information(self, "Profile Exported", msg)
+        else:
+            QMessageBox.warning(self, "Export Failed", msg)
+
+    def import_nydta(self):
+        """Import a .nydta profile archive."""
+        path, _ = QFileDialog.getOpenFileName(
+            self, "Import OyNIx Profile", "",
+            "OyNIx Profile (*.nydta);;All Files (*)")
+        if not path:
+            return
+
+        ok, data, msg = import_nydta(path)
+        if not ok:
+            QMessageBox.warning(self, "Import Failed", msg)
+            return
+
+        # Show what was found and let user choose
+        parts = []
+        if data['history']:
+            parts.append(f"{len(data['history'])} history entries")
+        if data['database']:
+            parts.append(f"{len(data['database'])} database entries")
+        if data['settings']:
+            parts.append("settings")
+        if data['profile_pic_path']:
+            parts.append("profile picture")
+
+        reply = QMessageBox.question(self, "Import Profile",
+            f"Found: {', '.join(parts)}\n\nImport all into OyNIx?\n"
+            "(Existing data will be merged, not replaced)")
+        if reply != QMessageBox.StandardButton.Yes:
+            return
+
+        # Merge history
+        if data['history']:
+            existing_urls = {h['url'] for h in self._history}
+            added = 0
+            for entry in data['history']:
+                if entry.get('url') and entry['url'] not in existing_urls:
+                    self._history.insert(0, entry)
+                    existing_urls.add(entry['url'])
+                    added += 1
+            self._history = self._history[:5000]
+            self._save_json(HISTORY_FILE, self._history)
+
+        # Merge database
+        db_added = 0
+        if data['database']:
+            for entry in data['database']:
+                url = entry.get('url', '')
+                title = entry.get('title', '')
+                desc = entry.get('description', '')
+                if url and database.add_site(url, title, desc, source='nydta'):
+                    db_added += 1
+
+        # Import settings (merge, don't replace)
+        if data['settings']:
+            for key, val in data['settings'].items():
+                if key not in self.config:
+                    self.config[key] = val
+            self._save_config()
+
+        # Profile picture
+        if data['profile_pic_path']:
+            import shutil
+            shutil.copy2(data['profile_pic_path'], PROFILE_PIC_PATH)
+
+        self._refresh_stats()
+        result = f"Imported: {len(data['history'])} history, {db_added} new DB entries"
+        if data['profile_pic_path']:
+            result += ", profile picture"
+        self._update_status(result)
+        QMessageBox.information(self, "Import Complete", result)
+
+    def set_profile_picture(self):
+        """Set the user's profile picture."""
+        path, _ = QFileDialog.getOpenFileName(
+            self, "Select Profile Picture", "",
+            "Images (*.png *.jpg *.jpeg *.jxl *.webp);;All (*)")
+        if not path:
+            return
+        import shutil
+        os.makedirs(os.path.dirname(PROFILE_PIC_PATH), exist_ok=True)
+        shutil.copy2(path, PROFILE_PIC_PATH)
+        self._update_status("Profile picture updated")
 
     # ── Audio Player ────────────────────────────────────────────────
     def toggle_audio_player(self):

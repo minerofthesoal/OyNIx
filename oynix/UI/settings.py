@@ -9,8 +9,8 @@ from PyQt6.QtWidgets import (
     QStackedWidget, QScrollArea, QListWidget, QListWidgetItem, QFrame,
     QFileDialog, QMessageBox, QSizePolicy,
 )
-from PyQt6.QtCore import Qt, QSize, QPropertyAnimation, QEasingCurve
-from PyQt6.QtGui import QFont, QIcon
+from PyQt6.QtCore import Qt, QSize, QPropertyAnimation, QEasingCurve, pyqtSignal
+from PyQt6.QtGui import QFont, QIcon, QKeySequence
 
 from oynix.UI.icons import svg_icon
 from oynix.core.theme_engine import NYX_COLORS
@@ -51,6 +51,101 @@ DEFAULT_CONFIG = {
 }
 
 C = NYX_COLORS  # shorthand
+
+
+# ── Key capture widget ────────────────────────────────────────────────
+
+class ShortcutEdit(QLineEdit):
+    """A line edit that captures key combinations when focused."""
+    shortcut_changed = pyqtSignal(str)
+
+    def __init__(self, text="", parent=None):
+        super().__init__(text, parent)
+        self.setReadOnly(True)
+        self.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._capturing = False
+        self.setStyleSheet(f"""
+            QLineEdit {{
+                background: {C['bg_mid']};
+                color: {C['purple_soft']};
+                border: 1px solid {C['border']};
+                border-radius: 4px;
+                padding: 4px 8px;
+                font-family: monospace;
+                font-size: 12px;
+            }}
+            QLineEdit:focus {{
+                border-color: {C['purple_mid']};
+                background: {C['bg_light']};
+            }}
+        """)
+
+    def mousePressEvent(self, event):
+        self._capturing = True
+        self.setText("Press keys...")
+        self.setStyleSheet(self.styleSheet().replace(
+            f"color: {C['purple_soft']}", f"color: {C['warning']}"))
+        super().mousePressEvent(event)
+
+    def keyPressEvent(self, event):
+        if not self._capturing:
+            return super().keyPressEvent(event)
+
+        key = event.key()
+        mods = event.modifiers()
+
+        # Escape cancels
+        if key == Qt.Key.Key_Escape:
+            self._capturing = False
+            self.clearFocus()
+            self.setStyleSheet(self.styleSheet().replace(
+                f"color: {C['warning']}", f"color: {C['purple_soft']}"))
+            return
+
+        # Backspace clears
+        if key == Qt.Key.Key_Backspace:
+            self._capturing = False
+            self.setText("")
+            self.setStyleSheet(self.styleSheet().replace(
+                f"color: {C['warning']}", f"color: {C['purple_soft']}"))
+            self.shortcut_changed.emit("")
+            self.clearFocus()
+            return
+
+        # Ignore bare modifier keys
+        if key in (Qt.Key.Key_Control, Qt.Key.Key_Shift, Qt.Key.Key_Alt, Qt.Key.Key_Meta):
+            return
+
+        parts = []
+        if mods & Qt.KeyboardModifier.ControlModifier:
+            parts.append("Ctrl")
+        if mods & Qt.KeyboardModifier.ShiftModifier:
+            parts.append("Shift")
+        if mods & Qt.KeyboardModifier.AltModifier:
+            parts.append("Alt")
+        if mods & Qt.KeyboardModifier.MetaModifier:
+            parts.append("Meta")
+
+        key_seq = QKeySequence(key)
+        key_text = key_seq.toString()
+        if key_text:
+            parts.append(key_text)
+
+        combo = "+".join(parts)
+        self._capturing = False
+        self.setText(combo)
+        self.setStyleSheet(self.styleSheet().replace(
+            f"color: {C['warning']}", f"color: {C['purple_soft']}"))
+        self.shortcut_changed.emit(combo)
+        self.clearFocus()
+
+    def focusOutEvent(self, event):
+        if self._capturing:
+            self._capturing = False
+            # Restore if cancelled by losing focus
+            self.setStyleSheet(self.styleSheet().replace(
+                f"color: {C['warning']}", f"color: {C['purple_soft']}"))
+        super().focusOutEvent(event)
 
 
 # ── Helpers ───────────────────────────────────────────────────────────
@@ -370,7 +465,12 @@ class SettingsDialog(QDialog):
     # ── Config helpers ────────────────────────────────────────────────
 
     def _cfg(self, key):
-        return self.temp_config.get(key, DEFAULT_CONFIG.get(key))
+        val = self.temp_config.get(key, DEFAULT_CONFIG.get(key))
+        # Guard against type corruption in saved configs
+        default = DEFAULT_CONFIG.get(key)
+        if default is not None and type(val) != type(default):
+            return default
+        return val
 
     def _set(self, key, value):
         self.temp_config[key] = value
@@ -405,6 +505,8 @@ class SettingsDialog(QDialog):
         engine = QComboBox()
         engine.addItems(["Nyx", "DuckDuckGo", "Google", "Brave"])
         cur = self._cfg('default_search_engine')
+        if not isinstance(cur, str):
+            cur = 'nyx'
         engine.setCurrentText(cur.title() if cur != 'nyx' else 'Nyx')
         engine.currentTextChanged.connect(
             lambda t: self._set('default_search_engine', t.lower()))
@@ -898,62 +1000,75 @@ class SettingsDialog(QDialog):
 
         lay.addWidget(_heading("Keyboard Shortcuts"))
         lay.addWidget(_description(
-            "Customize keyboard shortcuts for common actions. "
-            "Click a shortcut field and press a new key combination to rebind."
+            "Click a shortcut field, then press the new key combination to rebind it. "
+            "Press Escape to cancel, or Backspace to clear a binding."
         ))
 
-        shortcuts = [
-            ("New Tab",           "Ctrl+T"),
-            ("Close Tab",         "Ctrl+W"),
-            ("Reload",            "F5"),
-            ("Find in Page",      "Ctrl+F"),
-            ("Address Bar",       "Ctrl+L"),
-            ("Settings",          "Ctrl+,"),
-            ("Downloads",         "Ctrl+J"),
-            ("History",           "Ctrl+H"),
-            ("Zoom In",           "Ctrl++"),
-            ("Zoom Out",          "Ctrl+-"),
-            ("Full Screen",       "F11"),
-            ("Toggle AI Panel",   "Ctrl+Shift+A"),
-            ("Toggle Tree Tabs",  "Ctrl+Shift+T"),
-        ]
+        self._default_shortcuts = {
+            "New Tab":           "Ctrl+T",
+            "Close Tab":         "Ctrl+W",
+            "Reload":            "F5",
+            "Find in Page":      "Ctrl+F",
+            "Address Bar":       "Ctrl+L",
+            "Bookmark":          "Ctrl+D",
+            "Settings":          "Ctrl+,",
+            "Downloads":         "Ctrl+J",
+            "History":           "Ctrl+H",
+            "Bookmarks":         "Ctrl+B",
+            "Command Palette":   "Ctrl+K",
+            "Zoom In":           "Ctrl++",
+            "Zoom Out":          "Ctrl+-",
+            "Reset Zoom":        "Ctrl+0",
+            "Full Screen":       "F11",
+            "Toggle AI Panel":   "Ctrl+Shift+A",
+            "Audio Player":      "Ctrl+Shift+M",
+        }
+
+        saved = self._cfg('custom_shortcuts')
+        if not isinstance(saved, dict):
+            saved = {}
+        self._shortcut_edits = {}
 
         grid = QGridLayout()
         grid.setColumnStretch(1, 1)
         grid.setSpacing(6)
-        for i, (action, key) in enumerate(shortcuts):
+        for i, (action, default_key) in enumerate(self._default_shortcuts.items()):
+            current_key = saved.get(action, default_key)
+
             lbl = QLabel(action)
             lbl.setStyleSheet(f"color: {C['text_secondary']}; background: transparent;")
             grid.addWidget(lbl, i, 0)
 
-            key_edit = QLineEdit(key)
-            key_edit.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            key_edit.setReadOnly(True)
-            key_edit.setFixedWidth(150)
-            key_edit.setStyleSheet(f"""
-                QLineEdit {{
-                    background: {C['bg_mid']};
-                    color: {C['purple_soft']};
-                    border: 1px solid {C['border']};
-                    border-radius: 4px;
-                    padding: 3px 8px;
-                    font-family: monospace;
-                }}
-            """)
+            key_edit = ShortcutEdit(current_key)
+            key_edit.setFixedWidth(160)
+            key_edit.shortcut_changed.connect(
+                lambda new_key, a=action: self._on_shortcut_changed(a, new_key))
             grid.addWidget(key_edit, i, 1, Qt.AlignmentFlag.AlignLeft)
+            self._shortcut_edits[action] = key_edit
 
         lay.addLayout(grid)
 
         lay.addWidget(_separator())
 
-        reset_btn = QPushButton("Reset Shortcuts to Defaults")
-        reset_btn.clicked.connect(
-            lambda: QMessageBox.information(self, "Reset", "Shortcuts reset to defaults.")
-        )
+        reset_btn = QPushButton("Reset All Shortcuts to Defaults")
+        reset_btn.clicked.connect(self._reset_shortcuts)
         lay.addWidget(reset_btn)
 
         lay.addStretch()
         self._add_section(w)
+
+    def _on_shortcut_changed(self, action, new_key):
+        saved = self.temp_config.get('custom_shortcuts', {})
+        if not isinstance(saved, dict):
+            saved = {}
+        saved[action] = new_key
+        self._set('custom_shortcuts', saved)
+
+    def _reset_shortcuts(self):
+        self._set('custom_shortcuts', {})
+        for action, edit in self._shortcut_edits.items():
+            edit.setText(self._default_shortcuts[action])
+        QMessageBox.information(self, "Reset", "All shortcuts reset to defaults.")
 
     # ── Action callbacks ──────────────────────────────────────────────
 
