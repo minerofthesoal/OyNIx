@@ -1,37 +1,11 @@
 #!/usr/bin/env python3
 """
-OyNIx Browser v1.1.0 - The Nyx-Powered Local AI Browser
+OyNIx Browser v2.1.2 - The Nyx-Powered Local AI Browser
 Main Launcher and Entry Point
-
-Features:
-- Firefox-inspired browser with local LLM
-- Tree-style tabs + normal tabs
-- Medium purple + black Nyx theme
-- Nyx search engine with auto-indexing
-- DuckDuckGo / Google / Brave search
-- GitHub database sync
-- 1400+ curated site database
-- Security prompts for login pages
-
-Architecture:
-- oynix.py (this file)       - Main launcher
-- core/browser.py            - Browser core engine
-- core/tree_tabs.py          - Tree-style tab manager
-- core/theme_engine.py       - Nyx purple/black theme
-- core/nyx_search.py         - Nyx search engine + auto-indexing
-- core/ai_manager.py         - Local LLM (auto-download + inference)
-- core/database.py           - 1400+ curated site database
-- core/security.py           - Security prompts
-- core/github_sync.py        - GitHub database sync
-- UI/menus.py                - Menu system
-- UI/settings.py             - Settings dialog
-- UI/ai_chat.py              - AI chat panel
-- utils/helpers.py           - Utility functions
-- utils/logger.py            - Logging
 
 Author: OyNIx Team
 License: MIT
-Version: 1.1.0
+Version: 2.1.2
 """
 
 import sys
@@ -67,7 +41,7 @@ DIM = "\033[2m"
 
 print()
 print(f"{PURPLE}{BOLD}  ╔═══════════════════════════════════════════════╗{RESET}")
-print(f"{PURPLE}{BOLD}  ║         OyNIx Browser v1.1.0                 ║{RESET}")
+print(f"{PURPLE}{BOLD}  ║         OyNIx Browser v2.1.2                 ║{RESET}")
 print(f"{PURPLE}{BOLD}  ║    The Nyx-Powered Local AI Browser          ║{RESET}")
 print(f"{PURPLE}{BOLD}  ╚═══════════════════════════════════════════════╝{RESET}")
 print()

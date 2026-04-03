@@ -136,7 +136,7 @@ static int install_deps(const char *python, const char *exe_dir) {
 int main(int argc, char *argv[]) {
     printf("\n");
     printf(PURPLE BOLD "  ╔═══════════════════════════════════════════════╗\n");
-    printf("  ║         OyNIx Browser v1.1.0                 ║\n");
+    printf("  ║         OyNIx Browser v2.1.2                 ║\n");
     printf("  ║    The Nyx-Powered Local AI Browser          ║\n");
     printf("  ╚═══════════════════════════════════════════════╝" RESET "\n\n");
 
