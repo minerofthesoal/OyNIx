@@ -70,22 +70,85 @@ jobs:
         run: |
           @"
           import sys, os
+
+          # PyInstaller support
           base = os.path.dirname(os.path.abspath(__file__))
           if hasattr(sys, '_MEIPASS'):
               base = sys._MEIPASS
           if base not in sys.path:
               sys.path.insert(0, base)
+
+          # Windows: add Qt6 DLL path
+          if sys.platform == 'win32':
+              try:
+                  import PyQt6
+                  qt_bin = os.path.join(os.path.dirname(PyQt6.__file__), 'Qt6', 'bin')
+                  if os.path.isdir(qt_bin):
+                      os.environ['PATH'] = qt_bin + ';' + os.environ.get('PATH', '')
+                      os.add_dll_directory(qt_bin)
+                  qt_lib = os.path.join(os.path.dirname(PyQt6.__file__), 'Qt6', 'lib')
+                  if os.path.isdir(qt_lib):
+                      os.add_dll_directory(qt_lib)
+              except Exception:
+                  pass
+
+          # CRITICAL: Set OpenGL context sharing before QApplication
+          from PyQt6.QtWidgets import QApplication
+          from PyQt6.QtCore import Qt
+          try:
+              QApplication.setAttribute(Qt.ApplicationAttribute.AA_ShareOpenGLContexts)
+          except AttributeError:
+              pass
+          import PyQt6.QtWebEngineWidgets  # must be before QApplication
+
           from oynix.oynix import main
           main()
           "@ | Set-Content -Path "run_oynix.py" -Encoding UTF8
 
-      - name: Build .exe
+      - name: Locate QtWebEngineProcess
+        shell: pwsh
         run: |
+          $pyqt = python -c "import PyQt6; print(PyQt6.__path__[0])"
+          echo "PyQt6 path: $pyqt"
+          $proc = Get-ChildItem -Path $pyqt -Recurse -Filter "QtWebEngineProcess*" | Select-Object -First 1
+          if ($proc) { echo "Found: $($proc.FullName)" }
+          $res = Get-ChildItem -Path "$pyqt\Qt6\resources" -ErrorAction SilentlyContinue
+          if ($res) { echo "Resources: $($res.Count) files" }
+
+      - name: Build .exe
+        shell: pwsh
+        run: |
+          $pyqt = python -c "import PyQt6; print(PyQt6.__path__[0])"
+          $extraArgs = @()
+          # Bundle QtWebEngineProcess
+          $proc = Get-ChildItem -Path $pyqt -Recurse -Filter "QtWebEngineProcess.exe" | Select-Object -First 1
+          if ($proc) {
+            $extraArgs += "--add-binary"
+            $extraArgs += "$($proc.FullName);PyQt6/Qt6/libexec"
+          }
+          # Bundle Qt6 resources (icudtl.dat, qtwebengine_resources etc.)
+          $resDir = Join-Path $pyqt "Qt6\resources"
+          if (Test-Path $resDir) {
+            $extraArgs += "--add-data"
+            $extraArgs += "${resDir};PyQt6/Qt6/resources"
+          }
+          # Bundle Qt6 translations
+          $transDir = Join-Path $pyqt "Qt6\translations"
+          if (Test-Path $transDir) {
+            $extraArgs += "--add-data"
+            $extraArgs += "${transDir};PyQt6/Qt6/translations"
+          }
           pyinstaller --onefile --name OyNIx `
             --add-data "oynix;oynix" `
             --hidden-import PyQt6.QtWebEngineWidgets `
             --hidden-import PyQt6.QtWebEngineCore `
+            --hidden-import PyQt6.QtWebEngineQuick `
+            --hidden-import PyQt6.QtWebChannel `
+            --hidden-import PyQt6.QtNetwork `
+            --hidden-import PyQt6.QtPositioning `
             --hidden-import PyQt6.sip `
+            --hidden-import PyQt6.QtSvg `
+            @extraArgs `
             run_oynix.py
 
       - name: Rename

@@ -37,11 +37,24 @@ from oynix.core.database import database, guess_category
 from oynix.core.security import security_manager
 from oynix.core.github_sync import github_sync
 
+from oynix.core.extensions import (
+    install_extension, uninstall_extension, toggle_extension,
+    load_registry, get_content_scripts_for_url, get_extra_styles_for_url
+)
 from oynix.UI.ai_chat import AIChatPanel
+from oynix.core.credentials import credential_manager, CredentialDialog, SavePasswordBar
+from oynix.core.search_builder import SearchEngineBuilder, load_custom_engines, get_custom_search_url
+from oynix.core.nydta import export_nydta, import_nydta, PROFILE_PIC_PATH
 try:
     from oynix.UI.icons import svg_icon
 except ImportError:
     svg_icon = None
+
+try:
+    from oynix.core.audio_player import AudioPlayer
+    HAS_AUDIO = True
+except ImportError:
+    HAS_AUDIO = False
 
 # Config defaults
 DEFAULT_CONFIG = {
@@ -71,8 +84,14 @@ DOWNLOADS_DIR = os.path.expanduser("~/Downloads")
 
 
 class OynixWebPage(QWebEnginePage):
-    """Custom web page with security integration."""
+    """Custom web page with security integration and oyn:// interception."""
+    oyn_url_requested = pyqtSignal(QUrl)
+
     def acceptNavigationRequest(self, url, nav_type, is_main_frame):
+        # Intercept oyn:// URLs so homepage search bar and card links work
+        if is_main_frame and url.scheme() == 'oyn':
+            self.oyn_url_requested.emit(url)
+            return False  # Don't navigate — handled by signal
         if is_main_frame and security_manager.security_checks_enabled:
             ok, info = security_manager.check_url_security(url, self.parent())
             return ok
@@ -210,7 +229,9 @@ class OynixBrowser(QMainWindow):
         self._setup_toolbar()
         self._setup_tab_manager()
         self._setup_ai_panel()
+        self._setup_audio_player()
         self._setup_find_bar()
+        self._setup_credential_bar()
         self._setup_statusbar()
         self._setup_shortcuts()
         self._apply_theme()
@@ -313,6 +334,17 @@ class OynixBrowser(QMainWindow):
         self.main_splitter.addWidget(self.ai_panel)
         self.main_splitter.setSizes([1200, 0])
 
+    def _setup_audio_player(self):
+        if HAS_AUDIO:
+            self.audio_player = AudioPlayer()
+            self.audio_player.hide()
+            self.main_splitter.addWidget(self.audio_player)
+        else:
+            self.audio_player = None
+
+    def _setup_credential_bar(self):
+        self.save_pw_bar = SavePasswordBar(credential_manager, self)
+
     def _setup_find_bar(self):
         self.find_bar = FindBar(self)
 
@@ -329,27 +361,61 @@ class OynixBrowser(QMainWindow):
         self._refresh_stats()
 
     def _setup_shortcuts(self):
-        shortcuts = [
-            ('Ctrl+T', lambda: self.new_tab()),
-            ('Ctrl+W', self._close_current_tab),
-            ('Ctrl+L', lambda: (self.url_bar.setFocus(), self.url_bar.selectAll())),
-            ('Ctrl+F', self.show_find_dialog),
-            ('Ctrl+D', self.toggle_bookmark),
-            ('Ctrl+J', self.show_downloads),
-            ('Ctrl+H', self.show_history),
-            ('Ctrl+B', self.show_bookmarks),
-            ('Ctrl+K', self.show_command_palette),
-            ('Ctrl+Shift+A', self.toggle_ai_panel),
-            ('F5', self._reload),
-            ('F11', self.toggle_fullscreen),
-            ('Ctrl++', self.zoom_in),
-            ('Ctrl+-', self.zoom_out),
-            ('Ctrl+0', self.reset_zoom),
-            ('Ctrl+,', self.show_settings),
-            ('Escape', lambda: self.find_bar.hide_bar()),
-        ]
-        for key, callback in shortcuts:
-            QShortcut(QKeySequence(key), self).activated.connect(callback)
+        # Default shortcut -> action mapping
+        self._shortcut_actions = {
+            "New Tab":         lambda: self.new_tab(),
+            "Close Tab":       self._close_current_tab,
+            "Address Bar":     lambda: (self.url_bar.setFocus(), self.url_bar.selectAll()),
+            "Find in Page":    self.show_find_dialog,
+            "Bookmark":        self.toggle_bookmark,
+            "Downloads":       self.show_downloads,
+            "History":         self.show_history,
+            "Bookmarks":       self.show_bookmarks,
+            "Command Palette": self.show_command_palette,
+            "Toggle AI Panel": self.toggle_ai_panel,
+            "Audio Player":    self.toggle_audio_player,
+            "Reload":          self._reload,
+            "Full Screen":     self.toggle_fullscreen,
+            "Zoom In":         self.zoom_in,
+            "Zoom Out":        self.zoom_out,
+            "Reset Zoom":      self.reset_zoom,
+            "Settings":        self.show_settings,
+        }
+        self._default_keys = {
+            "New Tab": "Ctrl+T", "Close Tab": "Ctrl+W", "Address Bar": "Ctrl+L",
+            "Find in Page": "Ctrl+F", "Bookmark": "Ctrl+D", "Downloads": "Ctrl+J",
+            "History": "Ctrl+H", "Bookmarks": "Ctrl+B", "Command Palette": "Ctrl+K",
+            "Toggle AI Panel": "Ctrl+Shift+A", "Audio Player": "Ctrl+Shift+M",
+            "Reload": "F5", "Full Screen": "F11", "Zoom In": "Ctrl++",
+            "Zoom Out": "Ctrl+-", "Reset Zoom": "Ctrl+0", "Settings": "Ctrl+,",
+        }
+        custom = self.config.get('custom_shortcuts', {})
+        if not isinstance(custom, dict):
+            custom = {}
+
+        self._active_shortcuts = []
+        for action, default_key in self._default_keys.items():
+            key = custom.get(action, default_key)
+            if not key:
+                continue
+            callback = self._shortcut_actions.get(action)
+            if callback:
+                sc = QShortcut(QKeySequence(key), self)
+                sc.activated.connect(callback)
+                self._active_shortcuts.append(sc)
+
+        # Escape always closes find bar
+        esc = QShortcut(QKeySequence("Escape"), self)
+        esc.activated.connect(lambda: self.find_bar.hide_bar())
+        self._active_shortcuts.append(esc)
+
+    def reload_shortcuts(self):
+        """Reload shortcuts after settings change."""
+        for sc in self._active_shortcuts:
+            sc.setEnabled(False)
+            sc.deleteLater()
+        self._active_shortcuts.clear()
+        self._setup_shortcuts()
 
     def _apply_theme(self):
         self.theme_colors = get_theme(self.current_theme)
@@ -366,6 +432,7 @@ class OynixBrowser(QMainWindow):
         browser = QWebEngineView()
         page = OynixWebPage(browser)
         browser.setPage(page)
+        page.oyn_url_requested.connect(lambda u, b=browser: self._handle_oyn_url(u, b))
         browser.urlChanged.connect(lambda u, b=browser: self._on_url_changed(u, b))
         browser.loadFinished.connect(lambda ok, b=browser: self._on_load_finished(ok, b))
         browser.titleChanged.connect(lambda t, b=browser: self._on_title_changed(t, b))
@@ -418,7 +485,13 @@ class OynixBrowser(QMainWindow):
             'brave': f'https://search.brave.com/search?q={query}',
             'bing': f'https://www.bing.com/search?q={query}',
         }
-        return urls.get(engine, f'https://duckduckgo.com/?q={query}')
+        if engine in urls:
+            return urls[engine]
+        # Check custom engines
+        custom_url = get_custom_search_url(engine, query)
+        if custom_url:
+            return custom_url
+        return f'https://duckduckgo.com/?q={query}'
 
     def navigate_home(self):
         tab = self.current_tab()
@@ -479,13 +552,13 @@ class OynixBrowser(QMainWindow):
                 r['score'] = min(score, 100)
                 scored.append(r)
         scored.sort(key=lambda x: x.get('score', 0), reverse=True)
-        html = get_search_results_html(query, scored[:20], [], self.theme_colors)
+        html = get_search_results_html(query, scored, [], self.theme_colors)
         tab = self.current_tab()
         if tab:
             tab.setHtml(html, QUrl(f"oyn://search?q={query}"))
         # Async web results
         nyx_search.web_results_ready.connect(
-            lambda web: self._on_web_results(query, scored[:20], web))
+            lambda web: self._on_web_results(query, scored, web))
 
     def _on_web_results(self, query, local, web_results):
         try:
@@ -580,6 +653,14 @@ class OynixBrowser(QMainWindow):
                 js = f"(function(){{var s=document.createElement('style');s.textContent=`{css}`;document.head.appendChild(s)}})()"
                 browser.page().runJavaScript(js)
 
+        # Inject extension content scripts / styles
+        if not url_str.startswith(("oyn://", "about:", "data:")):
+            self._inject_extensions(browser, url_str)
+
+        # Auto-fill credentials on login pages
+        if not url_str.startswith(("oyn://", "about:", "data:")):
+            self._check_login_page(url_str, browser)
+
         self._refresh_stats()
 
     def _compare_site(self, url_str, title):
@@ -648,7 +729,13 @@ class OynixBrowser(QMainWindow):
             ("Zoom In", "Ctrl++"), ("Zoom Out", "Ctrl+-"), ("Full Screen", "F11"),
             ("Home", ""), ("Reload", "F5"), ("Toggle Reader Mode", ""),
             ("Print Page", ""), ("Save Page", ""), ("View Source", ""),
-            ("Import XPI Extension", ""), ("Manage Database", ""),
+            ("Install Extension", ""), ("Manage Extensions", ""),
+            ("Manage Database", ""), ("Scan Community Databases", ""),
+            ("Import Database File", ""), ("Audio Player", ""),
+            ("Passwords & Passkeys", ""), ("Import Chrome History", ""),
+            ("Import Chrome Searches", ""), ("Import Google Takeout", ""),
+            ("Search Engine Builder", ""),
+            ("Export Profile (.nydta)", ""), ("Import Profile (.nydta)", ""),
         ]
         palette = CommandPalette(commands, self)
         palette.command_selected.connect(self._run_command)
@@ -666,8 +753,19 @@ class OynixBrowser(QMainWindow):
             "Home": self.navigate_home, "Reload": self._reload,
             "Toggle Reader Mode": self.toggle_reader_mode, "Print Page": self.print_page,
             "Save Page": self.save_page, "View Source": self.view_source,
-            "Import XPI Extension": self.import_xpi_extension,
+            "Install Extension": self.import_extension,
+            "Manage Extensions": self.manage_extensions,
             "Manage Database": self.manage_database,
+            "Scan Community Databases": self.scan_community_databases,
+            "Import Database File": self.pick_database_file,
+            "Audio Player": self.toggle_audio_player,
+            "Passwords & Passkeys": self.show_passwords,
+            "Import Chrome History": self.import_chrome_history,
+            "Import Chrome Searches": self.import_chrome_searches,
+            "Import Google Takeout": self.import_google_takeout,
+            "Search Engine Builder": self.show_search_builder,
+            "Export Profile (.nydta)": self.export_nydta,
+            "Import Profile (.nydta)": self.import_nydta,
         }
         fn = mapping.get(name)
         if fn:
@@ -802,6 +900,7 @@ class OynixBrowser(QMainWindow):
             if new_theme != self.current_theme:
                 self.set_theme(new_theme)
             self.tab_manager.set_tree_mode(self.config.get('use_tree_tabs', True))
+            self.reload_shortcuts()
 
     def set_theme(self, name):
         self.current_theme = name
@@ -879,57 +978,246 @@ class OynixBrowser(QMainWindow):
         tab.page().runJavaScript(js)
         self._update_status("Reader mode enabled")
 
-    # ── XPI Extension Import ───────────────────────────────────────
-    def import_xpi_extension(self):
-        path, _ = QFileDialog.getOpenFileName(self, "Import Firefox Extension",
-                                               "", "XPI Files (*.xpi);;All Files (*)")
+    # ── Extensions (.npi / .xpi) ─────────────────────────────────
+    def import_extension(self):
+        """Install an extension from .npi (OyNIx) or .xpi (Firefox) file."""
+        path, _ = QFileDialog.getOpenFileName(
+            self, "Install Extension", "",
+            "OyNIx Extensions (*.npi);;Firefox Extensions (*.xpi);;All Files (*)")
         if not path:
             return
-        ext_dir = os.path.expanduser("~/.config/oynix/extensions")
-        os.makedirs(ext_dir, exist_ok=True)
-        import zipfile
-        try:
-            with zipfile.ZipFile(path, 'r') as zf:
-                # Read manifest
-                manifest = json.loads(zf.read('manifest.json'))
-                name = manifest.get('name', os.path.basename(path))
-                version = manifest.get('version', '?')
-                dest = os.path.join(ext_dir, name.replace(' ', '_'))
-                os.makedirs(dest, exist_ok=True)
-                zf.extractall(dest)
-                # Try to load content scripts
-                content_scripts = manifest.get('content_scripts', [])
-                self._update_status(f"Extension '{name}' v{version} imported to {dest}")
-                info = f"Extension: {name} v{version}\n"
-                if content_scripts:
-                    info += f"Content scripts: {len(content_scripts)} entries\n"
-                    info += "Note: Content scripts will be injected on matching pages."
-                else:
-                    info += "No content scripts found."
-                QMessageBox.information(self, "Extension Imported", info)
-                # Save to extension registry
-                reg_path = os.path.join(ext_dir, '_registry.json')
-                registry = self._load_json(reg_path, [])
-                registry.append({'name': name, 'version': version, 'path': dest,
-                                 'content_scripts': content_scripts, 'enabled': True})
-                self._save_json(reg_path, registry)
-        except (zipfile.BadZipFile, KeyError) as e:
-            QMessageBox.warning(self, "Invalid Extension", f"Could not load XPI: {e}")
-        except Exception as e:
-            QMessageBox.warning(self, "Error", str(e))
+        ok, info, error = install_extension(path)
+        if ok:
+            fmt = info.get('format', 'unknown').upper()
+            name = info.get('name', '?')
+            ver = info.get('version', '?')
+            cs = len(info.get('content_scripts', []))
+            feats = info.get('oynix_features', [])
+            msg = f"Installed: {name} v{ver} ({fmt})\n\n"
+            if cs:
+                msg += f"Content scripts: {cs} rule(s)\n"
+            if info.get('popup'):
+                msg += "Has popup UI\n"
+            if feats:
+                msg += f"OyNIx features: {', '.join(feats)}\n"
+            msg += f"\nPermissions: {', '.join(info.get('permissions', ['none']))}"
+            QMessageBox.information(self, "Extension Installed", msg)
+            self._update_status(f"Extension '{name}' installed")
+        else:
+            QMessageBox.warning(self, "Install Failed", error)
+
+    # Keep old name as alias
+    import_xpi_extension = import_extension
 
     def manage_extensions(self):
-        ext_dir = os.path.expanduser("~/.config/oynix/extensions")
-        reg_path = os.path.join(ext_dir, '_registry.json')
-        registry = self._load_json(reg_path, [])
+        """Show extension manager dialog."""
+        registry = load_registry()
         if not registry:
-            QMessageBox.information(self, "Extensions", "No extensions installed.\nUse File > Import XPI to add one.")
+            reply = QMessageBox.question(self, "Extensions",
+                "No extensions installed.\n\nInstall one now?",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+            if reply == QMessageBox.StandardButton.Yes:
+                self.import_extension()
             return
-        text = "Installed Extensions:\n\n"
+
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Extensions Manager")
+        dialog.setMinimumSize(500, 400)
+        layout = QVBoxLayout(dialog)
+
+        header = QLabel("Installed Extensions")
+        header.setObjectName("sectionHeader")
+        layout.addWidget(header)
+
+        ext_list = QListWidget()
         for ext in registry:
-            status = "Enabled" if ext.get('enabled') else "Disabled"
-            text += f"  {ext['name']} v{ext['version']} [{status}]\n"
-        QMessageBox.information(self, "Extensions", text)
+            status = "ON" if ext.get('enabled', True) else "OFF"
+            fmt = ext.get('format', '?').upper()
+            item_text = f"[{status}] {ext['name']} v{ext.get('version','?')} ({fmt})"
+            if ext.get('description'):
+                item_text += f"\n    {ext['description'][:80]}"
+            item = QListWidgetItem(item_text)
+            item.setData(Qt.ItemDataRole.UserRole, ext['name'])
+            ext_list.addItem(item)
+        layout.addWidget(ext_list)
+
+        btn_row = QHBoxLayout()
+        install_btn = QPushButton("Install New...")
+        install_btn.setObjectName("accentBtn")
+        install_btn.clicked.connect(lambda: (dialog.accept(), self.import_extension()))
+        btn_row.addWidget(install_btn)
+
+        toggle_btn = QPushButton("Toggle On/Off")
+        toggle_btn.clicked.connect(lambda: self._toggle_ext(ext_list))
+        btn_row.addWidget(toggle_btn)
+
+        remove_btn = QPushButton("Uninstall")
+        remove_btn.clicked.connect(lambda: self._uninstall_ext(ext_list, dialog))
+        btn_row.addWidget(remove_btn)
+
+        btn_row.addStretch()
+        close_btn = QPushButton("Close")
+        close_btn.clicked.connect(dialog.accept)
+        btn_row.addWidget(close_btn)
+        layout.addLayout(btn_row)
+
+        dialog.exec()
+
+    def _toggle_ext(self, ext_list):
+        current = ext_list.currentItem()
+        if not current:
+            return
+        name = current.data(Qt.ItemDataRole.UserRole)
+        new_state = toggle_extension(name)
+        if new_state is not None:
+            status = "ON" if new_state else "OFF"
+            self._update_status(f"Extension '{name}' {'enabled' if new_state else 'disabled'}")
+            # Refresh list
+            current.setText(current.text().replace("[ON]", f"[{status}]").replace("[OFF]", f"[{status}]"))
+
+    def _uninstall_ext(self, ext_list, dialog):
+        current = ext_list.currentItem()
+        if not current:
+            return
+        name = current.data(Qt.ItemDataRole.UserRole)
+        reply = QMessageBox.question(self, "Uninstall", f"Uninstall '{name}'?")
+        if reply == QMessageBox.StandardButton.Yes:
+            ok, msg = uninstall_extension(name)
+            if ok:
+                ext_list.takeItem(ext_list.row(current))
+                self._update_status(msg)
+
+    def _inject_extensions(self, browser, url_str):
+        """Inject extension content scripts and styles into a loaded page."""
+        # Content scripts from extensions
+        scripts = get_content_scripts_for_url(url_str)
+        for cs in scripts:
+            for js_code in cs.get('js', []):
+                browser.page().runJavaScript(js_code)
+            for css_code in cs.get('css', []):
+                js = f"(function(){{var s=document.createElement('style');s.textContent=`{css_code}`;document.head.appendChild(s)}})()"
+                browser.page().runJavaScript(js)
+
+        # NPI extra styles
+        extra_styles = get_extra_styles_for_url(url_str)
+        for css in extra_styles:
+            js = f"(function(){{var s=document.createElement('style');s.textContent=`{css}`;document.head.appendChild(s)}})()"
+            browser.page().runJavaScript(js)
+
+    # ── Community Database Folder ──────────────────────────────────
+    def scan_community_databases(self):
+        """Check GitHub repo's community folder for new database files."""
+        if not github_sync.is_configured():
+            QMessageBox.information(self, "Community Databases",
+                "Configure GitHub sync first (Search > GitHub Sync > Configure)")
+            return
+        github_sync.scan_community_folder(
+            on_new_files=self._on_community_files_found,
+            on_done=lambda ok, msg: self._update_status(msg))
+
+    def _on_community_files_found(self, file_entries):
+        """Handle new community database files found on GitHub."""
+        dialog = QDialog(self)
+        dialog.setWindowTitle("New Community Databases Found")
+        dialog.setMinimumSize(520, 380)
+        layout = QVBoxLayout(dialog)
+
+        header = QLabel(f"Found {len(file_entries)} new database file(s)")
+        header.setObjectName("sectionHeader")
+        layout.addWidget(header)
+
+        desc = QLabel("Select which databases to merge into your browser:")
+        desc.setStyleSheet(f"color: {NYX_COLORS['text_secondary']}; background: transparent;")
+        layout.addWidget(desc)
+
+        file_list = QListWidget()
+        file_list.setSelectionMode(QListWidget.SelectionMode.MultiSelection)
+        for entry in file_entries:
+            item = QListWidgetItem(f"{entry['filename']}  ({entry['count']} sites)")
+            item.setData(Qt.ItemDataRole.UserRole, entry)
+            item.setSelected(True)
+            file_list.addItem(item)
+        layout.addWidget(file_list)
+
+        btn_row = QHBoxLayout()
+        merge_btn = QPushButton("Merge Selected")
+        merge_btn.setObjectName("accentBtn")
+        btn_row.addWidget(merge_btn)
+        skip_btn = QPushButton("Skip All")
+        btn_row.addWidget(skip_btn)
+        layout.addLayout(btn_row)
+
+        def merge():
+            selected = file_list.selectedItems()
+            total_added = 0
+            for item in selected:
+                entry = item.data(Qt.ItemDataRole.UserRole)
+                for site in entry['sites']:
+                    added = database.add_site(
+                        site.get('url', ''), site.get('title', ''),
+                        site.get('description', ''), source='community')
+                    if added:
+                        total_added += 1
+            self._update_status(f"Merged {total_added} new sites from community databases")
+            self._refresh_stats()
+            dialog.accept()
+
+        merge_btn.clicked.connect(merge)
+        skip_btn.clicked.connect(dialog.reject)
+        dialog.exec()
+
+    def pick_database_file(self):
+        """Let user pick a local JSON database file to merge."""
+        path, _ = QFileDialog.getOpenFileName(
+            self, "Select Database File", "",
+            "JSON Files (*.json);;All Files (*)")
+        if not path:
+            return
+        try:
+            with open(path) as f:
+                data = json.load(f)
+
+            # Try to extract sites from various formats
+            sites = []
+            if isinstance(data, list):
+                sites = [s for s in data if isinstance(s, dict) and s.get('url')]
+            elif isinstance(data, dict):
+                for section in ('curated', 'discovered', 'sites'):
+                    if section in data and isinstance(data[section], dict):
+                        for cat, entries in data[section].items():
+                            if isinstance(entries, list):
+                                for item in entries:
+                                    if isinstance(item, dict) and item.get('url'):
+                                        sites.append(item)
+                    elif section in data and isinstance(data[section], list):
+                        sites.extend([s for s in data[section]
+                                      if isinstance(s, dict) and s.get('url')])
+
+            if not sites:
+                QMessageBox.information(self, "No Sites Found",
+                    "Could not find any site entries in this file.\n"
+                    "Expected JSON format: list of {url, title, description} objects.")
+                return
+
+            reply = QMessageBox.question(self, "Import Database",
+                f"Found {len(sites)} sites in {os.path.basename(path)}.\n\n"
+                f"Merge into your browser database?\n(Duplicates will be skipped)")
+            if reply != QMessageBox.StandardButton.Yes:
+                return
+
+            added = 0
+            for s in sites:
+                result = database.add_site(
+                    s.get('url', ''), s.get('title', ''),
+                    s.get('description', s.get('desc', '')), source='imported')
+                if result:
+                    added += 1
+            self._update_status(f"Imported {added} new sites (skipped {len(sites)-added} duplicates)")
+            self._refresh_stats()
+        except json.JSONDecodeError:
+            QMessageBox.warning(self, "Error", "Invalid JSON file")
+        except Exception as e:
+            QMessageBox.warning(self, "Error", str(e))
 
     # ── Database ───────────────────────────────────────────────────
     def manage_database(self):
@@ -984,7 +1272,31 @@ class OynixBrowser(QMainWindow):
                 lambda text: ai_manager.chat(f"Explain this simply:\n{text[:2000]}"))
 
     def set_ai_model(self):
-        QMessageBox.information(self, "AI Model", "Current: TinyLlama 1.1B Chat (GGUF Q4)\nModel auto-downloads on first launch.")
+        """Show AI model info and allow switching."""
+        models = ai_manager.get_available_models()
+        current = ai_manager.model_key
+        status = ai_manager.get_status()
+
+        items = []
+        for key, info in models.items():
+            marker = " [ACTIVE]" if key == current else ""
+            items.append(f"{info['name']}{marker}\n  {info['description']}")
+
+        model_names = list(models.keys())
+        model_labels = [models[k]['name'] for k in model_names]
+        current_idx = model_names.index(current) if current in model_names else 0
+
+        from PyQt6.QtWidgets import QInputDialog
+        choice, ok = QInputDialog.getItem(
+            self, "AI Model",
+            f"Status: {status['status']}\nCurrent: {models.get(current, {}).get('name', current)}\n\nSelect model:",
+            model_labels, current_idx, False)
+        if ok and choice:
+            idx = model_labels.index(choice)
+            new_key = model_names[idx]
+            if new_key != current:
+                ai_manager.switch_model(new_key)
+                self._update_status(f"Switching AI to {choice}...")
 
     # ── Window ─────────────────────────────────────────────────────
     def new_window(self):
@@ -1109,8 +1421,275 @@ class OynixBrowser(QMainWindow):
             f"Trusted: {len(security_manager.trusted_domains)}\n"
             f"Blocked: {len(security_manager.blocked_domains)}")
 
-    # FindBar layout fix
+    # ── .nydta Profile Export / Import ────────────────────────────
+    def export_nydta(self):
+        """Export full browser profile as .nydta archive."""
+        path, _ = QFileDialog.getSaveFileName(
+            self, "Export OyNIx Profile", "oynix_profile.nydta",
+            "OyNIx Profile (*.nydta);;All Files (*)")
+        if not path:
+            return
+
+        def _get_db_entries():
+            """Get database entries for export."""
+            import tempfile
+            tmp = tempfile.NamedTemporaryFile(suffix='.json', delete=False)
+            tmp.close()
+            database.export_to_json(tmp.name)
+            try:
+                with open(tmp.name) as f:
+                    data = json.load(f)
+                # Flatten to list
+                entries = []
+                if isinstance(data, dict):
+                    for section in ('curated', 'discovered', 'sites'):
+                        if section in data and isinstance(data[section], dict):
+                            for cat, items in data[section].items():
+                                if isinstance(items, list):
+                                    for item in items:
+                                        if isinstance(item, dict):
+                                            item['_category'] = cat
+                                            entries.append(item)
+                        elif section in data and isinstance(data[section], list):
+                            entries.extend(data[section])
+                elif isinstance(data, list):
+                    entries = data
+                return entries
+            except Exception:
+                return []
+            finally:
+                os.unlink(tmp.name)
+
+        ok, msg = export_nydta(path, self._history, self.config, _get_db_entries)
+        if ok:
+            self._update_status(msg)
+            QMessageBox.information(self, "Profile Exported", msg)
+        else:
+            QMessageBox.warning(self, "Export Failed", msg)
+
+    def import_nydta(self):
+        """Import a .nydta profile archive."""
+        path, _ = QFileDialog.getOpenFileName(
+            self, "Import OyNIx Profile", "",
+            "OyNIx Profile (*.nydta);;All Files (*)")
+        if not path:
+            return
+
+        ok, data, msg = import_nydta(path)
+        if not ok:
+            QMessageBox.warning(self, "Import Failed", msg)
+            return
+
+        # Show what was found and let user choose
+        parts = []
+        if data['history']:
+            parts.append(f"{len(data['history'])} history entries")
+        if data['database']:
+            parts.append(f"{len(data['database'])} database entries")
+        if data['settings']:
+            parts.append("settings")
+        if data['profile_pic_path']:
+            parts.append("profile picture")
+
+        reply = QMessageBox.question(self, "Import Profile",
+            f"Found: {', '.join(parts)}\n\nImport all into OyNIx?\n"
+            "(Existing data will be merged, not replaced)")
+        if reply != QMessageBox.StandardButton.Yes:
+            return
+
+        # Merge history
+        if data['history']:
+            existing_urls = {h['url'] for h in self._history}
+            added = 0
+            for entry in data['history']:
+                if entry.get('url') and entry['url'] not in existing_urls:
+                    self._history.insert(0, entry)
+                    existing_urls.add(entry['url'])
+                    added += 1
+            self._history = self._history[:5000]
+            self._save_json(HISTORY_FILE, self._history)
+
+        # Merge database
+        db_added = 0
+        if data['database']:
+            for entry in data['database']:
+                url = entry.get('url', '')
+                title = entry.get('title', '')
+                desc = entry.get('description', '')
+                if url and database.add_site(url, title, desc, source='nydta'):
+                    db_added += 1
+
+        # Import settings (merge, don't replace)
+        if data['settings']:
+            for key, val in data['settings'].items():
+                if key not in self.config:
+                    self.config[key] = val
+            self._save_config()
+
+        # Profile picture
+        if data['profile_pic_path']:
+            import shutil
+            shutil.copy2(data['profile_pic_path'], PROFILE_PIC_PATH)
+
+        self._refresh_stats()
+        result = f"Imported: {len(data['history'])} history, {db_added} new DB entries"
+        if data['profile_pic_path']:
+            result += ", profile picture"
+        self._update_status(result)
+        QMessageBox.information(self, "Import Complete", result)
+
+    def set_profile_picture(self):
+        """Set the user's profile picture."""
+        path, _ = QFileDialog.getOpenFileName(
+            self, "Select Profile Picture", "",
+            "Images (*.png *.jpg *.jpeg *.jxl *.webp);;All (*)")
+        if not path:
+            return
+        import shutil
+        os.makedirs(os.path.dirname(PROFILE_PIC_PATH), exist_ok=True)
+        shutil.copy2(path, PROFILE_PIC_PATH)
+        self._update_status("Profile picture updated")
+
+    # ── Audio Player ────────────────────────────────────────────────
+    def toggle_audio_player(self):
+        if not self.audio_player:
+            QMessageBox.information(self, "Audio Player",
+                "Audio player requires PyQt6.QtMultimedia.\n"
+                "Install: pip install PyQt6-Multimedia")
+            return
+        if self.audio_player.isVisible():
+            self.audio_player.hide()
+        else:
+            self.audio_player.show()
+
+    # ── Credential Manager ────────────────────────────────────────
+    def show_passwords(self):
+        dialog = CredentialDialog(credential_manager, self)
+        dialog.exec()
+
+    def _check_login_page(self, url_str, browser):
+        """Inject JS to detect login forms and offer auto-fill."""
+        if not credential_manager.is_unlocked:
+            return
+        creds = credential_manager.get_credentials(url_str)
+        if creds:
+            # Auto-fill first credential
+            c = creds[0]
+            js = f'''(function(){{
+                var u=document.querySelector('input[type="email"],input[name="username"],input[name="user"],input[name="login"],input[autocomplete="username"]');
+                var p=document.querySelector('input[type="password"]');
+                if(u)u.value={json.dumps(c['username'])};
+                if(p)p.value={json.dumps(c['password'])};
+            }})()'''
+            browser.page().runJavaScript(js)
+
+    # ── Chrome Import ─────────────────────────────────────────────
+    def import_chrome_history(self):
+        """Import browsing history from Google Chrome."""
+        from oynix.core.chrome_import import import_chrome_history, find_chrome_history_db
+        db_path = find_chrome_history_db()
+        if not db_path:
+            path, _ = QFileDialog.getOpenFileName(
+                self, "Select Chrome History DB", "",
+                "SQLite (History);;All (*)")
+            if not path:
+                return
+            db_path = path
+
+        entries, msg = import_chrome_history(db_path)
+        if not entries:
+            QMessageBox.information(self, "Chrome Import", msg)
+            return
+
+        reply = QMessageBox.question(self, "Chrome Import",
+            f"{msg}\n\nImport {len(entries)} entries into OyNIx?\n"
+            "They will be added to your history and database.")
+        if reply != QMessageBox.StandardButton.Yes:
+            return
+
+        # Add to history
+        for e in entries:
+            self._history.insert(0, {
+                'url': e['url'], 'title': e['title'],
+                'time': e.get('time', ''), 'source': 'chrome'
+            })
+        self._history = self._history[:5000]
+        self._save_json(HISTORY_FILE, self._history)
+
+        # Add to database
+        added = 0
+        for e in entries:
+            result = database.add_site(e['url'], e['title'], source='chrome')
+            if result:
+                added += 1
+        self._refresh_stats()
+        self._update_status(f"Chrome import: {len(entries)} history + {added} new DB sites")
+
+    def import_chrome_searches(self):
+        """Import search queries from Chrome history."""
+        from oynix.core.chrome_import import import_chrome_search_history, find_chrome_history_db
+        db_path = find_chrome_history_db()
+        if not db_path:
+            path, _ = QFileDialog.getOpenFileName(
+                self, "Select Chrome History DB", "",
+                "SQLite (History);;All (*)")
+            if not path:
+                return
+            db_path = path
+
+        searches, msg = import_chrome_search_history(db_path)
+        if not searches:
+            QMessageBox.information(self, "Chrome Search Import", msg)
+            return
+
+        QMessageBox.information(self, "Chrome Search Import",
+            f"{msg}\n\nSearch queries have been indexed for Nyx search.")
+        for s in searches:
+            nyx_search.index_page(
+                s['url'], f"Search: {s['query']}", s['query'])
+
+    def import_google_takeout(self):
+        """Import from Google Takeout JSON export."""
+        path, _ = QFileDialog.getOpenFileName(
+            self, "Import Google Takeout", "",
+            "JSON (*.json);;All (*)")
+        if not path:
+            return
+        from oynix.core.chrome_import import import_google_takeout
+        history, searches, msg = import_google_takeout(path)
+        if not history and not searches:
+            QMessageBox.information(self, "Takeout Import", msg)
+            return
+
+        reply = QMessageBox.question(self, "Takeout Import",
+            f"{msg}\n\nImport into OyNIx?")
+        if reply != QMessageBox.StandardButton.Yes:
+            return
+
+        for e in history:
+            self._history.insert(0, e)
+        self._history = self._history[:5000]
+        self._save_json(HISTORY_FILE, self._history)
+
+        added = 0
+        for e in history:
+            if database.add_site(e.get('url',''), e.get('title',''), source='takeout'):
+                added += 1
+        for s in searches:
+            nyx_search.index_page(s['url'], f"Search: {s['query']}", s['query'])
+
+        self._refresh_stats()
+        self._update_status(f"Takeout: {len(history)} history + {len(searches)} searches + {added} DB sites")
+
+    # ── Search Engine Builder ─────────────────────────────────────
+    def show_search_builder(self):
+        dialog = SearchEngineBuilder(self)
+        dialog.exec()
+
+    # FindBar + SavePW bar layout fix
     def resizeEvent(self, event):
         super().resizeEvent(event)
         if hasattr(self, 'find_bar'):
             self.find_bar.setGeometry(0, self.height() - 80, self.width(), 40)
+        if hasattr(self, 'save_pw_bar'):
+            self.save_pw_bar.setGeometry(0, self.height() - 120, self.width(), 40)

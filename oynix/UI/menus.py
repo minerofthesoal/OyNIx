@@ -1,6 +1,6 @@
 """
-OyNIx Browser v2.0 - Menu System
-Complete menu bar with all features including XPI import.
+OyNIx Browser v2.1 - Menu System
+Complete menu bar with all features.
 """
 from PyQt6.QtWidgets import QMenu
 from PyQt6.QtGui import QAction, QKeySequence
@@ -43,13 +43,23 @@ class OynixMenuBar:
         imp = m.addMenu("Import")
         self._a(imp, "Bookmarks...", self.b.import_bookmarks)
         self._a(imp, "History...", self.b.import_history)
+        self._a(imp, "Chrome History...", self.b.import_chrome_history)
+        self._a(imp, "Chrome Search Queries...", self.b.import_chrome_searches)
+        self._a(imp, "Google Takeout...", self.b.import_google_takeout)
         self._a(imp, "Settings...", self.b.import_settings)
-        self._a(imp, "XPI Extension...", self.b.import_xpi_extension)
+        self._a(imp, "Extension (.npi/.xpi)...", self.b.import_extension)
+        self._a(imp, "Database File...", self.b.pick_database_file)
+        imp.addSeparator()
+        self._a(imp, "OyNIx Profile (.nydta)...", self.b.import_nydta)
         exp = m.addMenu("Export")
         self._a(exp, "Bookmarks...", self.b.export_bookmarks)
         self._a(exp, "History...", self.b.export_history)
         self._a(exp, "Database...", self.b.export_database)
         self._a(exp, "Settings...", self.b.export_settings)
+        exp.addSeparator()
+        self._a(exp, "Full Profile (.nydta)...", self.b.export_nydta)
+        m.addSeparator()
+        self._a(m, "Set Profile Picture...", self.b.set_profile_picture)
         m.addSeparator()
         self._a(m, "Close Tab", self.b.close_tab, "Ctrl+W")
         self._a(m, "Quit", lambda: self.b.close(), "Ctrl+Q")
@@ -71,6 +81,7 @@ class OynixMenuBar:
         m.addSeparator()
         self._a(m, "Toggle Tree Tabs", self.b.toggle_tab_mode)
         self._a(m, "Toggle AI Panel", self.b.toggle_ai_panel, "Ctrl+Shift+A")
+        self._a(m, "Toggle Audio Player", self.b.toggle_audio_player)
         m.addSeparator()
         themes = m.addMenu("Themes")
         for name in ['nyx', 'nyx_midnight', 'nyx_violet', 'nyx_amethyst', 'nyx_ember']:
@@ -81,6 +92,7 @@ class OynixMenuBar:
         engines = m.addMenu("Search Engine")
         for eng in ['nyx', 'duckduckgo', 'google', 'brave', 'bing']:
             self._a(engines, eng.title(), lambda e=eng: self.b.set_search_engine(e))
+        self._a(m, "Custom Search Engine Builder...", self.b.show_search_builder)
         m.addSeparator()
         self._a(m, "Auto-Expand Database", self.b.auto_expand_database)
         self._a(m, "Manage Database", self.b.manage_database)
@@ -88,19 +100,24 @@ class OynixMenuBar:
         gh = m.addMenu("GitHub Sync")
         self._a(gh, "Upload Database", self.b.upload_to_github)
         self._a(gh, "Import from GitHub", self.b.import_from_github)
+        self._a(gh, "Scan Community Databases", self.b.scan_community_databases)
         self._a(gh, "Configure...", self.b.configure_github)
+        m.addSeparator()
+        self._a(m, "Import Database File...", self.b.pick_database_file)
 
     def _tools_menu(self):
         m = self.menubar.addMenu("Tools")
         self._a(m, "Downloads", self.b.show_downloads, "Ctrl+J")
         self._a(m, "History", self.b.show_history, "Ctrl+H")
         self._a(m, "Bookmarks", self.b.show_bookmarks, "Ctrl+B")
+        self._a(m, "Audio Player", self.b.toggle_audio_player)
         self._a(m, "Command Palette", self.b.show_command_palette, "Ctrl+K")
         m.addSeparator()
         self._a(m, "Extensions", self.b.manage_extensions)
-        self._a(m, "Import XPI...", self.b.import_xpi_extension)
+        self._a(m, "Install Extension...", self.b.import_extension)
         m.addSeparator()
         priv = m.addMenu("Privacy & Security")
+        self._a(priv, "Passwords & Passkeys", self.b.show_passwords)
         self._a(priv, "Clear Browsing Data", self.b.clear_data)
         self._a(priv, "Trusted Domains", self.b.manage_trusted_domains)
 
