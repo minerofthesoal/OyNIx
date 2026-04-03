@@ -1,5 +1,5 @@
 """
-OyNIx Browser v2.1 - Menu System
+OyNIx Browser v2.1.2 - Menu System
 Complete menu bar with all features.
 """
 from PyQt6.QtWidgets import QMenu

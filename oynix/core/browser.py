@@ -1,5 +1,5 @@
 """
-OyNIx Browser v2.0 - Main Browser Core
+OyNIx Browser v2.1.2 - Main Browser Core
 Complete desktop browser with local LLM, Nyx search, tree tabs,
 bookmarks, downloads, history, find-in-page, command palette,
 forced theme on external search engines, XPI extension import,
@@ -212,7 +212,7 @@ class CommandPalette(QDialog):
 
 
 class OynixBrowser(QMainWindow):
-    """OyNIx Browser v2.0 — The Nyx-Powered Local AI Browser."""
+    """OyNIx Browser v2.1.2 — The Nyx-Powered Local AI Browser."""
 
     def __init__(self):
         super().__init__()
@@ -1445,25 +1445,30 @@ class OynixBrowser(QMainWindow):
 
     def show_about(self):
         QMessageBox.about(self, "About OyNIx",
-            "OyNIx Browser v2.0\nThe Nyx-Powered Local AI Browser\n\n"
+            "OyNIx Browser v2.1.2\nThe Nyx-Powered Local AI Browser\n\n"
             "Features: Tree Tabs, Local LLM, Nyx Search,\n"
-            "1400+ Site Database, Bookmarks, Downloads,\n"
-            "History, Find in Page, Command Palette,\n"
-            "XPI Extensions, GitHub Sync\n\n"
+            "1400+ Site Database, Dynamic Refractions,\n"
+            "C++/C# Turbo Indexer, Audio Player,\n"
+            "Password Manager, .nydta Profiles,\n"
+            "XPI Extensions, GitHub Sync, Flatpak\n\n"
             "Coded by Claude (Anthropic)")
 
     def show_release_notes(self):
         QMessageBox.information(self, "Release Notes",
-            "v2.0 — Complete UI Overhaul\n\n"
-            "• Modern glassmorphism theme\n• Custom SVG icons\n• Smooth animations\n"
-            "• Bookmarks with folders\n• Download manager\n• History viewer\n"
-            "• Find in page (Ctrl+F)\n• Command palette (Ctrl+K)\n"
-            "• XPI extension import\n• Forced theme on search engines\n"
-            "• Site comparison + auto-update\n• Reader mode\n• Print to PDF\n"
-            "• Save page as HTML\n• View source")
+            "v2.1.2 — Dynamic Refractions & Turbo Search\n\n"
+            "• Nyx-first search (no external redirects)\n"
+            "• GPU-accelerated mouse-tracking refractions\n"
+            "• Dynamic glass effects on all UI pages\n"
+            "• C++ & C# turbo indexer with batch scoring\n"
+            "• Custom cat-ear logo & app icons\n"
+            "• Flatpak build support + CI\n"
+            "• Enhanced animations throughout\n"
+            "• .nydta profile export/import\n"
+            "• Password & passkey manager\n"
+            "• Audio player\n• Chrome history import")
 
     def check_updates(self):
-        QMessageBox.information(self, "Updates", "You are running OyNIx v2.0 (latest).")
+        QMessageBox.information(self, "Updates", "You are running OyNIx v2.1.2 (latest).")
 
     def import_settings(self):
         path, _ = QFileDialog.getOpenFileName(self, "Import Settings", "", "JSON (*.json)")
