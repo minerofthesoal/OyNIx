@@ -45,6 +45,7 @@ from oynix.UI.ai_chat import AIChatPanel
 from oynix.core.credentials import credential_manager, CredentialDialog, SavePasswordBar
 from oynix.core.search_builder import SearchEngineBuilder, load_custom_engines, get_custom_search_url
 from oynix.core.nydta import export_nydta, import_nydta, PROFILE_PIC_PATH
+from oynix.core.profiles import profile_manager, get_autologin_js
 try:
     from oynix.UI.icons import svg_icon
 except ImportError:
@@ -155,6 +156,95 @@ class FindBar(QWidget):
             self._browser.findText(text)
 
 
+class AutoLoginDialog(QDialog):
+    """Dialog for managing auto-login rules."""
+
+    def __init__(self, pcreds, parent=None):
+        super().__init__(parent)
+        self.pcreds = pcreds
+        self.setWindowTitle("Auto-Login Manager")
+        self.setMinimumSize(550, 400)
+        c = NYX_COLORS
+
+        layout = QVBoxLayout(self)
+        header = QLabel(f"Auto-Login Rules — {profile_manager.active.display_name}")
+        header.setStyleSheet(f"color: {c['purple_pale']}; font-size: 16px; font-weight: bold; background: transparent;")
+        layout.addWidget(header)
+
+        desc = QLabel("Sites where credentials are auto-filled on page load:")
+        desc.setStyleSheet(f"color: {c['text_muted']}; font-size: 12px; background: transparent;")
+        layout.addWidget(desc)
+
+        self.rule_list = QListWidget()
+        autologins = pcreds.get_all_autologins()
+        for domain, rule in autologins.items():
+            status = "fill + submit" if not rule.get('fill_only') else "fill only"
+            enabled = "ON" if rule.get('enabled') else "OFF"
+            item = QListWidgetItem(
+                f"{domain}  —  {rule.get('username', '?')}  [{enabled}, {status}]")
+            item.setData(Qt.ItemDataRole.UserRole, domain)
+            self.rule_list.addItem(item)
+        layout.addWidget(self.rule_list)
+
+        # Saved passwords
+        pw_header = QLabel("Saved Passwords")
+        pw_header.setStyleSheet(f"color: {c['purple_pale']}; font-size: 14px; font-weight: bold; background: transparent;")
+        layout.addWidget(pw_header)
+        self.cred_list = QListWidget()
+        self.cred_list.setMaximumHeight(150)
+        for domain in pcreds.get_all_domains():
+            for cred in pcreds.get_credentials(domain):
+                item = QListWidgetItem(
+                    f"{domain}  —  {cred['username']}  ({cred.get('saved_at', '?')})")
+                item.setData(Qt.ItemDataRole.UserRole, (domain, cred['username']))
+                self.cred_list.addItem(item)
+        layout.addWidget(self.cred_list)
+
+        btn_row = QHBoxLayout()
+        toggle_btn = QPushButton("Toggle Auto-Login")
+        toggle_btn.clicked.connect(self._toggle_autologin)
+        btn_row.addWidget(toggle_btn)
+        del_rule_btn = QPushButton("Remove Rule")
+        del_rule_btn.clicked.connect(self._remove_rule)
+        btn_row.addWidget(del_rule_btn)
+        del_pw_btn = QPushButton("Delete Password")
+        del_pw_btn.clicked.connect(self._delete_password)
+        btn_row.addWidget(del_pw_btn)
+        btn_row.addStretch()
+        close_btn = QPushButton("Close")
+        close_btn.clicked.connect(self.accept)
+        btn_row.addWidget(close_btn)
+        layout.addLayout(btn_row)
+
+    def _toggle_autologin(self):
+        current = self.rule_list.currentItem()
+        if not current:
+            return
+        domain = current.data(Qt.ItemDataRole.UserRole)
+        rule = self.pcreds.get_autologin(domain)
+        if rule:
+            rule['enabled'] = not rule.get('enabled', True)
+            self.pcreds.set_autologin(domain, rule['username'], rule['enabled'], rule.get('fill_only', False))
+            self.accept()
+            AutoLoginDialog(self.pcreds, self.parent()).exec()
+
+    def _remove_rule(self):
+        current = self.rule_list.currentItem()
+        if not current:
+            return
+        domain = current.data(Qt.ItemDataRole.UserRole)
+        self.pcreds.remove_autologin(domain)
+        self.rule_list.takeItem(self.rule_list.row(current))
+
+    def _delete_password(self):
+        current = self.cred_list.currentItem()
+        if not current:
+            return
+        domain, username = current.data(Qt.ItemDataRole.UserRole)
+        self.pcreds.delete_credential(domain, username)
+        self.cred_list.takeItem(self.cred_list.row(current))
+
+
 class CommandPalette(QDialog):
     """Quick command palette (Ctrl+K)."""
     command_selected = pyqtSignal(str)
@@ -220,8 +310,13 @@ class OynixBrowser(QMainWindow):
         self._load_config()
         self.current_theme = self.config.get('theme', 'nyx')
         self.theme_colors = get_theme(self.current_theme)
-        self._bookmarks = self._load_json(BOOKMARKS_FILE, [])
-        self._history = self._load_json(HISTORY_FILE, [])
+        # Load data from active profile directory (falls back to legacy paths)
+        self._bookmarks = self._load_json(
+            self._get_profile_path("bookmarks.json"),
+            self._load_json(BOOKMARKS_FILE, []))
+        self._history = self._load_json(
+            self._get_profile_path("history.json"),
+            self._load_json(HISTORY_FILE, []))
         self._downloads = []
         self._community_batch = []
 
@@ -245,18 +340,25 @@ class OynixBrowser(QMainWindow):
         self.new_tab(QUrl("oyn://home"))
         self._update_status("Ready")
 
-    # ── Config persistence ─────────────────────────────────────────
+    # ── Config persistence (profile-aware) ──────────────────────────
+    def _get_profile_path(self, filename):
+        """Get path to a file in the active profile's data dir."""
+        return os.path.join(profile_manager.active.data_dir, filename)
+
     def _load_config(self):
-        path = os.path.expanduser("~/.config/oynix/browser_config.json")
-        try:
-            with open(path) as f:
-                saved = json.load(f)
-                self.config.update(saved)
-        except (FileNotFoundError, json.JSONDecodeError):
-            pass
+        # Try profile-specific config first, fall back to legacy
+        for path in [self._get_profile_path("browser_config.json"),
+                     os.path.expanduser("~/.config/oynix/browser_config.json")]:
+            try:
+                with open(path) as f:
+                    saved = json.load(f)
+                    self.config.update(saved)
+                    return
+            except (FileNotFoundError, json.JSONDecodeError):
+                continue
 
     def _save_config(self):
-        path = os.path.expanduser("~/.config/oynix/browser_config.json")
+        path = self._get_profile_path("browser_config.json")
         os.makedirs(os.path.dirname(path), exist_ok=True)
         with open(path, 'w') as f:
             json.dump(self.config, f, indent=2)
@@ -272,6 +374,14 @@ class OynixBrowser(QMainWindow):
         os.makedirs(os.path.dirname(path), exist_ok=True)
         with open(path, 'w') as f:
             json.dump(data, f, indent=2)
+        # Mirror history/bookmarks to active profile dir
+        basename = os.path.basename(path)
+        if basename in ('history.json', 'bookmarks.json'):
+            profile_path = self._get_profile_path(basename)
+            if profile_path != path:
+                os.makedirs(os.path.dirname(profile_path), exist_ok=True)
+                with open(profile_path, 'w') as f:
+                    json.dump(data, f, indent=2)
 
     # ── Setup ──────────────────────────────────────────────────────
     def _setup_window(self):
@@ -660,6 +770,15 @@ class OynixBrowser(QMainWindow):
         elif path == "downloads":
             self.show_downloads()
 
+        elif path == "profiles":
+            self.show_profiles()
+
+        elif path == "switch-profile":
+            params = parse_qs(query_str)
+            name = params.get('name', [''])[0]
+            if name:
+                self.switch_profile(name)
+
         elif path == "about":
             self.show_about()
 
@@ -798,6 +917,9 @@ class OynixBrowser(QMainWindow):
             ("Import Chrome Searches", ""), ("Import Google Takeout", ""),
             ("Search Engine Builder", ""),
             ("Export Profile (.nydta)", ""), ("Import Profile (.nydta)", ""),
+            ("Profiles", ""), ("New Profile", ""), ("Switch Profile", ""),
+            ("Delete Profile", ""), ("Auto-Login Manager", ""),
+            ("Save Credential", ""),
         ]
         palette = CommandPalette(commands, self)
         palette.command_selected.connect(self._run_command)
@@ -828,6 +950,12 @@ class OynixBrowser(QMainWindow):
             "Search Engine Builder": self.show_search_builder,
             "Export Profile (.nydta)": self.export_nydta,
             "Import Profile (.nydta)": self.import_nydta,
+            "Profiles": self.show_profiles,
+            "New Profile": self.create_profile,
+            "Switch Profile": self.switch_profile,
+            "Delete Profile": self.delete_profile,
+            "Auto-Login Manager": self.manage_autologin,
+            "Save Credential": self.save_credential_to_profile,
         }
         fn = mapping.get(name)
         if fn:
@@ -1527,7 +1655,12 @@ class OynixBrowser(QMainWindow):
             finally:
                 os.unlink(tmp.name)
 
-        ok, msg = export_nydta(path, self._history, self.config, _get_db_entries)
+        # Include credentials and profile info
+        cred_data = profile_manager.active.credentials.export_dict()
+        profile_info = profile_manager.active.to_dict()
+
+        ok, msg = export_nydta(path, self._history, self.config, _get_db_entries,
+                               credentials_data=cred_data, profile_info=profile_info)
         if ok:
             self._update_status(msg)
             QMessageBox.information(self, "Profile Exported", msg)
@@ -1593,13 +1726,23 @@ class OynixBrowser(QMainWindow):
                     self.config[key] = val
             self._save_config()
 
-        # Profile picture
+        # Import credentials + auto-login rules into active profile
+        if data.get('credentials'):
+            profile_manager.active.credentials.import_dict(data['credentials'])
+
+        # Profile picture — save to active profile dir
         if data['profile_pic_path']:
             import shutil
+            dest = profile_manager.active.profile_pic_path
+            os.makedirs(os.path.dirname(dest), exist_ok=True)
+            shutil.copy2(data['profile_pic_path'], dest)
+            # Also copy to legacy path for backward compat
             shutil.copy2(data['profile_pic_path'], PROFILE_PIC_PATH)
 
         self._refresh_stats()
         result = f"Imported: {len(data['history'])} history, {db_added} new DB entries"
+        if data.get('credentials'):
+            result += ", credentials"
         if data['profile_pic_path']:
             result += ", profile picture"
         self._update_status(result)
@@ -1613,9 +1756,147 @@ class OynixBrowser(QMainWindow):
         if not path:
             return
         import shutil
+        dest = profile_manager.active.profile_pic_path
+        os.makedirs(os.path.dirname(dest), exist_ok=True)
+        shutil.copy2(path, dest)
+        # Legacy path too
         os.makedirs(os.path.dirname(PROFILE_PIC_PATH), exist_ok=True)
         shutil.copy2(path, PROFILE_PIC_PATH)
         self._update_status("Profile picture updated")
+
+    # ── Profile Management ───────────────────────────────────────
+    def show_profiles(self):
+        """Show the profiles management page."""
+        tab = self.current_tab()
+        if tab:
+            from oynix.core.theme_engine import get_profiles_html
+            html = get_profiles_html(profile_manager, self.theme_colors)
+            tab.setHtml(html, QUrl("oyn://profiles"))
+
+    def create_profile(self):
+        """Create a new browser profile."""
+        name, ok = QInputDialog.getText(self, "New Profile", "Profile name:")
+        if not ok or not name.strip():
+            return
+        try:
+            profile_manager.create_profile(name.strip())
+            self._update_status(f"Profile '{name.strip()}' created")
+            self.show_profiles()
+        except ValueError as e:
+            QMessageBox.warning(self, "Error", str(e))
+
+    def switch_profile(self, name=None):
+        """Switch to a different profile."""
+        if name is None:
+            profiles = profile_manager.list_profiles()
+            names = [f"{p.display_name} ({p.name})" for p in profiles]
+            choice, ok = QInputDialog.getItem(self, "Switch Profile",
+                                              "Select profile:", names, 0, False)
+            if not ok:
+                return
+            # Extract the (name) part
+            name = choice.rsplit('(', 1)[-1].rstrip(')')
+
+        try:
+            # Save current state before switching
+            self._save_json(self._get_profile_path("history.json"), self._history)
+            self._save_json(self._get_profile_path("bookmarks.json"), self._bookmarks)
+            self._save_config()
+
+            profile_manager.switch_profile(name)
+
+            # Reload data from new profile
+            self.config = dict(DEFAULT_CONFIG)
+            self._load_config()
+            self.current_theme = self.config.get('theme', 'nyx')
+            self._apply_theme()
+            self._bookmarks = self._load_json(
+                self._get_profile_path("bookmarks.json"), [])
+            self._history = self._load_json(
+                self._get_profile_path("history.json"), [])
+
+            self._update_status(f"Switched to profile: {profile_manager.active.display_name}")
+            self.navigate_home()
+        except ValueError as e:
+            QMessageBox.warning(self, "Error", str(e))
+
+    def delete_profile(self):
+        """Delete a browser profile."""
+        profiles = [p for p in profile_manager.list_profiles() if p.name != 'default']
+        if not profiles:
+            QMessageBox.information(self, "Profiles", "No profiles to delete (default cannot be deleted)")
+            return
+        names = [f"{p.display_name} ({p.name})" for p in profiles]
+        choice, ok = QInputDialog.getItem(self, "Delete Profile",
+                                          "Select profile to delete:", names, 0, False)
+        if not ok:
+            return
+        name = choice.rsplit('(', 1)[-1].rstrip(')')
+        reply = QMessageBox.question(self, "Delete Profile",
+            f"Delete profile '{name}' and all its data?\nThis cannot be undone.")
+        if reply == QMessageBox.StandardButton.Yes:
+            try:
+                profile_manager.delete_profile(name)
+                self._update_status(f"Profile '{name}' deleted")
+            except ValueError as e:
+                QMessageBox.warning(self, "Error", str(e))
+
+    def manage_autologin(self):
+        """Show auto-login management dialog."""
+        from oynix.core.profiles import ProfileCredentials
+        pcreds = profile_manager.active.credentials
+        if not pcreds.is_unlocked:
+            pw, ok = QInputDialog.getText(self, "Unlock Credentials",
+                "Master password:" if pcreds.has_master_password() else "Set master password:",
+                QLineEdit.EchoMode.Password)
+            if not ok or not pw:
+                return
+            if not pcreds.unlock(pw):
+                QMessageBox.warning(self, "Error", "Incorrect password")
+                return
+
+        dialog = AutoLoginDialog(pcreds, self)
+        dialog.exec()
+
+    def save_credential_to_profile(self):
+        """Save a credential for the current page to the active profile."""
+        tab = self.current_tab()
+        if not tab:
+            return
+        url = tab.url().toString()
+        domain = urlparse(url).netloc.lower()
+        pcreds = profile_manager.active.credentials
+        if not pcreds.is_unlocked:
+            pw, ok = QInputDialog.getText(self, "Unlock Credentials",
+                "Master password:" if pcreds.has_master_password() else "Set master password:",
+                QLineEdit.EchoMode.Password)
+            if not ok or not pw:
+                return
+            if not pcreds.unlock(pw):
+                QMessageBox.warning(self, "Error", "Incorrect password")
+                return
+
+        username, ok1 = QInputDialog.getText(self, "Save Credential", f"Username for {domain}:")
+        if not ok1 or not username:
+            return
+        password, ok2 = QInputDialog.getText(self, "Save Credential", "Password:",
+                                              QLineEdit.EchoMode.Password)
+        if not ok2:
+            return
+        pcreds.save_credential(domain, username, password)
+
+        # Ask about auto-login
+        reply = QMessageBox.question(self, "Auto-Login",
+            f"Enable auto-login for {username} on {domain}?\n"
+            "(Will auto-fill credentials when you visit this site)")
+        if reply == QMessageBox.StandardButton.Yes:
+            fill_reply = QMessageBox.question(self, "Auto-Login",
+                "Auto-submit the login form too?\n"
+                "(No = just fill fields, Yes = fill and submit)")
+            fill_only = fill_reply != QMessageBox.StandardButton.Yes
+            pcreds.set_autologin(domain, username, enabled=True, fill_only=fill_only)
+
+        self._update_status(f"Credential saved for {domain}")
 
     # ── Audio Player ────────────────────────────────────────────────
     def toggle_audio_player(self):
@@ -1635,19 +1916,30 @@ class OynixBrowser(QMainWindow):
         dialog.exec()
 
     def _check_login_page(self, url_str, browser):
-        """Inject JS to detect login forms and offer auto-fill."""
+        """Inject JS to detect login forms and auto-fill/auto-login."""
+        parsed = urlparse(url_str)
+        domain = parsed.netloc.lower()
+
+        # Check profile auto-login rules first
+        pcreds = profile_manager.active.credentials
+        autologin = pcreds.get_autologin(domain)
+        if autologin and autologin.get('enabled') and pcreds.is_unlocked:
+            creds = pcreds.get_credentials(domain)
+            target_user = autologin.get('username', '')
+            for c in creds:
+                if c['username'] == target_user:
+                    js = get_autologin_js(domain, c['username'], c['password'],
+                                          fill_only=autologin.get('fill_only', False))
+                    browser.page().runJavaScript(js)
+                    return
+
+        # Fall back to legacy credential manager auto-fill
         if not credential_manager.is_unlocked:
             return
         creds = credential_manager.get_credentials(url_str)
         if creds:
-            # Auto-fill first credential
             c = creds[0]
-            js = f'''(function(){{
-                var u=document.querySelector('input[type="email"],input[name="username"],input[name="user"],input[name="login"],input[autocomplete="username"]');
-                var p=document.querySelector('input[type="password"]');
-                if(u)u.value={json.dumps(c['username'])};
-                if(p)p.value={json.dumps(c['password'])};
-            }})()'''
+            js = get_autologin_js(domain, c['username'], c['password'], fill_only=True)
             browser.page().runJavaScript(js)
 
     # ── Chrome Import ─────────────────────────────────────────────
