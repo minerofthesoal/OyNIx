@@ -39,7 +39,7 @@ def export_nydta(filepath, history, config, database_export_fn, profile_pic_path
             manifest = {
                 'nydta_version': NYDTA_VERSION,
                 'exported_at': time.strftime('%Y-%m-%d %H:%M:%S'),
-                'browser_version': '2.1',
+                'browser_version': '2.1.2',
                 'contains': ['history.jsonl', 'database.jsonl',
                               'settings.md', 'settings.json'],
             }

@@ -1,5 +1,5 @@
 """
-OyNIx Browser v2.0 - Main Browser Core
+OyNIx Browser v2.1.2 - Main Browser Core
 Complete desktop browser with local LLM, Nyx search, tree tabs,
 bookmarks, downloads, history, find-in-page, command palette,
 forced theme on external search engines, XPI extension import,
@@ -212,7 +212,7 @@ class CommandPalette(QDialog):
 
 
 class OynixBrowser(QMainWindow):
-    """OyNIx Browser v2.0 — The Nyx-Powered Local AI Browser."""
+    """OyNIx Browser v2.1.2 — The Nyx-Powered Local AI Browser."""
 
     def __init__(self):
         super().__init__()
@@ -534,7 +534,7 @@ class OynixBrowser(QMainWindow):
 
     # ── Search ─────────────────────────────────────────────────────
     def _perform_search(self, query, engine='nyx'):
-        # Nyx and DuckDuckGo both use the combined Nyx+DDG search
+        # All engines use Nyx search; only brave/bing/google/custom navigate externally
         if engine in ('nyx', 'duckduckgo'):
             self._nyx_search(query)
         else:
@@ -544,7 +544,7 @@ class OynixBrowser(QMainWindow):
                 tab.setUrl(QUrl(url))
 
     def _nyx_search(self, query):
-        """Combined search: local Nyx index + database + DuckDuckGo web results."""
+        """Nyx-first search: local index + database, then web fallback for extra results."""
         # Disconnect any previous web results handler to avoid stacking
         try:
             nyx_search.web_results_ready.disconnect(self._web_results_handler)
@@ -578,7 +578,7 @@ class OynixBrowser(QMainWindow):
                 scored.append(r)
         scored.sort(key=lambda x: x.get('score', 0), reverse=True)
 
-        # Show local results immediately (web results arrive async)
+        # Show Nyx results immediately
         html = get_search_results_html(query, scored, [], self.theme_colors)
         tab = self.current_tab()
         if tab:
@@ -588,13 +588,13 @@ class OynixBrowser(QMainWindow):
         self._pending_search_query = query
         self._pending_search_local = scored
 
-        # Connect web results handler
+        # Always fetch web results in background — they supplement Nyx results
+        # (never navigates to DDG/Google site, only adds result cards)
         self._web_results_handler = lambda web: self._on_web_results(web)
         nyx_search.web_results_ready.connect(self._web_results_handler)
 
     def _on_web_results(self, web_results):
-        """Handle DuckDuckGo web results arriving asynchronously."""
-        # Disconnect immediately so it only fires once
+        """Handle web fallback results — adds cards, never navigates away."""
         try:
             nyx_search.web_results_ready.disconnect(self._web_results_handler)
         except (TypeError, RuntimeError):
@@ -603,19 +603,27 @@ class OynixBrowser(QMainWindow):
         query = getattr(self, '_pending_search_query', '')
         local = getattr(self, '_pending_search_local', [])
 
-        if web_results:
-            # Merge and re-render with web results included
-            html = get_search_results_html(query, local, web_results, self.theme_colors)
+        if not web_results:
+            return
+
+        # Deduplicate: don't show web results already in Nyx results
+        local_urls = {r.get('url', '').rstrip('/').lower() for r in local}
+        unique_web = [r for r in web_results
+                      if r.get('url', '').rstrip('/').lower() not in local_urls]
+
+        if unique_web or not local:
+            # Re-render with supplemental web results added below Nyx results
+            html = get_search_results_html(query, local, unique_web, self.theme_colors)
             tab = self.current_tab()
             if tab:
                 tab.setHtml(html, QUrl(f"oyn://search?q={query}"))
 
-            # Auto-expand database with discovered web results
-            if self.config.get('auto_expand_database'):
-                for r in web_results:
-                    database.add_site(r.get('url', ''), r.get('title', ''),
-                                      r.get('description', ''), source='duckduckgo')
-                self._refresh_stats()
+        # Auto-expand database with discovered web results
+        if self.config.get('auto_expand_database'):
+            for r in unique_web:
+                database.add_site(r.get('url', ''), r.get('title', ''),
+                                  r.get('description', ''), source='web')
+            self._refresh_stats()
 
     # ── Internal URL handler ───────────────────────────────────────
     def _handle_oyn_url(self, url, browser):
@@ -701,12 +709,14 @@ class OynixBrowser(QMainWindow):
         if self.config.get('auto_compare_sites'):
             self._compare_site(url_str, title)
 
-        # Force Nyx theme on external search engines
+        # Force Nyx theme + dynamic refractions on external pages
         if self.config.get('force_nyx_theme_external'):
             host = url.host().lower()
             if any(se in host for se in SEARCH_ENGINES):
                 css = get_external_search_theme_css(self.theme_colors)
-                js = f"(function(){{var s=document.createElement('style');s.textContent=`{css}`;document.head.appendChild(s)}})()"
+                from oynix.core.theme_engine import get_external_refraction_js
+                refract_js = get_external_refraction_js()
+                js = f"(function(){{var s=document.createElement('style');s.textContent=`{css}`;document.head.appendChild(s);{refract_js}}})()"
                 browser.page().runJavaScript(js)
 
         # Inject extension content scripts / styles
@@ -1435,25 +1445,30 @@ class OynixBrowser(QMainWindow):
 
     def show_about(self):
         QMessageBox.about(self, "About OyNIx",
-            "OyNIx Browser v2.0\nThe Nyx-Powered Local AI Browser\n\n"
+            "OyNIx Browser v2.1.2\nThe Nyx-Powered Local AI Browser\n\n"
             "Features: Tree Tabs, Local LLM, Nyx Search,\n"
-            "1400+ Site Database, Bookmarks, Downloads,\n"
-            "History, Find in Page, Command Palette,\n"
-            "XPI Extensions, GitHub Sync\n\n"
+            "1400+ Site Database, Dynamic Refractions,\n"
+            "C++/C# Turbo Indexer, Audio Player,\n"
+            "Password Manager, .nydta Profiles,\n"
+            "XPI Extensions, GitHub Sync, Flatpak\n\n"
             "Coded by Claude (Anthropic)")
 
     def show_release_notes(self):
         QMessageBox.information(self, "Release Notes",
-            "v2.0 — Complete UI Overhaul\n\n"
-            "• Modern glassmorphism theme\n• Custom SVG icons\n• Smooth animations\n"
-            "• Bookmarks with folders\n• Download manager\n• History viewer\n"
-            "• Find in page (Ctrl+F)\n• Command palette (Ctrl+K)\n"
-            "• XPI extension import\n• Forced theme on search engines\n"
-            "• Site comparison + auto-update\n• Reader mode\n• Print to PDF\n"
-            "• Save page as HTML\n• View source")
+            "v2.1.2 — Dynamic Refractions & Turbo Search\n\n"
+            "• Nyx-first search (no external redirects)\n"
+            "• GPU-accelerated mouse-tracking refractions\n"
+            "• Dynamic glass effects on all UI pages\n"
+            "• C++ & C# turbo indexer with batch scoring\n"
+            "• Custom cat-ear logo & app icons\n"
+            "• Flatpak build support + CI\n"
+            "• Enhanced animations throughout\n"
+            "• .nydta profile export/import\n"
+            "• Password & passkey manager\n"
+            "• Audio player\n• Chrome history import")
 
     def check_updates(self):
-        QMessageBox.information(self, "Updates", "You are running OyNIx v2.0 (latest).")
+        QMessageBox.information(self, "Updates", "You are running OyNIx v2.1.2 (latest).")
 
     def import_settings(self):
         path, _ = QFileDialog.getOpenFileName(self, "Import Settings", "", "JSON (*.json)")
