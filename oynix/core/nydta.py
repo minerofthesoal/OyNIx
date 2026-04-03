@@ -16,11 +16,21 @@ import tempfile
 from pathlib import Path
 
 
-NYDTA_VERSION = "1.0"
+NYDTA_VERSION = "2.0"
 PROFILE_PIC_PATH = os.path.expanduser("~/.config/oynix/profile.png")
 
 
-def export_nydta(filepath, history, config, database_export_fn, profile_pic_path=None):
+def _get_profile_pic_path():
+    """Get profile pic path from active profile if available."""
+    try:
+        from oynix.core.profiles import profile_manager
+        return profile_manager.active.profile_pic_path
+    except Exception:
+        return PROFILE_PIC_PATH
+
+
+def export_nydta(filepath, history, config, database_export_fn,
+                 profile_pic_path=None, credentials_data=None, profile_info=None):
     """
     Export a .nydta archive.
 
@@ -30,6 +40,8 @@ def export_nydta(filepath, history, config, database_export_fn, profile_pic_path
         config: Browser config dict
         database_export_fn: Callable that returns list of site dicts
         profile_pic_path: Optional path to profile picture
+        credentials_data: Optional dict from ProfileCredentials.export_dict()
+        profile_info: Optional dict with profile metadata
     Returns:
         (ok: bool, message: str)
     """
@@ -91,11 +103,30 @@ def export_nydta(filepath, history, config, database_export_fn, profile_pic_path
                 zf.write(pic_path, arcname)
                 manifest['contains'].append(arcname)
 
+            # ── Credentials (encrypted blob + auto-login rules) ──
+            if credentials_data:
+                zf.writestr('credentials.json', json.dumps(credentials_data, indent=2))
+                manifest['contains'].append('credentials.json')
+
+            # ── Profile metadata ──
+            if profile_info:
+                zf.writestr('profile_info.json', json.dumps(profile_info, indent=2))
+                manifest['contains'].append('profile_info.json')
+
             zf.writestr('manifest.json', json.dumps(manifest, indent=2))
 
         count_h = len(history)
         count_d = db_buf.getvalue().count('\n')
-        return True, f"Exported {count_h} history + {count_d} DB entries to {os.path.basename(filepath)}"
+        extras = []
+        if credentials_data:
+            al_count = len(credentials_data.get('autologin', {}))
+            has_pw = 'passwords_enc' in credentials_data
+            if has_pw:
+                extras.append("passwords")
+            if al_count:
+                extras.append(f"{al_count} auto-login rules")
+        extra_str = f" + {', '.join(extras)}" if extras else ""
+        return True, f"Exported {count_h} history + {count_d} DB entries{extra_str} to {os.path.basename(filepath)}"
 
     except Exception as e:
         return False, f"Export failed: {e}"
@@ -121,6 +152,8 @@ def import_nydta(filepath):
                 'settings': {},
                 'profile_pic_path': None,
                 'manifest': {},
+                'credentials': None,
+                'profile_info': None,
             }
 
             # ── Manifest ──
@@ -153,6 +186,14 @@ def import_nydta(filepath):
             if 'settings.json' in names:
                 result['settings'] = json.loads(zf.read('settings.json'))
 
+            # ── Credentials ──
+            if 'credentials.json' in names:
+                result['credentials'] = json.loads(zf.read('credentials.json'))
+
+            # ── Profile info ──
+            if 'profile_info.json' in names:
+                result['profile_info'] = json.loads(zf.read('profile_info.json'))
+
             # ── Profile picture ──
             pic_names = [n for n in names if n.startswith('profile.')]
             if pic_names:
@@ -168,6 +209,11 @@ def import_nydta(filepath):
             h = len(result['history'])
             d = len(result['database'])
             msg = f"Found {h} history entries, {d} database entries"
+            if result['credentials']:
+                al = len(result['credentials'].get('autologin', {}))
+                msg += f", credentials"
+                if al:
+                    msg += f" ({al} auto-login rules)"
             if result['profile_pic_path']:
                 msg += ", profile picture"
             return True, result, msg
