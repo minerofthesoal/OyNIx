@@ -605,30 +605,44 @@ class OynixBrowser(QMainWindow):
 
     # ── Internal URL handler ───────────────────────────────────────
     def _handle_oyn_url(self, url, browser):
-        path = url.path() or url.host()
+        # QUrl parses oyn://foo as host="foo", path=""
+        path = url.host() or url.path().strip('/')
         query_str = url.query()
-        if path in ("home", "/home", ""):
+
+        if path in ("home", ""):
             browser.setHtml(get_homepage_html(self.theme_colors), QUrl("oyn://home"))
-        elif path in ("search", "/search", "nyx-search", "/nyx-search"):
+
+        elif path in ("search", "nyx-search"):
             params = parse_qs(query_str)
             q = params.get('q', [''])[0]
             engine = params.get('engine', ['nyx'])[0]
             if q:
                 self._perform_search(q, engine)
-        elif path in ("settings", "/settings"):
+            else:
+                # No query — focus the URL bar for the user to type
+                self.url_bar.setFocus()
+                self.url_bar.selectAll()
+
+        elif path == "settings":
             self.show_settings()
-        elif path in ("ai-chat", "/ai-chat"):
+
+        elif path == "ai-chat":
             if not self.ai_panel.isVisible():
                 self.toggle_ai_panel()
-        elif path in ("database", "/database"):
+
+        elif path == "database":
             self.manage_database()
-        elif path in ("history", "/history"):
+
+        elif path == "history":
             self.show_history()
-        elif path in ("bookmarks", "/bookmarks"):
+
+        elif path == "bookmarks":
             self.show_bookmarks()
-        elif path in ("downloads", "/downloads"):
+
+        elif path == "downloads":
             self.show_downloads()
-        elif path in ("about", "/about"):
+
+        elif path == "about":
             self.show_about()
 
     # ── Page events ────────────────────────────────────────────────
