@@ -149,7 +149,7 @@ def main():
     # Create QApplication FIRST - required before any QObject/QWidget
     app = QApplication(sys.argv)
     app.setApplicationName("OyNIx Browser")
-    app.setApplicationVersion("1.1.0")
+    app.setApplicationVersion("2.1.2")
     app.setOrganizationName("OyNIx")
 
     # Create data directories

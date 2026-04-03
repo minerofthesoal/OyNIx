@@ -79,11 +79,16 @@ fi
 cat > "${PKG}/usr/share/applications/oynix.desktop" <<'DESKTOP'
 [Desktop Entry]
 Name=OyNIx Browser
-Comment=Nyx-themed browser with local AI
-Exec=oynix
+Comment=Nyx-Powered Local AI Browser
+Exec=oynix %u
+Icon=oynix
 Terminal=false
 Type=Application
 Categories=Network;WebBrowser;
+MimeType=text/html;text/xml;application/xhtml+xml;x-scheme-handler/http;x-scheme-handler/https;
+Keywords=browser;web;internet;ai;nyx;
+StartupNotify=true
+StartupWMClass=OyNIx Browser
 DESKTOP
 
 # Control file
