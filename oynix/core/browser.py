@@ -709,12 +709,14 @@ class OynixBrowser(QMainWindow):
         if self.config.get('auto_compare_sites'):
             self._compare_site(url_str, title)
 
-        # Force Nyx theme on external search engines
+        # Force Nyx theme + dynamic refractions on external pages
         if self.config.get('force_nyx_theme_external'):
             host = url.host().lower()
             if any(se in host for se in SEARCH_ENGINES):
                 css = get_external_search_theme_css(self.theme_colors)
-                js = f"(function(){{var s=document.createElement('style');s.textContent=`{css}`;document.head.appendChild(s)}})()"
+                from oynix.core.theme_engine import get_external_refraction_js
+                refract_js = get_external_refraction_js()
+                js = f"(function(){{var s=document.createElement('style');s.textContent=`{css}`;document.head.appendChild(s);{refract_js}}})()"
                 browser.page().runJavaScript(js)
 
         # Inject extension content scripts / styles
