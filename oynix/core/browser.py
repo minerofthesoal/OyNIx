@@ -534,7 +534,7 @@ class OynixBrowser(QMainWindow):
 
     # ── Search ─────────────────────────────────────────────────────
     def _perform_search(self, query, engine='nyx'):
-        # Nyx and DuckDuckGo both use the combined Nyx+DDG search
+        # All engines use Nyx search; only brave/bing/google/custom navigate externally
         if engine in ('nyx', 'duckduckgo'):
             self._nyx_search(query)
         else:
@@ -544,7 +544,7 @@ class OynixBrowser(QMainWindow):
                 tab.setUrl(QUrl(url))
 
     def _nyx_search(self, query):
-        """Combined search: local Nyx index + database + DuckDuckGo web results."""
+        """Nyx-first search: local index + database, then web fallback for extra results."""
         # Disconnect any previous web results handler to avoid stacking
         try:
             nyx_search.web_results_ready.disconnect(self._web_results_handler)
@@ -578,7 +578,7 @@ class OynixBrowser(QMainWindow):
                 scored.append(r)
         scored.sort(key=lambda x: x.get('score', 0), reverse=True)
 
-        # Show local results immediately (web results arrive async)
+        # Show Nyx results immediately
         html = get_search_results_html(query, scored, [], self.theme_colors)
         tab = self.current_tab()
         if tab:
@@ -588,13 +588,13 @@ class OynixBrowser(QMainWindow):
         self._pending_search_query = query
         self._pending_search_local = scored
 
-        # Connect web results handler
+        # Always fetch web results in background — they supplement Nyx results
+        # (never navigates to DDG/Google site, only adds result cards)
         self._web_results_handler = lambda web: self._on_web_results(web)
         nyx_search.web_results_ready.connect(self._web_results_handler)
 
     def _on_web_results(self, web_results):
-        """Handle DuckDuckGo web results arriving asynchronously."""
-        # Disconnect immediately so it only fires once
+        """Handle web fallback results — adds cards, never navigates away."""
         try:
             nyx_search.web_results_ready.disconnect(self._web_results_handler)
         except (TypeError, RuntimeError):
@@ -603,19 +603,27 @@ class OynixBrowser(QMainWindow):
         query = getattr(self, '_pending_search_query', '')
         local = getattr(self, '_pending_search_local', [])
 
-        if web_results:
-            # Merge and re-render with web results included
-            html = get_search_results_html(query, local, web_results, self.theme_colors)
+        if not web_results:
+            return
+
+        # Deduplicate: don't show web results already in Nyx results
+        local_urls = {r.get('url', '').rstrip('/').lower() for r in local}
+        unique_web = [r for r in web_results
+                      if r.get('url', '').rstrip('/').lower() not in local_urls]
+
+        if unique_web or not local:
+            # Re-render with supplemental web results added below Nyx results
+            html = get_search_results_html(query, local, unique_web, self.theme_colors)
             tab = self.current_tab()
             if tab:
                 tab.setHtml(html, QUrl(f"oyn://search?q={query}"))
 
-            # Auto-expand database with discovered web results
-            if self.config.get('auto_expand_database'):
-                for r in web_results:
-                    database.add_site(r.get('url', ''), r.get('title', ''),
-                                      r.get('description', ''), source='duckduckgo')
-                self._refresh_stats()
+        # Auto-expand database with discovered web results
+        if self.config.get('auto_expand_database'):
+            for r in unique_web:
+                database.add_site(r.get('url', ''), r.get('title', ''),
+                                  r.get('description', ''), source='web')
+            self._refresh_stats()
 
     # ── Internal URL handler ───────────────────────────────────────
     def _handle_oyn_url(self, url, browser):

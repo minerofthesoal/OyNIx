@@ -231,8 +231,9 @@ class NyxIndexer:
             return False
 
 
-class DuckDuckGoFetcher(QThread):
-    """Fetch search results from DuckDuckGo in the background."""
+class WebResultsFetcher(QThread):
+    """Fetch supplemental web results from DDG/Google in the background.
+    Never navigates to external search sites — only scrapes result cards."""
     results_ready = pyqtSignal(list)
 
     def __init__(self, query):
@@ -244,8 +245,14 @@ class DuckDuckGoFetcher(QThread):
             self.results_ready.emit([])
             return
 
+        results = self._fetch_ddg()
+        if not results:
+            results = self._fetch_google()
+        self.results_ready.emit(results)
+
+    def _fetch_ddg(self):
+        """Try DuckDuckGo HTML endpoint."""
         try:
-            results = []
             headers = {
                 'User-Agent': ('Mozilla/5.0 (X11; Linux x86_64; rv:120.0) '
                                'Gecko/20100101 Firefox/120.0')
@@ -253,6 +260,7 @@ class DuckDuckGoFetcher(QThread):
             url = f"https://html.duckduckgo.com/html/?q={quote_plus(self.query)}"
             resp = requests.get(url, headers=headers, timeout=8)
             soup = BeautifulSoup(resp.text, 'html.parser')
+            results = []
 
             for item in soup.select('.result')[:15]:
                 title_el = item.select_one('.result__a')
@@ -260,10 +268,9 @@ class DuckDuckGoFetcher(QThread):
                 if title_el:
                     title = title_el.get_text(strip=True)
                     link = title_el.get('href', '')
-                    # DDG wraps links; try to extract real URL
                     if 'uddg=' in link:
-                        from urllib.parse import unquote, parse_qs
-                        params = parse_qs(urlparse(link).query)
+                        from urllib.parse import unquote, parse_qs as _pqs
+                        params = _pqs(urlparse(link).query)
                         link = unquote(params.get('uddg', [link])[0])
                     desc = (snippet_el.get_text(strip=True)
                             if snippet_el else '')
@@ -272,13 +279,50 @@ class DuckDuckGoFetcher(QThread):
                             'url': link,
                             'title': title,
                             'description': desc,
-                            'source': 'duckduckgo',
+                            'source': 'web',
                         })
-
-            self.results_ready.emit(results)
+            return results
         except Exception as e:
-            print(f"[DuckDuckGo] Fetch error: {e}")
-            self.results_ready.emit([])
+            print(f"[Nyx] DDG fetch failed: {e}")
+            return []
+
+    def _fetch_google(self):
+        """Fallback: try Google search scrape."""
+        try:
+            headers = {
+                'User-Agent': ('Mozilla/5.0 (X11; Linux x86_64; rv:120.0) '
+                               'Gecko/20100101 Firefox/120.0'),
+                'Accept-Language': 'en-US,en;q=0.9',
+            }
+            url = f"https://www.google.com/search?q={quote_plus(self.query)}&hl=en"
+            resp = requests.get(url, headers=headers, timeout=8)
+            soup = BeautifulSoup(resp.text, 'html.parser')
+            results = []
+
+            for div in soup.select('div.g')[:15]:
+                a_tag = div.select_one('a[href]')
+                title_el = div.select_one('h3')
+                if a_tag and title_el:
+                    link = a_tag.get('href', '')
+                    title = title_el.get_text(strip=True)
+                    # Extract snippet
+                    desc = ''
+                    for span in div.select('span'):
+                        text = span.get_text(strip=True)
+                        if len(text) > 40:
+                            desc = text
+                            break
+                    if link.startswith('http'):
+                        results.append({
+                            'url': link,
+                            'title': title,
+                            'description': desc,
+                            'source': 'web',
+                        })
+            return results
+        except Exception as e:
+            print(f"[Nyx] Google fetch failed: {e}")
+            return []
 
 
 class NyxSearchEngine(QObject):
@@ -296,7 +340,7 @@ class NyxSearchEngine(QObject):
         super().__init__()
         self.indexer = NyxIndexer()
         self.database = database
-        self._ddg_thread = None
+        self._web_thread = None
         self.auto_expand_database = True  # Controlled by settings
 
     def index_page(self, url, title, content_snippet=""):
@@ -346,12 +390,12 @@ class NyxSearchEngine(QObject):
             # Find relevant sites from DB that relate to the query topic
             relevant_sites = self._find_relevant_sites(query, db_results)
 
-        # Start web search in background
-        if engine == 'nyx' or engine == 'duckduckgo':
-            self._ddg_thread = DuckDuckGoFetcher(query)
-            self._ddg_thread.results_ready.connect(
+        # Start web search in background (supplements Nyx results, never navigates)
+        if engine in ('nyx', 'duckduckgo'):
+            self._web_thread = WebResultsFetcher(query)
+            self._web_thread.results_ready.connect(
                 self._on_web_results)
-            self._ddg_thread.start()
+            self._web_thread.start()
 
         return {
             'local': local_results,
@@ -476,7 +520,7 @@ class NyxSearchEngine(QObject):
             self.indexer.index_page(r['url'], r['title'], r.get('description', ''))
         # Auto-expand database with DDG results (if enabled)
         if self.auto_expand_database:
-            self.database.add_sites_batch(results, source="duckduckgo")
+            self.database.add_sites_batch(results, source="web")
 
     def get_stats(self):
         """Get search engine statistics."""
