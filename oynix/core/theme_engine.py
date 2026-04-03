@@ -1,5 +1,5 @@
 """
-OyNIx Browser - Nyx Theme Engine v2.2
+OyNIx Browser - Nyx Theme Engine v2.3
 Modern glassmorphism UI with dynamic mouse-tracking refractions,
 GPU-accelerated glass effects, enhanced animations, custom SVG icons,
 and multiple theme variants. Deep blacks + medium purple accents.

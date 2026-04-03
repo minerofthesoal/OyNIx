@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-OyNIx Browser v2.2 - The Nyx-Powered Local AI Browser
+OyNIx Browser v2.3 - The Nyx-Powered Local AI Browser
 Main Launcher and Entry Point
 
 Author: OyNIx Team
@@ -45,6 +45,8 @@ def _safe_print(*args, **kwargs):
 
 def _fix_ld_library_path():
     """Set LD_LIBRARY_PATH for pip-installed Qt6 libraries and re-exec if needed."""
+    if sys.platform == 'win32':
+        return  # Not needed on Windows — Qt DLLs are found via PATH
     try:
         import PyQt6
         _qt6_lib = os.path.join(os.path.dirname(PyQt6.__file__), 'Qt6', 'lib')
@@ -110,7 +112,7 @@ def main():
 
     _safe_print()
     _safe_print(f"{P}{B}  ╔═══════════════════════════════════════════════╗{R}")
-    _safe_print(f"{P}{B}  ║         OyNIx Browser v2.2                 ║{R}")
+    _safe_print(f"{P}{B}  ║         OyNIx Browser v2.3                 ║{R}")
     _safe_print(f"{P}{B}  ║    The Nyx-Powered Local AI Browser          ║{R}")
     _safe_print(f"{P}{B}  ╚═══════════════════════════════════════════════╝{R}")
     _safe_print()
@@ -177,12 +179,38 @@ def main():
     app.setOrganizationName("OyNIx")
     app.setDesktopFileName("oynix")
 
-    # Create data directories
-    config_dir = os.path.expanduser("~/.config/oynix")
+    # Create data directories (Windows: %APPDATA%\oynix, Unix: ~/.config/oynix)
+    if sys.platform == 'win32':
+        config_dir = os.path.join(os.environ.get('APPDATA', os.path.expanduser('~')), 'oynix')
+    else:
+        config_dir = os.path.expanduser("~/.config/oynix")
     for subdir in ['models', 'search_index', 'database', 'cache', 'sync']:
         os.makedirs(os.path.join(config_dir, subdir), exist_ok=True)
 
     # Import browser core AFTER QApplication exists
+    # Suppress broken native library imports (e.g. llama_cpp on Windows)
+    # by pre-patching the import system
+    import importlib
+    _orig_import = __builtins__.__import__ if hasattr(__builtins__, '__import__') else __import__
+
+    _SKIP_MODULES = {'llama_cpp', 'transformers', 'torch', 'huggingface_hub'}
+
+    def _safe_import(name, *args, **kwargs):
+        top = name.split('.')[0]
+        if top in _SKIP_MODULES:
+            try:
+                return _orig_import(name, *args, **kwargs)
+            except (ImportError, OSError, RuntimeError, Exception) as exc:
+                _logger.warning("Optional module %s failed to import: %s", name, exc)
+                raise ImportError(f"{name} not available: {exc}") from exc
+        return _orig_import(name, *args, **kwargs)
+
+    try:
+        import builtins
+        builtins.__import__ = _safe_import
+    except Exception:
+        pass
+
     try:
         from oynix.core.browser import OynixBrowser
         _safe_print(f"  {P}+{R} Browser core loaded (Chromium WebEngine)")
@@ -197,6 +225,12 @@ def main():
         except Exception:
             pass
         sys.exit(1)
+    finally:
+        # Restore original import
+        try:
+            builtins.__import__ = _orig_import
+        except Exception:
+            pass
 
     # Create and show browser
     _safe_print(f"  {P}+{R} Creating browser window...")
