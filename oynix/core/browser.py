@@ -541,7 +541,7 @@ class OynixBrowser(QMainWindow):
         # Disconnect any previous web results handler to avoid stacking
         try:
             nyx_search.web_results_ready.disconnect(self._web_results_handler)
-        except (TypeError, RuntimeError):
+        except (TypeError, RuntimeError, AttributeError):
             pass
 
         results = nyx_search.search(query)
@@ -590,7 +590,7 @@ class OynixBrowser(QMainWindow):
         """Handle web fallback results — adds cards, never navigates away."""
         try:
             nyx_search.web_results_ready.disconnect(self._web_results_handler)
-        except (TypeError, RuntimeError):
+        except (TypeError, RuntimeError, AttributeError):
             pass
 
         query = getattr(self, '_pending_search_query', '')
