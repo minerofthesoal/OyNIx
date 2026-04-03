@@ -520,15 +520,26 @@ class OynixBrowser(QMainWindow):
 
     # ── Search ─────────────────────────────────────────────────────
     def _perform_search(self, query, engine='nyx'):
-        if engine == 'nyx':
+        # Nyx and DuckDuckGo both use the combined Nyx+DDG search
+        if engine in ('nyx', 'duckduckgo'):
             self._nyx_search(query)
         else:
             url = self._get_search_url(engine, query)
-            self.current_tab().setUrl(QUrl(url))
+            tab = self.current_tab()
+            if tab:
+                tab.setUrl(QUrl(url))
 
     def _nyx_search(self, query):
+        """Combined search: local Nyx index + database + DuckDuckGo web results."""
+        # Disconnect any previous web results handler to avoid stacking
+        try:
+            nyx_search.web_results_ready.disconnect(self._web_results_handler)
+        except (TypeError, RuntimeError):
+            pass
+
         results = nyx_search.search(query)
         local = results.get('local', []) + results.get('database', [])
+
         # Filter and rank — show only results relevant to the query
         query_lower = query.lower()
         scored = []
@@ -552,55 +563,86 @@ class OynixBrowser(QMainWindow):
                 r['score'] = min(score, 100)
                 scored.append(r)
         scored.sort(key=lambda x: x.get('score', 0), reverse=True)
+
+        # Show local results immediately (web results arrive async)
         html = get_search_results_html(query, scored, [], self.theme_colors)
         tab = self.current_tab()
         if tab:
             tab.setHtml(html, QUrl(f"oyn://search?q={query}"))
-        # Async web results
-        nyx_search.web_results_ready.connect(
-            lambda web: self._on_web_results(query, scored, web))
 
-    def _on_web_results(self, query, local, web_results):
+        # Store for the async callback
+        self._pending_search_query = query
+        self._pending_search_local = scored
+
+        # Connect web results handler
+        self._web_results_handler = lambda web: self._on_web_results(web)
+        nyx_search.web_results_ready.connect(self._web_results_handler)
+
+    def _on_web_results(self, web_results):
+        """Handle DuckDuckGo web results arriving asynchronously."""
+        # Disconnect immediately so it only fires once
         try:
-            nyx_search.web_results_ready.disconnect()
-        except TypeError:
+            nyx_search.web_results_ready.disconnect(self._web_results_handler)
+        except (TypeError, RuntimeError):
             pass
+
+        query = getattr(self, '_pending_search_query', '')
+        local = getattr(self, '_pending_search_local', [])
+
         if web_results:
+            # Merge and re-render with web results included
             html = get_search_results_html(query, local, web_results, self.theme_colors)
             tab = self.current_tab()
             if tab:
                 tab.setHtml(html, QUrl(f"oyn://search?q={query}"))
+
+            # Auto-expand database with discovered web results
             if self.config.get('auto_expand_database'):
                 for r in web_results:
                     database.add_site(r.get('url', ''), r.get('title', ''),
                                       r.get('description', ''), source='duckduckgo')
+                self._refresh_stats()
 
     # ── Internal URL handler ───────────────────────────────────────
     def _handle_oyn_url(self, url, browser):
-        path = url.path() or url.host()
+        # QUrl parses oyn://foo as host="foo", path=""
+        path = url.host() or url.path().strip('/')
         query_str = url.query()
-        if path in ("home", "/home", ""):
+
+        if path in ("home", ""):
             browser.setHtml(get_homepage_html(self.theme_colors), QUrl("oyn://home"))
-        elif path in ("search", "/search", "nyx-search", "/nyx-search"):
+
+        elif path in ("search", "nyx-search"):
             params = parse_qs(query_str)
             q = params.get('q', [''])[0]
             engine = params.get('engine', ['nyx'])[0]
             if q:
                 self._perform_search(q, engine)
-        elif path in ("settings", "/settings"):
+            else:
+                # No query — focus the URL bar for the user to type
+                self.url_bar.setFocus()
+                self.url_bar.selectAll()
+
+        elif path == "settings":
             self.show_settings()
-        elif path in ("ai-chat", "/ai-chat"):
+
+        elif path == "ai-chat":
             if not self.ai_panel.isVisible():
                 self.toggle_ai_panel()
-        elif path in ("database", "/database"):
+
+        elif path == "database":
             self.manage_database()
-        elif path in ("history", "/history"):
+
+        elif path == "history":
             self.show_history()
-        elif path in ("bookmarks", "/bookmarks"):
+
+        elif path == "bookmarks":
             self.show_bookmarks()
-        elif path in ("downloads", "/downloads"):
+
+        elif path == "downloads":
             self.show_downloads()
-        elif path in ("about", "/about"):
+
+        elif path == "about":
             self.show_about()
 
     # ── Page events ────────────────────────────────────────────────
