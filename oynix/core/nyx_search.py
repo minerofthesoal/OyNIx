@@ -290,9 +290,16 @@ class WebResultsFetcher(QThread):
             self.results_ready.emit([])
             return
 
+        # Fetch from BOTH DDG and Google for maximum coverage
         results = self._fetch_ddg()
-        if not results:
-            results = self._fetch_google()
+        google_results = self._fetch_google()
+        # Merge, dedup by URL
+        seen = {r['url'].rstrip('/').lower() for r in results}
+        for r in google_results:
+            key = r['url'].rstrip('/').lower()
+            if key not in seen:
+                results.append(r)
+                seen.add(key)
         self.results_ready.emit(results)
 
     def _fetch_ddg(self):
@@ -307,7 +314,7 @@ class WebResultsFetcher(QThread):
             soup = BeautifulSoup(resp.text, 'html.parser')
             results = []
 
-            for item in soup.select('.result')[:15]:
+            for item in soup.select('.result')[:30]:
                 title_el = item.select_one('.result__a')
                 snippet_el = item.select_one('.result__snippet')
                 if title_el:
@@ -344,7 +351,7 @@ class WebResultsFetcher(QThread):
             soup = BeautifulSoup(resp.text, 'html.parser')
             results = []
 
-            for div in soup.select('div.g')[:15]:
+            for div in soup.select('div.g')[:30]:
                 a_tag = div.select_one('a[href]')
                 title_el = div.select_one('h3')
                 if a_tag and title_el:
@@ -542,7 +549,7 @@ class NyxSearchEngine(QObject):
                         'category': site.get('category', ''),
                         'source': 'related',
                     })
-                    if len(relevant) >= 8:
+                    if len(relevant) >= 25:
                         break
 
         return relevant

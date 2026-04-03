@@ -1,5 +1,5 @@
 """
-OyNIx Browser v2.1.2 - Menu System
+OyNIx Browser v2.2 - Menu System
 Complete menu bar with all features.
 """
 from PyQt6.QtWidgets import QMenu
@@ -38,6 +38,7 @@ class OynixMenuBar:
         m.addSeparator()
         self._a(m, "Open File...", self.b.open_file, "Ctrl+O")
         self._a(m, "Save Page...", self.b.save_page, "Ctrl+S")
+        self._a(m, "Screenshot Page...", self.b.screenshot_page)
         self._a(m, "Print to PDF", self.b.print_page, "Ctrl+P")
         m.addSeparator()
         imp = m.addMenu("Import")
@@ -83,6 +84,10 @@ class OynixMenuBar:
         self._a(m, "Toggle AI Panel", self.b.toggle_ai_panel, "Ctrl+Shift+A")
         self._a(m, "Toggle Audio Player", self.b.toggle_audio_player)
         m.addSeparator()
+        self._a(m, "Pin/Unpin Tab", self.b.pin_current_tab)
+        self._a(m, "Search Tabs...", self.b.search_tabs)
+        self._a(m, "Create Tab Group...", self.b.create_tab_group)
+        m.addSeparator()
         themes = m.addMenu("Themes")
         for name in ['nyx', 'nyx_midnight', 'nyx_violet', 'nyx_amethyst', 'nyx_ember']:
             self._a(themes, name.replace('_', ' ').title(), lambda n=name: self.b.set_theme(n))
@@ -110,8 +115,15 @@ class OynixMenuBar:
         self._a(m, "Downloads", self.b.show_downloads, "Ctrl+J")
         self._a(m, "History", self.b.show_history, "Ctrl+H")
         self._a(m, "Bookmarks", self.b.show_bookmarks, "Ctrl+B")
+        self._a(m, "Reading List", self.b.show_reading_list)
+        self._a(m, "Add to Reading List", self.b.add_to_reading_list)
+        self._a(m, "Quick Notes...", self.b.show_quick_notes)
         self._a(m, "Audio Player", self.b.toggle_audio_player)
         self._a(m, "Command Palette", self.b.show_command_palette, "Ctrl+K")
+        m.addSeparator()
+        sess = m.addMenu("Sessions")
+        self._a(sess, "Save Session...", self.b.save_session)
+        self._a(sess, "Restore Session...", self.b.restore_session)
         m.addSeparator()
         # Profiles submenu
         prof = m.addMenu("Profiles")
@@ -123,8 +135,11 @@ class OynixMenuBar:
         self._a(prof, "Save Credential...", self.b.save_credential_to_profile)
         self._a(prof, "Auto-Login Manager", self.b.manage_autologin)
         m.addSeparator()
-        self._a(m, "Extensions", self.b.manage_extensions)
-        self._a(m, "Install Extension...", self.b.import_extension)
+        ext = m.addMenu("Extensions")
+        self._a(ext, "Manage Extensions", self.b.manage_extensions)
+        self._a(ext, "Install Extension...", self.b.import_extension)
+        self._a(ext, "Convert XPI → NPI...", self.b.convert_xpi_to_npi)
+        self._a(ext, "NPI Extension Builder...", self.b.open_npi_builder)
         m.addSeparator()
         priv = m.addMenu("Privacy & Security")
         self._a(priv, "Passwords & Passkeys", self.b.show_passwords)

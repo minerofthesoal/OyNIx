@@ -21,9 +21,40 @@ except ImportError:
 
 PLAYLIST_FILE = os.path.expanduser("~/.config/oynix/audio_playlist.json")
 
+# JavaScript to detect all playing audio/video on a page
+DETECT_MEDIA_JS = """
+(function() {
+    var media = [];
+    var els = document.querySelectorAll('audio, video');
+    for (var i = 0; i < els.length; i++) {
+        var el = els[i];
+        if (!el.paused && el.duration > 0) {
+            var title = '';
+            // Try to get title from nearby elements
+            var parent = el.closest('[class*="player"], [id*="player"], [class*="media"]');
+            if (parent) {
+                var t = parent.querySelector('[class*="title"], [class*="name"], h1, h2, h3');
+                if (t) title = t.textContent.trim().substring(0, 100);
+            }
+            if (!title) title = document.title;
+            media.push({
+                type: el.tagName.toLowerCase(),
+                src: el.currentSrc || el.src || '',
+                title: title,
+                duration: Math.round(el.duration),
+                currentTime: Math.round(el.currentTime),
+                paused: el.paused,
+                volume: Math.round(el.volume * 100)
+            });
+        }
+    }
+    return JSON.stringify(media);
+})()
+"""
+
 
 class AudioPlayer(QWidget):
-    """Built-in audio player with playlist support."""
+    """Built-in audio player with playlist support and web media detection."""
     status_changed = pyqtSignal(str)
 
     def __init__(self, parent=None):
@@ -144,6 +175,23 @@ class AudioPlayer(QWidget):
         btn_row.addWidget(clear_btn)
         layout.addLayout(btn_row)
 
+        # Web Media Detection Section
+        sep = QFrame()
+        sep.setFrameShape(QFrame.Shape.HLine)
+        sep.setStyleSheet(f"color: {c['border']};")
+        layout.addWidget(sep)
+
+        self._web_header = QLabel("Playing in Tabs")
+        self._web_header.setStyleSheet(
+            f"color: {c['purple_light']}; font-size: 12px; font-weight: bold; background: transparent;")
+        layout.addWidget(self._web_header)
+
+        self._web_media_label = QLabel("No web media playing")
+        self._web_media_label.setStyleSheet(
+            f"color: {c['text_secondary']}; font-size: 11px; background: transparent; padding: 4px;")
+        self._web_media_label.setWordWrap(True)
+        layout.addWidget(self._web_media_label)
+
     def add_files(self):
         paths, _ = QFileDialog.getOpenFileNames(
             self, "Add Audio Files", "",
@@ -258,3 +306,72 @@ class AudioPlayer(QWidget):
                 self.playlist_widget.addItem(QListWidgetItem(t['title']))
         except (FileNotFoundError, json.JSONDecodeError):
             pass
+
+    # ── Web Media Detection ───────────────────────────────────────────
+    def setup_web_media_detection(self, browser_window):
+        """Set up periodic scanning of open tabs for playing media."""
+        self._browser = browser_window
+        self._web_media = []  # list of detected media items
+        self._media_timer = QTimer(self)
+        self._media_timer.timeout.connect(self._scan_tabs_for_media)
+        self._media_timer.start(3000)  # scan every 3 seconds
+
+    def _scan_tabs_for_media(self):
+        """Scan all open tabs for playing audio/video elements."""
+        if not hasattr(self, '_browser'):
+            return
+        tab_mgr = getattr(self._browser, 'tab_manager', None)
+        if not tab_mgr:
+            return
+        self._pending_scans = 0
+        self._new_web_media = []
+        for i in range(tab_mgr.count()):
+            browser = tab_mgr.widget(i)
+            if browser and hasattr(browser, 'page'):
+                self._pending_scans += 1
+                page = browser.page()
+                tab_url = browser.url().toString()
+                tab_title = browser.page().title() or tab_url
+                page.runJavaScript(DETECT_MEDIA_JS,
+                    lambda result, url=tab_url, title=tab_title: self._on_media_scan(result, url, title))
+
+    def _on_media_scan(self, result, tab_url, tab_title):
+        """Handle JS callback from a tab's media scan."""
+        self._pending_scans -= 1
+        if result:
+            try:
+                items = json.loads(result) if isinstance(result, str) else result
+                for m in items:
+                    m['tab_url'] = tab_url
+                    m['tab_title'] = tab_title
+                    self._new_web_media.append(m)
+            except (json.JSONDecodeError, TypeError):
+                pass
+        # When all scans done, update the UI
+        if self._pending_scans <= 0:
+            self._update_web_media_list(self._new_web_media)
+
+    def _update_web_media_list(self, media_items):
+        """Update the web media section of the player."""
+        if not hasattr(self, '_web_media_label'):
+            return
+        old_count = len(self._web_media)
+        self._web_media = media_items
+        if media_items:
+            lines = []
+            for m in media_items:
+                title = m.get('title', m.get('tab_title', 'Unknown'))
+                mtype = m.get('type', 'audio')
+                dur = m.get('duration', 0)
+                cur = m.get('currentTime', 0)
+                time_str = f"{cur//60}:{cur%60:02d}/{dur//60}:{dur%60:02d}" if dur else ""
+                icon = "\U0001F3B5" if mtype == 'audio' else "\U0001F3AC"
+                lines.append(f"{icon} {title[:50]}  {time_str}")
+            self._web_media_label.setText('\n'.join(lines))
+            self._web_media_label.show()
+            self._web_header.show()
+        else:
+            self._web_media_label.setText("No web media playing")
+            if old_count > 0:
+                self._web_media_label.show()
+                self._web_header.show()

@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """
-OyNIx Browser v2.1.2 - The Nyx-Powered Local AI Browser
+OyNIx Browser v2.2 - The Nyx-Powered Local AI Browser
 Main Launcher and Entry Point
 
 Author: OyNIx Team
 License: MIT
-Version: 2.1.2
+Version: 2.2
 """
 
 import sys
@@ -110,7 +110,7 @@ def main():
 
     _safe_print()
     _safe_print(f"{P}{B}  ╔═══════════════════════════════════════════════╗{R}")
-    _safe_print(f"{P}{B}  ║         OyNIx Browser v2.1.2                 ║{R}")
+    _safe_print(f"{P}{B}  ║         OyNIx Browser v2.2                 ║{R}")
     _safe_print(f"{P}{B}  ║    The Nyx-Powered Local AI Browser          ║{R}")
     _safe_print(f"{P}{B}  ╚═══════════════════════════════════════════════╝{R}")
     _safe_print()
@@ -173,7 +173,7 @@ def main():
     # Create QApplication FIRST - required before any QObject/QWidget
     app = QApplication(sys.argv)
     app.setApplicationName("OyNIx Browser")
-    app.setApplicationVersion("2.1.2")
+    app.setApplicationVersion("2.2")
     app.setOrganizationName("OyNIx")
     app.setDesktopFileName("oynix")
 
