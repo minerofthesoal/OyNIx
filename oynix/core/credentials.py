@@ -41,6 +41,55 @@ def _xor_encrypt(data, key):
     return bytes(a ^ b for a, b in zip(data, key_bytes[:len(data)]))
 
 
+def _xor256pp(data: bytes, key: bytes, rounds: int = 4) -> bytes:
+    """XOR-256++ encryption: multi-round XOR with key rotation and byte diffusion."""
+    result = bytearray(data)
+    length = len(result)
+    if length == 0:
+        return bytes(result)
+    for r in range(rounds):
+        round_key = hashlib.sha256(key + r.to_bytes(4, 'big')).digest()
+        expanded = round_key * ((length // 32) + 1)
+        for i in range(length):
+            result[i] ^= expanded[i]
+        carry = round_key[r % 32]
+        for i in range(length):
+            old = result[i]
+            result[i] = (result[i] + carry) & 0xFF
+            carry = (old ^ carry ^ (r + 1)) & 0xFF
+        offset = round_key[(r + 7) % 32] % max(length, 1)
+        result = result[offset:] + result[:offset]
+    return bytes(result)
+
+
+def _xor256pp_decrypt(data: bytes, key: bytes, rounds: int = 4) -> bytes:
+    """Decrypt XOR-256++ by reversing rounds."""
+    result = bytearray(data)
+    length = len(result)
+    if length == 0:
+        return bytes(result)
+    for r in range(rounds - 1, -1, -1):
+        round_key = hashlib.sha256(key + r.to_bytes(4, 'big')).digest()
+        expanded = round_key * ((length // 32) + 1)
+        offset = round_key[(r + 7) % 32] % max(length, 1)
+        result = result[-offset:] + result[:-offset] if offset else result
+        carry = round_key[r % 32]
+        carries = [carry]
+        for i in range(length - 1):
+            old_before_add = (result[i] - carries[-1]) & 0xFF
+            carries.append((old_before_add ^ carries[-1] ^ (r + 1)) & 0xFF)
+        for i in range(length):
+            result[i] = (result[i] - carries[i]) & 0xFF
+        for i in range(length):
+            result[i] ^= expanded[i]
+    return bytes(result)
+
+
+def _sha128(data: bytes) -> bytes:
+    """SHA-128: truncated SHA-256 (first 16 bytes) for integrity verification."""
+    return hashlib.sha256(data).digest()[:16]
+
+
 class CredentialManager(QObject):
     """Manages passwords, passkeys, and biometric auth."""
 
@@ -230,19 +279,56 @@ class CredentialManager(QObject):
     def _save_credentials(self):
         if not self._master_key:
             return
-        data = json.dumps(self._credentials).encode()
-        encrypted = _xor_encrypt(data, self._master_key)
+        plaintext = json.dumps(self._credentials).encode()
+
+        # Layer 1: XOR-256++ (multi-round with key rotation + diffusion)
+        layer1 = _xor256pp(plaintext, self._master_key, rounds=4)
+
+        # Layer 2: Basic XOR with derived sub-key
+        xor_subkey = hashlib.sha256(self._master_key + b'xor_layer').digest()
+        layer2 = _xor_encrypt(layer1, xor_subkey)
+
+        # SHA-128 integrity check (16 bytes prepended)
+        checksum = _sha128(plaintext)
+        payload = checksum + layer2
+
         with open(CRED_FILE, 'wb') as f:
-            f.write(base64.b64encode(encrypted))
+            # Version byte: 0x02 = triple-layer format
+            f.write(b'\x02' + base64.b64encode(payload))
 
     def _load_credentials(self):
         if not self._master_key or not os.path.isfile(CRED_FILE):
             return
         try:
             with open(CRED_FILE, 'rb') as f:
-                encrypted = base64.b64decode(f.read())
-            decrypted = _xor_encrypt(encrypted, self._master_key)
-            self._credentials = json.loads(decrypted.decode())
+                raw = f.read()
+
+            if raw and raw[0:1] == b'\x02':
+                # v2 format: XOR-256++ + XOR + SHA-128 integrity
+                payload = base64.b64decode(raw[1:])
+                checksum = payload[:16]
+                encrypted = payload[16:]
+
+                # Reverse Layer 2: XOR
+                xor_subkey = hashlib.sha256(self._master_key + b'xor_layer').digest()
+                layer1 = _xor_encrypt(encrypted, xor_subkey)
+
+                # Reverse Layer 1: XOR-256++
+                plaintext = _xor256pp_decrypt(layer1, self._master_key, rounds=4)
+
+                # Verify SHA-128 integrity
+                if _sha128(plaintext) != checksum:
+                    self._credentials = {}
+                    return
+
+                self._credentials = json.loads(plaintext.decode())
+            else:
+                # Legacy v1 format: basic XOR only
+                encrypted = base64.b64decode(raw)
+                decrypted = _xor_encrypt(encrypted, self._master_key)
+                self._credentials = json.loads(decrypted.decode())
+                # Auto-upgrade to v2 format
+                self._save_credentials()
         except Exception:
             self._credentials = {}
 
