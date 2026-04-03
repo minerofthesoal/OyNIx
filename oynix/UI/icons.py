@@ -6,7 +6,11 @@ Each icon returns a QIcon via svg_icon() or raw SVG via svg_str().
 
 from PyQt6.QtGui import QIcon, QPixmap, QPainter, QColor
 from PyQt6.QtCore import QByteArray, Qt, QSize
-from PyQt6.QtSvg import QSvgRenderer
+try:
+    from PyQt6.QtSvg import QSvgRenderer
+    HAS_SVG = True
+except ImportError:
+    HAS_SVG = False
 
 
 def _recolor(svg: str, color: str) -> str:
@@ -16,6 +20,8 @@ def _recolor(svg: str, color: str) -> str:
 
 def svg_icon(name: str, color: str = "#c4a0f5", size: int = 20) -> QIcon:
     """Get a QIcon from an SVG icon name."""
+    if not HAS_SVG:
+        return QIcon()
     raw = _recolor(ICONS.get(name, ICONS['fallback']), color)
     renderer = QSvgRenderer(QByteArray(raw.encode()))
     pm = QPixmap(QSize(size, size))
