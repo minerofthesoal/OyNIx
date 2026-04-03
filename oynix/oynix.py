@@ -1,15 +1,16 @@
 #!/usr/bin/env python3
 """
-OyNIx Browser v2.1.2 - The Nyx-Powered Local AI Browser
+OyNIx Browser v2.2 - The Nyx-Powered Local AI Browser
 Main Launcher and Entry Point
 
 Author: OyNIx Team
 License: MIT
-Version: 2.1.2
+Version: 2.2
 """
 
 import sys
 import os
+import logging
 
 # Ensure the package root is on the path
 OYNIX_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -21,6 +22,17 @@ if PACKAGE_ROOT not in sys.path:
 _deb_path = '/usr/lib/oynix'
 if os.path.isdir(os.path.join(_deb_path, 'oynix')) and _deb_path not in sys.path:
     sys.path.insert(0, _deb_path)
+
+# Set up file logging so errors are captured even without a terminal
+_log_dir = os.path.expanduser("~/.config/oynix")
+os.makedirs(_log_dir, exist_ok=True)
+logging.basicConfig(
+    filename=os.path.join(_log_dir, "oynix.log"),
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+)
+_logger = logging.getLogger("oynix")
 
 
 def _safe_print(*args, **kwargs):
@@ -84,6 +96,10 @@ def _diagnose():
 
 def main():
     """Main entry point — safe to call from desktop launchers (no terminal required)."""
+    _logger.info("OyNIx starting (Python %s, pid %d)", sys.version.split()[0], os.getpid())
+    _logger.info("sys.path: %s", sys.path[:5])
+    _logger.info("LD_LIBRARY_PATH: %s", os.environ.get('LD_LIBRARY_PATH', '(not set)'))
+
     # Fix LD_LIBRARY_PATH before anything loads Qt .so files
     _fix_ld_library_path()
 
@@ -94,7 +110,7 @@ def main():
 
     _safe_print()
     _safe_print(f"{P}{B}  ╔═══════════════════════════════════════════════╗{R}")
-    _safe_print(f"{P}{B}  ║         OyNIx Browser v2.1.2                 ║{R}")
+    _safe_print(f"{P}{B}  ║         OyNIx Browser v2.2                 ║{R}")
     _safe_print(f"{P}{B}  ║    The Nyx-Powered Local AI Browser          ║{R}")
     _safe_print(f"{P}{B}  ╚═══════════════════════════════════════════════╝{R}")
     _safe_print()
@@ -117,13 +133,9 @@ def main():
         _safe_print(f"  {P}+{R} PyQt6 loaded")
     except ImportError as e:
         err = str(e)
-        if 'libEGL' in err or 'libGL' in err or '.so' in err:
-            _safe_print(f"ERROR: Missing system library: {err}")
-            _safe_print("Fix:  sudo apt install libegl1 libgl1 libxkbcommon0")
-        else:
-            _safe_print("ERROR: PyQt6 not installed")
-            _safe_print("Run: pip install --break-system-packages PyQt6 PyQt6-WebEngine")
-        # Show a GUI error dialog if possible (no terminal)
+        _logger.error("PyQt6 import failed: %s", err)
+        _safe_print(f"ERROR: {err}")
+        _safe_print("Run: pip install --break-system-packages PyQt6 PyQt6-WebEngine")
         try:
             import tkinter as tk
             from tkinter import messagebox
@@ -132,7 +144,14 @@ def main():
             messagebox.showerror("OyNIx Browser", f"Cannot start: {err}\n\nInstall PyQt6:\npip install PyQt6 PyQt6-WebEngine")
             root.destroy()
         except Exception:
-            pass
+            # Last resort: desktop notification
+            try:
+                import subprocess
+                subprocess.run(['notify-send', 'OyNIx Browser',
+                                f'Failed to start: {err}', '--icon=dialog-error'],
+                               timeout=5)
+            except Exception:
+                pass
         sys.exit(1)
 
     # Set OpenGL sharing before QApplication
@@ -154,7 +173,7 @@ def main():
     # Create QApplication FIRST - required before any QObject/QWidget
     app = QApplication(sys.argv)
     app.setApplicationName("OyNIx Browser")
-    app.setApplicationVersion("2.1.2")
+    app.setApplicationVersion("2.2")
     app.setOrganizationName("OyNIx")
     app.setDesktopFileName("oynix")
 
@@ -167,19 +186,16 @@ def main():
     try:
         from oynix.core.browser import OynixBrowser
         _safe_print(f"  {P}+{R} Browser core loaded (Chromium WebEngine)")
-    except ImportError as e:
+    except Exception as e:
         err = str(e)
+        _logger.error("Browser core import failed: %s", err, exc_info=True)
         _safe_print(f"ERROR: Failed to load browser core: {err}")
-        if 'WebChannel' in err or 'WebEngine' in err or '.so' in err:
-            _safe_print("  Missing Qt6 WebEngine system libraries.")
-            _safe_print("  Fix: sudo apt install libqt6webchannel6 libqt6webenginecore6 libqt6webenginewidgets6")
-        else:
-            import traceback
-            traceback.print_exc()
-        # Show GUI error since we have QApplication
-        from PyQt6.QtWidgets import QMessageBox
-        QMessageBox.critical(None, "OyNIx Browser",
-                             f"Failed to load browser:\n{err}\n\nRun: python3 -m oynix --diagnose")
+        try:
+            from PyQt6.QtWidgets import QMessageBox
+            QMessageBox.critical(None, "OyNIx Browser",
+                                 f"Failed to load browser:\n{err}\n\nRun: python3 -m oynix --diagnose")
+        except Exception:
+            pass
         sys.exit(1)
 
     # Create and show browser
@@ -188,12 +204,14 @@ def main():
         browser = OynixBrowser()
         browser.show()
     except Exception as e:
+        _logger.error("Browser window creation failed: %s", e, exc_info=True)
         _safe_print(f"ERROR: Failed to create browser window: {e}")
-        import traceback
-        traceback.print_exc()
-        from PyQt6.QtWidgets import QMessageBox
-        QMessageBox.critical(None, "OyNIx Browser",
-                             f"Failed to create browser window:\n{e}")
+        try:
+            from PyQt6.QtWidgets import QMessageBox
+            QMessageBox.critical(None, "OyNIx Browser",
+                                 f"Failed to create browser window:\n{e}")
+        except Exception:
+            pass
         sys.exit(1)
 
     _safe_print()

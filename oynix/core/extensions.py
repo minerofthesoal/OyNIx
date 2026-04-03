@@ -236,6 +236,108 @@ def _parse_popup(manifest, ext_dir):
     return None
 
 
+def convert_xpi_to_npi(xpi_path, output_path=None):
+    """
+    Convert a Firefox .xpi extension to an OyNIx .npi extension.
+
+    Reads the XPI manifest, translates Firefox-specific keys into NPI format,
+    and repacks as a .npi zip file.
+
+    Returns (success, output_path, error_string).
+    """
+    if not os.path.isfile(xpi_path):
+        return False, '', 'XPI file not found'
+
+    if output_path is None:
+        base = os.path.splitext(xpi_path)[0]
+        output_path = base + '.npi'
+
+    try:
+        with zipfile.ZipFile(xpi_path, 'r') as zin:
+            if 'manifest.json' not in zin.namelist():
+                return False, '', 'No manifest.json in XPI'
+            manifest = json.loads(zin.read('manifest.json'))
+
+            # Build NPI manifest from Firefox WebExtension manifest
+            npi_manifest = {
+                'manifest_version': manifest.get('manifest_version', 2),
+                'name': manifest.get('name', 'Converted Extension'),
+                'version': manifest.get('version', '1.0'),
+                'description': manifest.get('description', ''),
+                'npi_version': 1,
+                'permissions': manifest.get('permissions', []),
+                'oynix_features': [],
+                'icons': manifest.get('icons', {}),
+            }
+
+            # Map browser_action / action -> action
+            action = manifest.get('action', manifest.get('browser_action', {}))
+            if action:
+                npi_manifest['action'] = action
+
+            # Map content_scripts
+            if 'content_scripts' in manifest:
+                npi_manifest['content_scripts'] = manifest['content_scripts']
+
+            # Map background
+            bg = manifest.get('background', {})
+            if bg:
+                npi_manifest['background'] = bg
+
+            # Detect OyNIx-compatible features
+            if 'content_scripts' in manifest:
+                npi_manifest['oynix_features'].append('content_injection')
+            if action and action.get('default_popup'):
+                npi_manifest['oynix_features'].append('popup')
+            if bg:
+                npi_manifest['oynix_features'].append('background')
+
+            # Copy everything into NPI zip, replacing manifest
+            with zipfile.ZipFile(output_path, 'w', zipfile.ZIP_DEFLATED) as zout:
+                for item in zin.namelist():
+                    if item == 'manifest.json':
+                        continue
+                    # Skip Firefox-only metadata
+                    if item.startswith('META-INF/'):
+                        continue
+                    zout.writestr(item, zin.read(item))
+                # Write the NPI manifest
+                zout.writestr('manifest.json',
+                              json.dumps(npi_manifest, indent=2))
+
+        return True, output_path, ''
+
+    except zipfile.BadZipFile:
+        return False, '', 'File is not a valid zip/xpi archive'
+    except Exception as e:
+        return False, '', str(e)
+
+
+def compile_npi(manifest_dict, files_dict, output_path):
+    """
+    Compile an NPI extension from a manifest dict and files dict.
+
+    Args:
+        manifest_dict: dict — the NPI manifest.json content
+        files_dict: dict mapping relative paths to file content (str or bytes)
+        output_path: path for the .npi output
+
+    Returns (success, error_string).
+    """
+    try:
+        os.makedirs(os.path.dirname(output_path) or '.', exist_ok=True)
+        with zipfile.ZipFile(output_path, 'w', zipfile.ZIP_DEFLATED) as zf:
+            zf.writestr('manifest.json', json.dumps(manifest_dict, indent=2))
+            for rel_path, content in files_dict.items():
+                if isinstance(content, str):
+                    zf.writestr(rel_path, content)
+                else:
+                    zf.writestr(rel_path, content)
+        return True, ''
+    except Exception as e:
+        return False, str(e)
+
+
 def _url_matches(url, patterns):
     """Check if URL matches any of the given match patterns."""
     if not patterns:

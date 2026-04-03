@@ -15,7 +15,7 @@ import time
 import hashlib
 import threading
 
-from PyQt6.QtCore import QThread, pyqtSignal, QObject
+from PyQt6.QtCore import QThread, pyqtSignal, QObject, QTimer
 
 try:
     import requests
@@ -162,6 +162,9 @@ class GitHubSync(QObject):
         self.config = self._load_config()
         self._upload_thread = None
         self._import_thread = None
+        self._auto_timer = QTimer(self)
+        self._auto_timer.timeout.connect(self._auto_sync_tick)
+        self._json_export_func = None  # set by browser to export DB JSON
 
     def _load_config(self):
         """Load GitHub sync configuration."""
@@ -186,15 +189,59 @@ class GitHubSync(QObject):
         with open(config_path, 'w') as f:
             json.dump(self.config, f, indent=2)
 
+    # ── Auto-Sync Timer ────────────────────────────────────────────
+    def start_auto_sync(self, export_func=None):
+        """Start the auto-sync timer.  export_func(path) should write the
+        database JSON to *path* so it can be uploaded."""
+        if export_func:
+            self._json_export_func = export_func
+        interval = max(self.config.get('sync_interval_minutes', 60), 30)
+        if self.config.get('auto_sync') and self.is_configured():
+            self._auto_timer.start(interval * 60 * 1000)
+            self.status_update.emit(
+                f"Auto-sync enabled (every {interval} min)")
+
+    def stop_auto_sync(self):
+        """Stop the auto-sync timer."""
+        self._auto_timer.stop()
+
+    def _auto_sync_tick(self):
+        """Called by the QTimer — performs one upload cycle."""
+        if not self.is_configured() or not self._json_export_func:
+            return
+        import tempfile
+        tmp = tempfile.NamedTemporaryFile(suffix='.json', delete=False)
+        tmp.close()
+        try:
+            self._json_export_func(tmp.name)
+            self.upload_database(tmp.name, callback=self._auto_sync_done)
+        except Exception as e:
+            self.status_update.emit(f"Auto-sync error: {e}")
+            try:
+                os.unlink(tmp.name)
+            except OSError:
+                pass
+
+    def _auto_sync_done(self, success, msg):
+        self.config['last_sync'] = int(time.time())
+        self.save_config()
+        self.status_update.emit(f"Auto-sync: {msg}")
+        # Also flush community upload queue
+        self.flush_upload_queue()
+
     def configure(self, token, repo, auto_sync=False, interval=60):
         """Configure GitHub sync settings."""
         self.config.update({
             'token': token,
             'repo': repo,
             'auto_sync': auto_sync,
-            'sync_interval_minutes': interval,
+            'sync_interval_minutes': max(interval, 30),
         })
         self.save_config()
+        # Restart or stop auto-sync based on new settings
+        self.stop_auto_sync()
+        if auto_sync:
+            self.start_auto_sync()
 
     def upload_database(self, json_filepath, callback=None):
         """Upload database to GitHub."""

@@ -15,9 +15,7 @@ finish-args:
   - --env=QTWEBENGINE_CHROMIUM_FLAGS=--no-sandbox
 
 modules:
-  # ── Python deps (network access at build time via flatpak-builder) ──
   # KDE 6.7 runtime already has: Python 3, PyQt6, Qt6 WebEngine
-  # We install the rest via pip with --no-build-isolation
   - name: python3-deps
     buildsystem: simple
     build-options:
@@ -32,7 +30,6 @@ modules:
           'huggingface-hub>=0.20.0'
     sources: []
 
-  # llama-cpp-python — CPU only, optional
   - name: python3-llama-cpp
     buildsystem: simple
     build-options:
@@ -41,86 +38,43 @@ modules:
       env:
         CMAKE_ARGS: '-DGGML_BLAS=OFF -DGGML_CUDA=OFF'
     build-commands:
-      - pip3 install --prefix=/app 'llama-cpp-python>=0.2.0' || echo 'llama-cpp-python build failed (optional, skipping)'
+      - pip3 install --prefix=/app 'llama-cpp-python>=0.2.0' || echo 'llama-cpp-python build failed (optional)'
     sources: []
 
-  # ── OyNIx Browser ──
   - name: oynix
     buildsystem: simple
     build-commands:
-      # Install app files
       - mkdir -p /app/lib/oynix
       - cp -r oynix /app/lib/oynix/
       - cp pyproject.toml /app/lib/oynix/
       - cp requirements.txt /app/lib/oynix/
 
       # Native turbo indexer
-      - |
-        if [ -f src/native/fast_index.cpp ]; then
-          mkdir -p /app/lib/oynix/build
-          g++ -O2 -shared -fPIC -std=c++17 \
-            -o /app/lib/oynix/build/libnyx_index.so \
-            src/native/fast_index.cpp 2>/dev/null || echo "Native lib skipped"
-        fi
+      - g++ -O2 -shared -fPIC -std=c++17
+          -o /app/lib/oynix/build/libnyx_index.so
+          src/native/fast_index.cpp 2>/dev/null
+          && mkdir -p /app/lib/oynix/build || true
 
-      # C# turbo indexer (if dotnet available)
-      - |
-        if command -v dotnet &>/dev/null && [ -d src/turbo_indexer ]; then
-          dotnet build src/turbo_indexer/TurboIndexer.csproj -c Release -o /app/lib/oynix/build/ 2>/dev/null || echo "C# indexer skipped"
-        fi
-
-      # Launcher
-      - |
-        mkdir -p /app/bin
-        cat > /app/bin/oynix-launch <<'LAUNCHER'
-#!/bin/bash
-# OyNIx Browser Flatpak launcher
-export PYTHONPATH="/app/lib/oynix${PYTHONPATH:+:$PYTHONPATH}"
-# Log errors when no terminal
-if ! [ -t 1 ]; then
-    mkdir -p "$HOME/.config/oynix"
-    exec >>"$HOME/.config/oynix/launch.log" 2>&1
-fi
-exec python3 -m oynix "$@"
-LAUNCHER
-        chmod +x /app/bin/oynix-launch
+      # Launcher script
+      - mkdir -p /app/bin
+      - install -Dm755 flatpak/oynix-launch /app/bin/oynix-launch
 
       # Desktop file
       - install -Dm644 oynix.desktop /app/share/applications/io.github.oynix.browser.desktop
       - sed -i 's|Exec=oynix.*|Exec=oynix-launch %u|' /app/share/applications/io.github.oynix.browser.desktop
       - sed -i 's|Icon=oynix|Icon=io.github.oynix.browser|' /app/share/applications/io.github.oynix.browser.desktop
 
-      # Icons (multiple sizes)
-      - |
-        for size in 256 128 64 48; do
-          icon="assets/icon-${size}.png"
+      # Icons
+      - for size in 256 128 64 48; do
+          icon="assets/icon-${size}.png";
           if [ -f "$icon" ]; then
-            install -Dm644 "$icon" "/app/share/icons/hicolor/${size}x${size}/apps/io.github.oynix.browser.png"
-          fi
+            install -Dm644 "$icon" "/app/share/icons/hicolor/${size}x${size}/apps/io.github.oynix.browser.png";
+          fi;
         done
-        if [ -f assets/icon.png ]; then
-          install -Dm644 assets/icon.png /app/share/icons/hicolor/256x256/apps/io.github.oynix.browser.png
-        fi
 
       # AppStream metadata
-      - |
-        mkdir -p /app/share/metainfo
-        cat > /app/share/metainfo/io.github.oynix.browser.metainfo.xml <<'METAINFO'
-<?xml version="1.0" encoding="UTF-8"?>
-<component type="desktop-application">
-  <id>io.github.oynix.browser</id>
-  <name>OyNIx Browser</name>
-  <summary>Nyx-powered local AI browser with tree tabs</summary>
-  <metadata_license>MIT</metadata_license>
-  <project_license>MIT</project_license>
-  <description>
-    <p>Custom Chromium-based desktop browser with built-in local LLM assistant,
-    Nyx search engine, tree-style tabs, audio player, and purple/black Nyx theme.</p>
-  </description>
-  <url type="homepage">https://github.com/minerofthesoal/OyNIx</url>
-  <launchable type="desktop-id">io.github.oynix.browser.desktop</launchable>
-</component>
-METAINFO
+      - install -Dm644 flatpak/io.github.oynix.browser.metainfo.xml
+          /app/share/metainfo/io.github.oynix.browser.metainfo.xml
 
     sources:
       - type: dir

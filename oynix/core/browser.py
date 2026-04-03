@@ -1,5 +1,5 @@
 """
-OyNIx Browser v2.1.2 - Main Browser Core
+OyNIx Browser v2.2 - Main Browser Core
 Complete desktop browser with local LLM, Nyx search, tree tabs,
 bookmarks, downloads, history, find-in-page, command palette,
 forced theme on external search engines, XPI extension import,
@@ -39,7 +39,8 @@ from oynix.core.github_sync import github_sync
 
 from oynix.core.extensions import (
     install_extension, uninstall_extension, toggle_extension,
-    load_registry, get_content_scripts_for_url, get_extra_styles_for_url
+    load_registry, get_content_scripts_for_url, get_extra_styles_for_url,
+    convert_xpi_to_npi as _convert_xpi, compile_npi
 )
 from oynix.UI.ai_chat import AIChatPanel
 from oynix.core.credentials import credential_manager, CredentialDialog, SavePasswordBar
@@ -302,7 +303,7 @@ class CommandPalette(QDialog):
 
 
 class OynixBrowser(QMainWindow):
-    """OyNIx Browser v2.1.2 — The Nyx-Powered Local AI Browser."""
+    """OyNIx Browser v2.2 — The Nyx-Powered Local AI Browser."""
 
     def __init__(self):
         super().__init__()
@@ -339,6 +340,9 @@ class OynixBrowser(QMainWindow):
         ai_manager.load_model_async()
         self.new_tab(QUrl("oyn://home"))
         self._update_status("Ready")
+
+        # Start auto-sync if configured
+        github_sync.start_auto_sync(export_func=lambda p: database.export_to_json(p))
 
     # ── Config persistence (profile-aware) ──────────────────────────
     def _get_profile_path(self, filename):
@@ -442,6 +446,92 @@ class OynixBrowser(QMainWindow):
         nav_btn('downloads', 'Downloads (Ctrl+J)', self.show_downloads)
         nav_btn('new_tab', 'New Tab (Ctrl+T)', lambda: self.new_tab())
 
+        # Extension toolbar buttons (right side of nav bar)
+        tb.addSeparator()
+        self._ext_toolbar_btns = []
+        self._rebuild_extension_toolbar(tb)
+
+    def _rebuild_extension_toolbar(self, toolbar=None):
+        """Add/refresh extension action buttons in the toolbar."""
+        # Remove old extension buttons
+        for btn in self._ext_toolbar_btns:
+            btn.setParent(None)
+            btn.deleteLater()
+        self._ext_toolbar_btns.clear()
+
+        registry = load_registry()
+        if not registry:
+            return
+
+        if toolbar is None:
+            toolbar = self.findChild(QToolBar, "Navigation")
+        if not toolbar:
+            return
+
+        for ext in registry:
+            if not ext.get('enabled', True):
+                continue
+            name = ext.get('name', '?')
+            has_popup = ext.get('popup') is not None
+            desc = ext.get('description', '')[:40]
+
+            btn = QPushButton()
+            # Use first letter as icon fallback
+            icon_text = name[0].upper() if name else '?'
+            btn.setText(icon_text)
+            btn.setObjectName("extBtn")
+            btn.setToolTip(f"{name}\n{desc}" if desc else name)
+            btn.setFixedSize(30, 30)
+            btn.setStyleSheet(f"""
+                QPushButton#extBtn {{
+                    background: {NYX_COLORS['bg_lighter']};
+                    color: {NYX_COLORS['purple_pale']};
+                    border: 1px solid {NYX_COLORS['border']};
+                    border-radius: 6px;
+                    font-weight: bold;
+                    font-size: 13px;
+                }}
+                QPushButton#extBtn:hover {{
+                    background: {NYX_COLORS['purple_dark']};
+                    border-color: {NYX_COLORS['purple_mid']};
+                }}
+            """)
+
+            if has_popup:
+                btn.clicked.connect(lambda checked=False, e=ext: self._show_ext_popup(e))
+            else:
+                btn.clicked.connect(lambda checked=False, e=ext: self._toggle_ext_inline(e))
+
+            toolbar.addWidget(btn)
+            self._ext_toolbar_btns.append(btn)
+
+    def _show_ext_popup(self, ext):
+        """Show an extension's popup HTML in a small dialog."""
+        popup = ext.get('popup')
+        if not popup or not popup.get('html'):
+            return
+
+        dialog = QDialog(self)
+        dialog.setWindowTitle(ext.get('name', 'Extension'))
+        dialog.setFixedSize(400, 500)
+        layout = QVBoxLayout(dialog)
+        layout.setContentsMargins(0, 0, 0, 0)
+
+        popup_view = QWebEngineView()
+        popup_view.setHtml(popup['html'],
+                           QUrl.fromLocalFile(os.path.join(ext.get('path', ''), popup.get('file', ''))))
+        layout.addWidget(popup_view)
+        dialog.exec()
+
+    def _toggle_ext_inline(self, ext):
+        """Toggle an extension that has no popup (just enable/disable)."""
+        name = ext.get('name', '')
+        new_state = toggle_extension(name)
+        if new_state is not None:
+            state_str = 'enabled' if new_state else 'disabled'
+            self._update_status(f"Extension '{name}' {state_str}")
+            self._rebuild_extension_toolbar()
+
     def _setup_tab_manager(self):
         self.tab_manager = TabManager()
         self.tab_manager.current_view_changed.connect(self._on_current_view_changed)
@@ -463,6 +553,7 @@ class OynixBrowser(QMainWindow):
             self.audio_player = AudioPlayer()
             self.audio_player.hide()
             self.main_splitter.addWidget(self.audio_player)
+            self.audio_player.setup_web_media_detection(self)
         else:
             self.audio_player = None
 
@@ -543,7 +634,30 @@ class OynixBrowser(QMainWindow):
 
     def _apply_theme(self):
         self.theme_colors = get_theme(self.current_theme)
-        self.setStyleSheet(get_qt_stylesheet(self.theme_colors))
+        c = self.theme_colors
+        self.setStyleSheet(get_qt_stylesheet(c))
+        # Update widgets that were styled with hardcoded colors at init time
+        if hasattr(self, 'ai_status_label'):
+            self.ai_status_label.setStyleSheet(
+                f"color: {c['text_muted']}; font-size: 11px; padding: 0 8px; background: transparent;")
+        if hasattr(self, 'db_label'):
+            self.db_label.setStyleSheet(
+                f"color: {c['text_muted']}; font-size: 11px; background: transparent;")
+        # Re-render the current page if it's an internal oyn:// page
+        tab = self.current_tab()
+        if tab:
+            url_str = tab.url().toString()
+            if url_str.startswith('oyn://home'):
+                tab.setHtml(get_homepage_html(c), tab.url())
+            elif url_str.startswith('oyn://bookmarks'):
+                html = get_bookmarks_html(self._bookmarks, c)
+                tab.setHtml(html, tab.url())
+            elif url_str.startswith('oyn://history'):
+                html = get_history_html(self._history[:100], c)
+                tab.setHtml(html, tab.url())
+            elif url_str.startswith('oyn://downloads'):
+                html = get_downloads_html(self._downloads, c)
+                tab.setHtml(html, tab.url())
 
     def _setup_download_handler(self):
         profile = QWebEngineProfile.defaultProfile()
@@ -656,15 +770,16 @@ class OynixBrowser(QMainWindow):
 
         results = nyx_search.search(query)
         local = results.get('local', []) + results.get('database', [])
+        relevant = results.get('relevant_sites', [])
 
-        # Filter and rank — show only results relevant to the query
+        # Score and rank — include ALL results, even loosely related
         query_lower = query.lower()
         scored = []
-        for r in local:
+        for r in local + relevant:
             title = (r.get('title') or '').lower()
             desc = (r.get('description') or '').lower()
             url_str = (r.get('url') or '').lower()
-            score = 0
+            score = 1  # minimum score so everything is included
             if query_lower in title:
                 score += 60
             if query_lower in desc:
@@ -676,9 +791,17 @@ class OynixBrowser(QMainWindow):
                     score += 15
                 if word in desc:
                     score += 8
-            if score > 0:
-                r['score'] = min(score, 100)
-                scored.append(r)
+            r['score'] = min(score, 100)
+            scored.append(r)
+        # Deduplicate by URL
+        seen = set()
+        deduped = []
+        for r in scored:
+            key = r.get('url', '').rstrip('/').lower()
+            if key not in seen:
+                seen.add(key)
+                deduped.append(r)
+        scored = deduped
         scored.sort(key=lambda x: x.get('score', 0), reverse=True)
 
         # Show Nyx results immediately
@@ -842,6 +965,10 @@ class OynixBrowser(QMainWindow):
         if not url_str.startswith(("oyn://", "about:", "data:")):
             self._check_login_page(url_str, browser)
 
+        # Apply remembered zoom level for this domain
+        if not url_str.startswith(("oyn://", "about:", "data:")):
+            self._apply_zoom_for_domain(browser)
+
         self._refresh_stats()
 
     def _compare_site(self, url_str, title):
@@ -871,6 +998,16 @@ class OynixBrowser(QMainWindow):
 
     def _update_status(self, message):
         self.status_bar.showMessage(message, 5000)
+        # Brief purple glow on status update
+        c = self.theme_colors
+        self.status_bar.setStyleSheet(
+            f"QStatusBar {{ background: {c['bg_darkest']}; color: {c['purple_light']};"
+            f" border-top: 1px solid {c['purple_mid']}; font-size: 11px; padding: 2px 8px; }}"
+            f" QStatusBar::item {{ border: none; }}")
+        QTimer.singleShot(1500, lambda: self.status_bar.setStyleSheet(
+            f"QStatusBar {{ background: {c['bg_darkest']}; color: {c['text_muted']};"
+            f" border-top: 1px solid {c['border']}; font-size: 11px; padding: 2px 8px; }}"
+            f" QStatusBar::item {{ border: none; }}"))
 
     def _refresh_stats(self):
         stats = database.get_stats()
@@ -883,13 +1020,36 @@ class OynixBrowser(QMainWindow):
         self.tab_manager.set_tree_mode(not current)
         self._save_config()
 
+    def _animate_splitter(self, splitter, target_sizes, duration=250):
+        """Smoothly animate a QSplitter to target sizes."""
+        start = splitter.sizes()
+        if len(start) != len(target_sizes):
+            splitter.setSizes(target_sizes)
+            return
+        self._anim_timer_step = 0
+        steps = max(1, duration // 16)
+        def step():
+            self._anim_timer_step += 1
+            t = min(1.0, self._anim_timer_step / steps)
+            # Ease-out cubic
+            t2 = 1 - (1 - t) ** 3
+            sizes = [int(s + (e - s) * t2) for s, e in zip(start, target_sizes)]
+            splitter.setSizes(sizes)
+            if self._anim_timer_step >= steps:
+                self._anim_qtimer.stop()
+        self._anim_qtimer = QTimer()
+        self._anim_qtimer.timeout.connect(step)
+        self._anim_qtimer.start(16)
+
     def toggle_ai_panel(self):
         if self.ai_panel.isVisible():
-            self.ai_panel.hide()
-            self.main_splitter.setSizes([1200, 0])
+            self._animate_splitter(self.main_splitter,
+                [self.main_splitter.sizes()[0] + self.main_splitter.sizes()[1], 0])
+            QTimer.singleShot(300, self.ai_panel.hide)
         else:
             self.ai_panel.show()
-            self.main_splitter.setSizes([900, 350])
+            total = sum(self.main_splitter.sizes())
+            self._animate_splitter(self.main_splitter, [total - 350, 350])
 
     def toggle_fullscreen(self):
         if self.isFullScreen():
@@ -920,6 +1080,11 @@ class OynixBrowser(QMainWindow):
             ("Profiles", ""), ("New Profile", ""), ("Switch Profile", ""),
             ("Delete Profile", ""), ("Auto-Login Manager", ""),
             ("Save Credential", ""),
+            ("Pin/Unpin Tab", ""), ("Search Tabs", ""), ("Tab Group", ""),
+            ("Reading List", ""), ("Add to Reading List", ""),
+            ("Quick Notes", ""), ("Screenshot Page", ""),
+            ("Save Session", ""), ("Restore Session", ""),
+            ("Convert XPI → NPI", ""), ("NPI Builder", ""),
         ]
         palette = CommandPalette(commands, self)
         palette.command_selected.connect(self._run_command)
@@ -956,6 +1121,17 @@ class OynixBrowser(QMainWindow):
             "Delete Profile": self.delete_profile,
             "Auto-Login Manager": self.manage_autologin,
             "Save Credential": self.save_credential_to_profile,
+            "Pin/Unpin Tab": self.pin_current_tab,
+            "Search Tabs": self.search_tabs,
+            "Tab Group": self.create_tab_group,
+            "Reading List": self.show_reading_list,
+            "Add to Reading List": self.add_to_reading_list,
+            "Quick Notes": self.show_quick_notes,
+            "Screenshot Page": self.screenshot_page,
+            "Save Session": self.save_session,
+            "Restore Session": self.restore_session,
+            "Convert XPI → NPI": self.convert_xpi_to_npi,
+            "NPI Builder": self.open_npi_builder,
         }
         fn = mapping.get(name)
         if fn:
@@ -1103,16 +1279,19 @@ class OynixBrowser(QMainWindow):
         tab = self.current_tab()
         if tab:
             tab.setZoomFactor(tab.zoomFactor() + 0.1)
+            self._save_zoom_for_domain()
 
     def zoom_out(self):
         tab = self.current_tab()
         if tab:
             tab.setZoomFactor(max(0.3, tab.zoomFactor() - 0.1))
+            self._save_zoom_for_domain()
 
     def reset_zoom(self):
         tab = self.current_tab()
         if tab:
             tab.setZoomFactor(1.0)
+            self._save_zoom_for_domain()
 
     # ── Print / Save / Source / Reader ─────────────────────────────
     def print_page(self):
@@ -1198,6 +1377,41 @@ class OynixBrowser(QMainWindow):
 
     # Keep old name as alias
     import_xpi_extension = import_extension
+
+    def open_npi_builder(self):
+        """Open the NPI Extension Builder dialog."""
+        from oynix.UI.npi_builder import NPIBuilderDialog
+        dlg = NPIBuilderDialog(self)
+        dlg.exec()
+
+    def convert_xpi_to_npi(self):
+        """Convert a Firefox .xpi to OyNIx .npi format."""
+        from oynix.core.extensions import convert_xpi_to_npi
+        path, _ = QFileDialog.getOpenFileName(
+            self, "Select XPI to Convert", "",
+            "Firefox Extensions (*.xpi);;All Files (*)")
+        if not path:
+            return
+        out, _ = QFileDialog.getSaveFileName(
+            self, "Save NPI As",
+            os.path.splitext(path)[0] + '.npi',
+            "OyNIx Extensions (*.npi)")
+        if not out:
+            return
+        ok, out_path, err = convert_xpi_to_npi(path, out)
+        if ok:
+            reply = QMessageBox.question(self, "Conversion Complete",
+                f"Saved: {out_path}\n\nInstall the converted extension now?")
+            if reply == QMessageBox.StandardButton.Yes:
+                ok2, info, err2 = install_extension(out_path)
+                if ok2:
+                    QMessageBox.information(self, "Installed",
+                        f"Installed: {info.get('name', '?')}")
+                    self._rebuild_extension_toolbar()
+                else:
+                    QMessageBox.warning(self, "Install Failed", err2)
+        else:
+            QMessageBox.warning(self, "Conversion Failed", err)
 
     def manage_extensions(self):
         """Show extension manager dialog."""
@@ -1542,8 +1756,19 @@ class OynixBrowser(QMainWindow):
             repo, ok2 = QInputDialog.getText(self, "GitHub Repo",
                 "Repository (user/repo):", text="")
             if ok2 and repo:
-                github_sync.configure(token, repo)
-                self._update_status("GitHub sync configured")
+                auto = QMessageBox.question(self, "Auto-Sync",
+                    "Enable auto-sync to GitHub?") == QMessageBox.StandardButton.Yes
+                interval = 60
+                if auto:
+                    val, ok3 = QInputDialog.getInt(self, "Sync Interval",
+                        "Sync every N minutes (min 30):", 60, 30, 1440)
+                    if ok3:
+                        interval = val
+                github_sync.configure(token, repo, auto_sync=auto, interval=interval)
+                github_sync.start_auto_sync(
+                    export_func=lambda p: database.export_to_json(p))
+                self._update_status("GitHub sync configured"
+                    + (" (auto-sync ON)" if auto else ""))
 
     # ── Misc stubs now implemented ─────────────────────────────────
     def set_search_engine(self, engine='nyx'):
@@ -1569,7 +1794,7 @@ class OynixBrowser(QMainWindow):
 
     def show_about(self):
         QMessageBox.about(self, "About OyNIx",
-            "OyNIx Browser v2.1.2\nThe Nyx-Powered Local AI Browser\n\n"
+            "OyNIx Browser v2.2\nThe Nyx-Powered Local AI Browser\n\n"
             "Features: Tree Tabs, Local LLM, Nyx Search,\n"
             "1400+ Site Database, Dynamic Refractions,\n"
             "C++/C# Turbo Indexer, Audio Player,\n"
@@ -1579,7 +1804,7 @@ class OynixBrowser(QMainWindow):
 
     def show_release_notes(self):
         QMessageBox.information(self, "Release Notes",
-            "v2.1.2 — Dynamic Refractions & Turbo Search\n\n"
+            "v2.2 — Dynamic Refractions & Turbo Search\n\n"
             "• Nyx-first search (no external redirects)\n"
             "• GPU-accelerated mouse-tracking refractions\n"
             "• Dynamic glass effects on all UI pages\n"
@@ -1592,7 +1817,7 @@ class OynixBrowser(QMainWindow):
             "• Audio player\n• Chrome history import")
 
     def check_updates(self):
-        QMessageBox.information(self, "Updates", "You are running OyNIx v2.1.2 (latest).")
+        QMessageBox.information(self, "Updates", "You are running OyNIx v2.2 (latest).")
 
     def import_settings(self):
         path, _ = QFileDialog.getOpenFileName(self, "Import Settings", "", "JSON (*.json)")
@@ -2052,3 +2277,263 @@ class OynixBrowser(QMainWindow):
             self.find_bar.setGeometry(0, self.height() - 80, self.width(), 40)
         if hasattr(self, 'save_pw_bar'):
             self.save_pw_bar.setGeometry(0, self.height() - 120, self.width(), 40)
+
+    # ══════════════════════════════════════════════════════════════════
+    # v2.2 Features
+    # ══════════════════════════════════════════════════════════════════
+
+    # ── 1. Tab Pinning ─────────────────────────────────────────────
+    def pin_current_tab(self):
+        """Pin/unpin the current tab (pinned tabs stay at the front)."""
+        idx = self.tab_manager.currentIndex()
+        if idx < 0:
+            return
+        pinned = getattr(self, '_pinned_tabs', set())
+        tab = self.tab_manager.widget(idx)
+        tab_id = id(tab)
+        if tab_id in pinned:
+            pinned.discard(tab_id)
+            self._update_status("Tab unpinned")
+        else:
+            pinned.add(tab_id)
+            # Move to front
+            if idx > 0:
+                self.tab_manager.tabBar().moveTab(idx, 0)
+            self._update_status("Tab pinned")
+        self._pinned_tabs = pinned
+
+    # ── 2. Page Screenshot ─────────────────────────────────────────
+    def screenshot_page(self):
+        """Capture the current page as a PNG screenshot."""
+        tab = self.current_tab()
+        if not tab:
+            return
+        path, _ = QFileDialog.getSaveFileName(
+            self, "Save Screenshot",
+            os.path.expanduser("~/screenshot.png"),
+            "PNG Images (*.png)")
+        if not path:
+            return
+        # Grab the web view widget
+        pixmap = tab.grab()
+        pixmap.save(path, "PNG")
+        self._update_status(f"Screenshot saved: {path}")
+
+    # ── 3. Reading List ────────────────────────────────────────────
+    def add_to_reading_list(self):
+        """Add current page to reading list for later."""
+        tab = self.current_tab()
+        if not tab:
+            return
+        url = tab.url().toString()
+        title = tab.page().title() or url
+        reading_list = self._load_json(
+            self._get_profile_path("reading_list.json"), [])
+        if any(r['url'] == url for r in reading_list):
+            self._update_status("Already in reading list")
+            return
+        reading_list.insert(0, {
+            'url': url, 'title': title,
+            'added': time.strftime("%Y-%m-%d %H:%M"),
+            'read': False,
+        })
+        self._save_json(self._get_profile_path("reading_list.json"), reading_list)
+        self._update_status(f"Added to reading list: {title[:40]}")
+
+    def show_reading_list(self):
+        """Show the reading list in a dialog."""
+        reading_list = self._load_json(
+            self._get_profile_path("reading_list.json"), [])
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Reading List")
+        dialog.setMinimumSize(500, 400)
+        layout = QVBoxLayout(dialog)
+        header = QLabel(f"Reading List ({len(reading_list)} items)")
+        header.setStyleSheet(
+            f"font-size: 16px; font-weight: bold; color: {self.theme_colors['purple_light']};"
+            " background: transparent;")
+        layout.addWidget(header)
+        lst = QListWidget()
+        for item in reading_list:
+            check = "\u2713 " if item.get('read') else ""
+            li = QListWidgetItem(f"{check}{item['title']}")
+            li.setData(Qt.ItemDataRole.UserRole, item)
+            lst.addItem(li)
+        layout.addWidget(lst)
+        btn_row = QHBoxLayout()
+        open_btn = QPushButton("Open Selected")
+        open_btn.clicked.connect(lambda: self._open_reading_item(lst, dialog))
+        btn_row.addWidget(open_btn)
+        remove_btn = QPushButton("Remove Selected")
+        remove_btn.clicked.connect(lambda: self._remove_reading_item(lst, reading_list))
+        btn_row.addWidget(remove_btn)
+        layout.addLayout(btn_row)
+        dialog.exec()
+
+    def _open_reading_item(self, lst, dialog):
+        item = lst.currentItem()
+        if item:
+            data = item.data(Qt.ItemDataRole.UserRole)
+            self.new_tab(QUrl(data['url']))
+            data['read'] = True
+            reading_list = self._load_json(
+                self._get_profile_path("reading_list.json"), [])
+            for r in reading_list:
+                if r['url'] == data['url']:
+                    r['read'] = True
+            self._save_json(self._get_profile_path("reading_list.json"), reading_list)
+            dialog.accept()
+
+    def _remove_reading_item(self, lst, reading_list):
+        item = lst.currentItem()
+        if item:
+            data = item.data(Qt.ItemDataRole.UserRole)
+            reading_list[:] = [r for r in reading_list if r['url'] != data['url']]
+            self._save_json(self._get_profile_path("reading_list.json"), reading_list)
+            lst.takeItem(lst.row(item))
+
+    # ── 4. Tab Search ──────────────────────────────────────────────
+    def search_tabs(self):
+        """Search through open tabs by title/URL."""
+        text, ok = QInputDialog.getText(self, "Search Tabs", "Find tab:")
+        if not ok or not text:
+            return
+        text_lower = text.lower()
+        for i in range(self.tab_manager.count()):
+            w = self.tab_manager.widget(i)
+            if w:
+                title = (w.page().title() or '').lower()
+                url = w.url().toString().lower()
+                if text_lower in title or text_lower in url:
+                    self.tab_manager.setCurrentIndex(i)
+                    self._update_status(f"Found tab: {w.page().title()}")
+                    return
+        self._update_status("No matching tab found")
+
+    # ── 5. Session Save/Restore ────────────────────────────────────
+    def save_session(self):
+        """Save all open tabs as a session file."""
+        tabs = []
+        for i in range(self.tab_manager.count()):
+            w = self.tab_manager.widget(i)
+            if w:
+                url = w.url().toString()
+                if url and not url.startswith('oyn://'):
+                    tabs.append({
+                        'url': url,
+                        'title': w.page().title() or url,
+                    })
+        if not tabs:
+            self._update_status("No tabs to save")
+            return
+        path, _ = QFileDialog.getSaveFileName(
+            self, "Save Session",
+            os.path.expanduser("~/oynix_session.json"),
+            "Session Files (*.json)")
+        if path:
+            with open(path, 'w') as f:
+                json.dump({'tabs': tabs, 'saved': time.strftime("%Y-%m-%d %H:%M")}, f, indent=2)
+            self._update_status(f"Session saved: {len(tabs)} tabs")
+
+    def restore_session(self):
+        """Restore tabs from a session file."""
+        path, _ = QFileDialog.getOpenFileName(
+            self, "Restore Session", "",
+            "Session Files (*.json);;All Files (*)")
+        if not path:
+            return
+        try:
+            with open(path) as f:
+                data = json.load(f)
+            tabs = data.get('tabs', [])
+            for t in tabs:
+                self.new_tab(QUrl(t['url']))
+            self._update_status(f"Restored {len(tabs)} tabs")
+        except Exception as e:
+            QMessageBox.warning(self, "Session Restore", f"Error: {e}")
+
+    # ── 6. Site-Specific Zoom Memory ───────────────────────────────
+    def _get_zoom_map(self):
+        return self._load_json(self._get_profile_path("zoom_map.json"), {})
+
+    def _save_zoom_for_domain(self):
+        """Remember the current zoom level for this domain."""
+        tab = self.current_tab()
+        if not tab:
+            return
+        domain = urlparse(tab.url().toString()).netloc
+        if not domain:
+            return
+        zoom_map = self._get_zoom_map()
+        zoom_map[domain] = tab.zoomFactor()
+        self._save_json(self._get_profile_path("zoom_map.json"), zoom_map)
+
+    def _apply_zoom_for_domain(self, browser):
+        """Apply saved zoom level for the current domain."""
+        domain = urlparse(browser.url().toString()).netloc
+        if not domain:
+            return
+        zoom_map = self._get_zoom_map()
+        if domain in zoom_map:
+            browser.setZoomFactor(zoom_map[domain])
+
+    # ── 7. Quick Notes ─────────────────────────────────────────────
+    def show_quick_notes(self):
+        """Open a quick-notes dialog for the current page."""
+        tab = self.current_tab()
+        if not tab:
+            return
+        url = tab.url().toString()
+        domain = urlparse(url).netloc or 'general'
+        notes_file = self._get_profile_path("notes.json")
+        all_notes = self._load_json(notes_file, {})
+        current_note = all_notes.get(domain, '')
+
+        dialog = QDialog(self)
+        dialog.setWindowTitle(f"Notes — {domain}")
+        dialog.setMinimumSize(400, 300)
+        layout = QVBoxLayout(dialog)
+        from PyQt6.QtWidgets import QTextEdit as _QTE
+        editor = _QTE()
+        editor.setPlainText(current_note)
+        editor.setPlaceholderText("Type your notes here...")
+        editor.setStyleSheet(
+            f"font-family: 'JetBrains Mono', monospace; font-size: 13px;"
+            f" background: {self.theme_colors['bg_mid']};"
+            f" color: {self.theme_colors['text_primary']};"
+            f" border: 1px solid {self.theme_colors['border']}; border-radius: 8px; padding: 10px;")
+        layout.addWidget(editor)
+        save_btn = QPushButton("Save Notes")
+        save_btn.setObjectName("accentBtn")
+        save_btn.clicked.connect(lambda: self._save_note(all_notes, domain, editor.toPlainText(), notes_file, dialog))
+        layout.addWidget(save_btn)
+        dialog.exec()
+
+    def _save_note(self, all_notes, domain, text, path, dialog):
+        if text.strip():
+            all_notes[domain] = text
+        else:
+            all_notes.pop(domain, None)
+        self._save_json(path, all_notes)
+        self._update_status("Notes saved")
+        dialog.accept()
+
+    # ── 8. Tab Groups ──────────────────────────────────────────────
+    def create_tab_group(self):
+        """Create a named tab group from selected tabs."""
+        name, ok = QInputDialog.getText(self, "Tab Group", "Group name:")
+        if not ok or not name:
+            return
+        colors = ['#7B4FBF', '#6FCF97', '#F2C94C', '#EB5757', '#56CCF2', '#BB6BD9']
+        color_names = ['Purple', 'Green', 'Yellow', 'Red', 'Blue', 'Pink']
+        color, ok2 = QInputDialog.getItem(self, "Group Color", "Select color:", color_names, 0, False)
+        if not ok2:
+            return
+        idx = color_names.index(color) if color in color_names else 0
+        groups = getattr(self, '_tab_groups', {})
+        groups[name] = {
+            'color': colors[idx],
+            'tabs': [self.tab_manager.currentIndex()],
+        }
+        self._tab_groups = groups
+        self._update_status(f"Created tab group: {name}")
