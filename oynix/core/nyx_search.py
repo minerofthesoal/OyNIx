@@ -88,15 +88,29 @@ class NyxIndexer:
                 visit_count INTEGER DEFAULT 1
             )
         """)
-        # Try FTS5
+        # Try FTS5 — use content='' (standalone) to avoid external content sync issues
         try:
             self.conn.execute("""
                 CREATE VIRTUAL TABLE IF NOT EXISTS pages_fts
-                USING fts5(url, title, content, domain, content=pages)
+                USING fts5(url, title, content, domain)
             """)
             self._has_fts = True
         except Exception:
-            self._has_fts = False
+            # FTS5 may be unavailable or corrupted — try rebuilding
+            try:
+                self.conn.execute("DROP TABLE IF EXISTS pages_fts")
+                self.conn.execute("""
+                    CREATE VIRTUAL TABLE pages_fts
+                    USING fts5(url, title, content, domain)
+                """)
+                # Re-populate from pages table
+                self.conn.execute("""
+                    INSERT INTO pages_fts (url, title, content, domain)
+                    SELECT url, title, content, domain FROM pages
+                """)
+                self._has_fts = True
+            except Exception:
+                self._has_fts = False
         self.conn.commit()
 
     def index_page(self, url, title, content_snippet=""):
@@ -130,11 +144,17 @@ class NyxIndexer:
                     """, (url, title, content_snippet[:2000], domain,
                           timestamp, url))
                     if self._has_fts:
-                        self.conn.execute("""
-                            INSERT OR REPLACE INTO pages_fts
-                            (url, title, content, domain)
-                            VALUES (?, ?, ?, ?)
-                        """, (url, title, content_snippet[:2000], domain))
+                        try:
+                            # Delete old FTS entry if exists, then insert new
+                            self.conn.execute(
+                                "DELETE FROM pages_fts WHERE url = ?", (url,))
+                            self.conn.execute("""
+                                INSERT INTO pages_fts
+                                (url, title, content, domain)
+                                VALUES (?, ?, ?, ?)
+                            """, (url, title, content_snippet[:2000], domain))
+                        except Exception:
+                            pass  # FTS insert failure is non-critical
                     self.conn.commit()
         except Exception as e:
             print(f"[NyxIndex] Error indexing {url}: {e}")
@@ -162,12 +182,18 @@ class NyxIndexer:
                                 'source': 'nyx_index',
                             })
                 else:
+                    rows = None
                     if self._has_fts:
-                        rows = self.conn.execute("""
-                            SELECT url, title, content FROM pages_fts
-                            WHERE pages_fts MATCH ? LIMIT ?
-                        """, (query, limit)).fetchall()
-                    else:
+                        try:
+                            rows = self.conn.execute("""
+                                SELECT url, title, content FROM pages_fts
+                                WHERE pages_fts MATCH ? LIMIT ?
+                            """, (query, limit)).fetchall()
+                        except Exception:
+                            # FTS5 corrupted — rebuild and fall back to LIKE
+                            self._rebuild_fts()
+                            rows = None
+                    if rows is None:
                         like = f"%{query}%"
                         rows = self.conn.execute("""
                             SELECT url, title, content FROM pages
@@ -188,6 +214,25 @@ class NyxIndexer:
             print(f"[NyxSearch] Search error: {e}")
 
         return results
+
+    def _rebuild_fts(self):
+        """Drop and rebuild FTS5 index from the pages table."""
+        try:
+            self.conn.execute("DROP TABLE IF EXISTS pages_fts")
+            self.conn.execute("""
+                CREATE VIRTUAL TABLE pages_fts
+                USING fts5(url, title, content, domain)
+            """)
+            self.conn.execute("""
+                INSERT INTO pages_fts (url, title, content, domain)
+                SELECT url, title, content, domain FROM pages
+            """)
+            self.conn.commit()
+            self._has_fts = True
+            print("[NyxSearch] FTS5 index rebuilt successfully")
+        except Exception as e:
+            self._has_fts = False
+            print(f"[NyxSearch] FTS5 rebuild failed, using LIKE fallback: {e}")
 
     def get_index_stats(self):
         """Get stats about the index."""

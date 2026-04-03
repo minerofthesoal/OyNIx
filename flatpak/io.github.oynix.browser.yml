@@ -72,11 +72,17 @@ modules:
       # Launcher
       - |
         mkdir -p /app/bin
-        cat > /app/bin/oynix-launch << 'LAUNCHER'
-        #!/bin/bash
-        export PYTHONPATH="/app/lib/oynix${PYTHONPATH:+:$PYTHONPATH}"
-        exec python3 -m oynix "$@"
-        LAUNCHER
+        cat > /app/bin/oynix-launch <<'LAUNCHER'
+#!/bin/bash
+# OyNIx Browser Flatpak launcher
+export PYTHONPATH="/app/lib/oynix${PYTHONPATH:+:$PYTHONPATH}"
+# Log errors when no terminal
+if ! [ -t 1 ]; then
+    mkdir -p "$HOME/.config/oynix"
+    exec >>"$HOME/.config/oynix/launch.log" 2>&1
+fi
+exec python3 -m oynix "$@"
+LAUNCHER
         chmod +x /app/bin/oynix-launch
 
       # Desktop file
@@ -99,22 +105,22 @@ modules:
       # AppStream metadata
       - |
         mkdir -p /app/share/metainfo
-        cat > /app/share/metainfo/io.github.oynix.browser.metainfo.xml << 'METAINFO'
-        <?xml version="1.0" encoding="UTF-8"?>
-        <component type="desktop-application">
-          <id>io.github.oynix.browser</id>
-          <name>OyNIx Browser</name>
-          <summary>Nyx-powered local AI browser with tree tabs</summary>
-          <metadata_license>MIT</metadata_license>
-          <project_license>MIT</project_license>
-          <description>
-            <p>Custom Chromium-based desktop browser with built-in local LLM assistant,
-            Nyx search engine, tree-style tabs, audio player, and purple/black Nyx theme.</p>
-          </description>
-          <url type="homepage">https://github.com/minerofthesoal/OyNIx</url>
-          <launchable type="desktop-id">io.github.oynix.browser.desktop</launchable>
-        </component>
-        METAINFO
+        cat > /app/share/metainfo/io.github.oynix.browser.metainfo.xml <<'METAINFO'
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>io.github.oynix.browser</id>
+  <name>OyNIx Browser</name>
+  <summary>Nyx-powered local AI browser with tree tabs</summary>
+  <metadata_license>MIT</metadata_license>
+  <project_license>MIT</project_license>
+  <description>
+    <p>Custom Chromium-based desktop browser with built-in local LLM assistant,
+    Nyx search engine, tree-style tabs, audio player, and purple/black Nyx theme.</p>
+  </description>
+  <url type="homepage">https://github.com/minerofthesoal/OyNIx</url>
+  <launchable type="desktop-id">io.github.oynix.browser.desktop</launchable>
+</component>
+METAINFO
 
     sources:
       - type: dir
