@@ -329,6 +329,73 @@ class OynixDatabase:
                     self._known_urls.add(self._norm_url(url))
             self.total_sites = self.total_curated
 
+    def get_all_sites(self):
+        """Get all sites (curated + discovered) as flat list of dicts."""
+        all_sites = []
+        for cat, entries in self._curated.items():
+            for title, url, desc, rating in entries:
+                all_sites.append({
+                    'title': title, 'url': url, 'description': desc,
+                    'rating': rating, 'category': cat, 'source': 'curated',
+                })
+        for cat, entries in self._discovered.items():
+            for title, url, desc, rating in entries:
+                all_sites.append({
+                    'title': title, 'url': url, 'description': desc,
+                    'rating': rating, 'category': cat, 'source': 'discovered',
+                })
+        return all_sites
+
+    def compare_site(self, url, title=""):
+        """
+        Compare a URL against known sites. Returns match info:
+        - is_known: whether the site is already in the database
+        - similar: list of similar sites from the database
+        - category_guess: guessed category for the site
+        """
+        norm = self._norm_url(url)
+        is_known = norm in self._known_urls
+        domain = urlparse(url).netloc.lower()
+        similar = []
+
+        # Find sites with same domain or similar domain
+        for cat, entries in self.sites.items():
+            for stitle, surl, sdesc, srating in entries:
+                sdomain = urlparse(surl).netloc.lower()
+                if sdomain == domain and self._norm_url(surl) != norm:
+                    similar.append({
+                        'title': stitle, 'url': surl,
+                        'description': sdesc, 'category': cat,
+                    })
+                    if len(similar) >= 5:
+                        break
+            if len(similar) >= 5:
+                break
+
+        # Guess category
+        cat_guess = guess_category(url, title)
+
+        return {
+            'is_known': is_known,
+            'similar': similar,
+            'category_guess': cat_guess,
+            'domain': domain,
+        }
+
+    def get_sites_by_domain(self, domain):
+        """Get all known sites for a given domain."""
+        domain = domain.lower()
+        results = []
+        for cat, entries in self.sites.items():
+            for title, url, desc, rating in entries:
+                if urlparse(url).netloc.lower() == domain:
+                    results.append({
+                        'title': title, 'url': url,
+                        'description': desc, 'category': cat,
+                        'rating': rating,
+                    })
+        return results
+
     # ── Curated database ──────────────────────────────────────────────
 
     def _build_curated(self):

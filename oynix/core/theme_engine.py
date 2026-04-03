@@ -1,508 +1,215 @@
 """
-OyNIx Browser - Nyx Theme Engine
-Medium purple and black themed UI system with multiple theme variants.
-
-The signature look: deep blacks with medium purple accents,
-glowing highlights, and smooth gradients.
+OyNIx Browser - Nyx Theme Engine v2
+Modern glassmorphism UI with smooth animations, custom SVG icons,
+and multiple theme variants. Deep blacks + medium purple accents.
 """
 
 
 # ── Nyx Purple/Black Palette ──────────────────────────────────────────
 NYX_COLORS = {
-    # Core blacks
-    'bg_darkest':       '#0a0a0f',
-    'bg_dark':          '#111118',
-    'bg_mid':           '#1a1a24',
-    'bg_light':         '#22222e',
-    'bg_lighter':       '#2a2a38',
-    'bg_surface':       '#32323f',
-
-    # Purple spectrum (medium purple focus)
+    'bg_darkest':       '#08080d',
+    'bg_dark':          '#0e0e16',
+    'bg_mid':           '#16161f',
+    'bg_light':         '#1e1e2a',
+    'bg_lighter':       '#282836',
+    'bg_surface':       '#303042',
+    'bg_glass':         'rgba(18, 18, 28, 0.85)',
+    'bg_glass_light':   'rgba(30, 30, 46, 0.7)',
     'purple_dark':      '#4a2d7a',
-    'purple_mid':       '#7B4FBF',     # Main accent - medium purple
+    'purple_mid':       '#7B4FBF',
     'purple_light':     '#9B6FDF',
     'purple_glow':      '#B088F0',
     'purple_soft':      '#C9A8F0',
     'purple_pale':      '#E0D0F8',
-
-    # Text colors
     'text_primary':     '#E8E0F0',
     'text_secondary':   '#A8A0B8',
-    'text_muted':       '#706880',
+    'text_muted':       '#605878',
     'text_accent':      '#C9A8F0',
-
-    # Status colors
     'success':          '#6FCF97',
     'warning':          '#F2C94C',
     'error':            '#EB5757',
     'info':             '#7B4FBF',
-
-    # Special
-    'glow':             'rgba(123, 79, 191, 0.4)',
-    'glow_strong':      'rgba(123, 79, 191, 0.7)',
-    'border':           '#3a3a4a',
+    'glow':             'rgba(123, 79, 191, 0.35)',
+    'glow_strong':      'rgba(123, 79, 191, 0.6)',
+    'border':           'rgba(58, 58, 74, 0.6)',
     'border_active':    '#7B4FBF',
-    'selection':        'rgba(123, 79, 191, 0.3)',
-    'scrollbar':        '#4a2d7a',
+    'selection':        'rgba(123, 79, 191, 0.25)',
+    'scrollbar':        '#3a2560',
     'scrollbar_hover':  '#7B4FBF',
 }
 
-# ── Alternate Themes ──────────────────────────────────────────────────
 THEMES = {
     'nyx': NYX_COLORS,
-
-    'nyx_midnight': {
-        **NYX_COLORS,
-        'bg_darkest':   '#050510',
-        'bg_dark':      '#0a0a18',
-        'bg_mid':       '#101020',
-        'purple_mid':   '#6040A0',
-        'purple_glow':  '#9070C0',
-    },
-
-    'nyx_violet': {
-        **NYX_COLORS,
-        'purple_mid':   '#8855CC',
-        'purple_light': '#AA77EE',
-        'purple_glow':  '#CC99FF',
-        'purple_soft':  '#DDBBFF',
-    },
-
-    'nyx_amethyst': {
-        **NYX_COLORS,
-        'bg_darkest':   '#0d0810',
-        'bg_dark':      '#150e1a',
-        'purple_mid':   '#9966CC',
-        'purple_light': '#BB88DD',
-    },
+    'nyx_midnight': {**NYX_COLORS,
+        'bg_darkest': '#030308', 'bg_dark': '#080810', 'bg_mid': '#0c0c18',
+        'purple_mid': '#5a3a9a', 'purple_glow': '#8060c0'},
+    'nyx_violet': {**NYX_COLORS,
+        'purple_mid': '#8855CC', 'purple_light': '#AA77EE',
+        'purple_glow': '#CC99FF', 'purple_soft': '#DDBBFF'},
+    'nyx_amethyst': {**NYX_COLORS,
+        'bg_darkest': '#0d0810', 'bg_dark': '#150e1a',
+        'purple_mid': '#9966CC', 'purple_light': '#BB88DD'},
+    'nyx_ember': {**NYX_COLORS,
+        'purple_mid': '#BF4F4F', 'purple_light': '#DF6F6F',
+        'purple_glow': '#F08888', 'purple_soft': '#F0A8A8',
+        'purple_dark': '#7a2d2d', 'border_active': '#BF4F4F'},
 }
 
 
 def get_theme(name='nyx'):
-    """Get a theme color palette by name."""
     return THEMES.get(name, THEMES['nyx'])
 
 
 def get_qt_stylesheet(colors=None):
-    """Generate the full Qt stylesheet for the OyNIx browser."""
+    """Generate the full Qt stylesheet for OyNIx browser."""
     c = colors or NYX_COLORS
     return f"""
-    /* ── Global ───────────────────────────────── */
-    QMainWindow {{
-        background-color: {c['bg_darkest']};
-        color: {c['text_primary']};
-    }}
-
-    QWidget {{
-        background-color: {c['bg_dark']};
-        color: {c['text_primary']};
-        font-family: 'Segoe UI', 'Ubuntu', 'Cantarell', sans-serif;
-        font-size: 13px;
-    }}
-
-    /* ── Menu Bar ─────────────────────────────── */
-    QMenuBar {{
-        background-color: {c['bg_darkest']};
-        color: {c['text_primary']};
-        border-bottom: 1px solid {c['border']};
-        padding: 2px;
-    }}
-
-    QMenuBar::item {{
-        padding: 6px 12px;
-        border-radius: 4px;
-    }}
-
-    QMenuBar::item:selected {{
-        background-color: {c['purple_dark']};
-        color: {c['purple_pale']};
-    }}
-
-    QMenu {{
-        background-color: {c['bg_mid']};
-        color: {c['text_primary']};
-        border: 1px solid {c['border']};
-        border-radius: 8px;
-        padding: 4px;
-    }}
-
-    QMenu::item {{
-        padding: 8px 30px 8px 20px;
-        border-radius: 4px;
-    }}
-
-    QMenu::item:selected {{
-        background-color: {c['purple_dark']};
-        color: {c['purple_pale']};
-    }}
-
-    QMenu::separator {{
-        height: 1px;
-        background: {c['border']};
-        margin: 4px 10px;
-    }}
-
-    /* ── Toolbar ──────────────────────────────── */
-    QToolBar {{
-        background-color: {c['bg_darkest']};
-        border-bottom: 1px solid {c['border']};
-        padding: 4px 8px;
-        spacing: 4px;
-    }}
-
-    /* ── URL Bar ──────────────────────────────── */
-    QLineEdit {{
-        background-color: {c['bg_mid']};
-        color: {c['text_primary']};
-        border: 2px solid {c['border']};
-        border-radius: 20px;
-        padding: 8px 16px;
-        font-size: 14px;
-        selection-background-color: {c['selection']};
-    }}
-
-    QLineEdit:focus {{
-        border-color: {c['purple_mid']};
-        background-color: {c['bg_light']};
-    }}
-
-    /* ── Buttons ──────────────────────────────── */
-    QPushButton {{
-        background-color: {c['bg_lighter']};
-        color: {c['text_primary']};
-        border: 1px solid {c['border']};
-        border-radius: 8px;
-        padding: 8px 14px;
-        font-weight: 600;
-        min-width: 32px;
-    }}
-
-    QPushButton:hover {{
-        background-color: {c['purple_dark']};
-        border-color: {c['purple_mid']};
-        color: {c['purple_pale']};
-    }}
-
-    QPushButton:pressed {{
-        background-color: {c['purple_mid']};
-        color: {c['bg_darkest']};
-    }}
-
-    QPushButton#navButton {{
-        background-color: transparent;
-        border: none;
-        border-radius: 6px;
-        padding: 6px 10px;
-        font-size: 16px;
-        min-width: 36px;
-    }}
-
-    QPushButton#navButton:hover {{
-        background-color: {c['bg_lighter']};
-    }}
-
-    QPushButton#accentButton {{
-        background-color: {c['purple_mid']};
-        color: {c['bg_darkest']};
-        border: none;
-        font-weight: bold;
-    }}
-
-    QPushButton#accentButton:hover {{
-        background-color: {c['purple_light']};
-    }}
-
-    /* ── Tab Widget (Normal Tabs) ─────────────── */
-    QTabWidget::pane {{
-        border: none;
-        background-color: {c['bg_darkest']};
-    }}
-
-    QTabBar {{
-        background-color: {c['bg_darkest']};
-    }}
-
-    QTabBar::tab {{
-        background-color: {c['bg_mid']};
-        color: {c['text_secondary']};
-        padding: 8px 20px;
-        margin-right: 1px;
-        border-top-left-radius: 10px;
-        border-top-right-radius: 10px;
-        border: 1px solid {c['border']};
-        border-bottom: none;
-        min-width: 120px;
-        max-width: 250px;
-    }}
-
-    QTabBar::tab:selected {{
-        background-color: {c['bg_light']};
-        color: {c['purple_light']};
-        border-color: {c['purple_mid']};
-        border-bottom: 2px solid {c['purple_mid']};
-    }}
-
-    QTabBar::tab:hover:!selected {{
-        background-color: {c['bg_lighter']};
-        color: {c['text_primary']};
-    }}
-
-    QTabBar::close-button {{
-        image: none;
-        subcontrol-position: right;
-        border-radius: 4px;
-        padding: 2px;
-    }}
-
-    QTabBar::close-button:hover {{
-        background-color: {c['error']};
-    }}
-
-    /* ── Tree Widget (Tree Tabs) ──────────────── */
-    QTreeWidget {{
-        background-color: {c['bg_dark']};
-        color: {c['text_primary']};
-        border: none;
-        outline: none;
-        font-size: 12px;
-    }}
-
-    QTreeWidget::item {{
-        padding: 6px 8px;
-        border-radius: 4px;
-        margin: 1px 4px;
-    }}
-
-    QTreeWidget::item:selected {{
-        background-color: {c['purple_dark']};
-        color: {c['purple_pale']};
-    }}
-
-    QTreeWidget::item:hover:!selected {{
-        background-color: {c['bg_lighter']};
-    }}
-
-    QTreeWidget::branch {{
-        background: transparent;
-    }}
-
-    QTreeWidget::branch:has-siblings:!adjoins-item {{
-        border-image: none;
-        image: none;
-    }}
-
-    QTreeWidget::branch:has-siblings:adjoins-item {{
-        border-image: none;
-        image: none;
-    }}
-
-    QTreeWidget::branch:!has-children:!has-siblings:adjoins-item {{
-        border-image: none;
-        image: none;
-    }}
-
-    QTreeWidget::branch:has-children:!has-siblings:closed,
-    QTreeWidget::branch:closed:has-children:has-siblings {{
-        image: none;
-        border-image: none;
-    }}
-
-    QTreeWidget::branch:open:has-children:!has-siblings,
-    QTreeWidget::branch:open:has-children:has-siblings {{
-        image: none;
-        border-image: none;
-    }}
-
-    /* ── Scrollbars ───────────────────────────── */
-    QScrollBar:vertical {{
-        background: {c['bg_dark']};
-        width: 10px;
-        margin: 0;
-        border-radius: 5px;
-    }}
-
-    QScrollBar::handle:vertical {{
-        background: {c['scrollbar']};
-        border-radius: 5px;
-        min-height: 30px;
-    }}
-
-    QScrollBar::handle:vertical:hover {{
-        background: {c['scrollbar_hover']};
-    }}
-
-    QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{
-        height: 0;
-    }}
-
-    QScrollBar:horizontal {{
-        background: {c['bg_dark']};
-        height: 10px;
-        border-radius: 5px;
-    }}
-
-    QScrollBar::handle:horizontal {{
-        background: {c['scrollbar']};
-        border-radius: 5px;
-        min-width: 30px;
-    }}
-
-    QScrollBar::handle:horizontal:hover {{
-        background: {c['scrollbar_hover']};
-    }}
-
-    QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {{
-        width: 0;
-    }}
-
-    /* ── Status Bar ───────────────────────────── */
-    QStatusBar {{
-        background-color: {c['bg_darkest']};
-        color: {c['text_muted']};
-        border-top: 1px solid {c['border']};
-        font-size: 12px;
-    }}
-
-    QStatusBar::item {{
-        border: none;
-    }}
-
-    /* ── Dialogs ──────────────────────────────── */
-    QDialog {{
-        background-color: {c['bg_dark']};
-        color: {c['text_primary']};
-        border-radius: 12px;
-    }}
-
-    QGroupBox {{
-        font-weight: bold;
-        border: 1px solid {c['border']};
-        border-radius: 8px;
-        margin-top: 12px;
-        padding-top: 16px;
-        color: {c['purple_light']};
-    }}
-
-    QGroupBox::title {{
-        subcontrol-origin: margin;
-        subcontrol-position: top left;
-        padding: 4px 12px;
-        background-color: {c['bg_dark']};
-        border-radius: 4px;
-    }}
-
-    QCheckBox {{
-        spacing: 8px;
-        color: {c['text_primary']};
-    }}
-
-    QCheckBox::indicator {{
-        width: 18px;
-        height: 18px;
-        border-radius: 4px;
-        border: 2px solid {c['border']};
-        background-color: {c['bg_mid']};
-    }}
-
-    QCheckBox::indicator:checked {{
-        background-color: {c['purple_mid']};
-        border-color: {c['purple_mid']};
-    }}
-
-    QComboBox {{
-        background-color: {c['bg_mid']};
-        color: {c['text_primary']};
-        border: 1px solid {c['border']};
-        border-radius: 6px;
-        padding: 6px 12px;
-    }}
-
-    QComboBox:hover {{
-        border-color: {c['purple_mid']};
-    }}
-
-    QComboBox QAbstractItemView {{
-        background-color: {c['bg_mid']};
-        color: {c['text_primary']};
-        border: 1px solid {c['border']};
-        selection-background-color: {c['purple_dark']};
-    }}
-
-    QSpinBox {{
-        background-color: {c['bg_mid']};
-        color: {c['text_primary']};
-        border: 1px solid {c['border']};
-        border-radius: 6px;
-        padding: 4px 8px;
-    }}
-
-    QSlider::groove:horizontal {{
-        height: 6px;
-        background: {c['bg_lighter']};
-        border-radius: 3px;
-    }}
-
-    QSlider::handle:horizontal {{
-        background: {c['purple_mid']};
-        width: 16px;
-        height: 16px;
-        margin: -5px 0;
-        border-radius: 8px;
-    }}
-
-    QSlider::handle:horizontal:hover {{
-        background: {c['purple_light']};
-    }}
-
-    /* ── Splitter ─────────────────────────────── */
-    QSplitter::handle {{
-        background: {c['border']};
-    }}
-
-    QSplitter::handle:hover {{
-        background: {c['purple_mid']};
-    }}
-
-    /* ── Text Edit (AI Chat) ──────────────────── */
-    QTextEdit, QPlainTextEdit {{
-        background-color: {c['bg_mid']};
-        color: {c['text_primary']};
-        border: 1px solid {c['border']};
-        border-radius: 8px;
-        padding: 8px;
-        selection-background-color: {c['selection']};
-    }}
-
-    QTextEdit:focus, QPlainTextEdit:focus {{
-        border-color: {c['purple_mid']};
-    }}
-
-    /* ── Labels ───────────────────────────────── */
-    QLabel {{
-        color: {c['text_primary']};
-        background: transparent;
-    }}
-
-    QLabel#sectionHeader {{
-        color: {c['purple_light']};
-        font-size: 15px;
-        font-weight: bold;
-    }}
-
-    /* ── Message Box ──────────────────────────── */
-    QMessageBox {{
-        background-color: {c['bg_dark']};
-    }}
-
-    /* ── ToolTip ──────────────────────────────── */
-    QToolTip {{
-        background-color: {c['bg_mid']};
-        color: {c['text_primary']};
-        border: 1px solid {c['purple_mid']};
-        border-radius: 6px;
-        padding: 6px;
-    }}
+    QMainWindow {{ background-color: {c['bg_darkest']}; color: {c['text_primary']}; }}
+    QWidget {{ background-color: {c['bg_dark']}; color: {c['text_primary']};
+        font-family: 'Segoe UI', 'Ubuntu', 'Cantarell', sans-serif; font-size: 13px; }}
+
+    /* Menu Bar */
+    QMenuBar {{ background: {c['bg_darkest']}; color: {c['text_primary']};
+        border-bottom: 1px solid {c['border']}; padding: 2px; }}
+    QMenuBar::item {{ padding: 6px 14px; border-radius: 6px; }}
+    QMenuBar::item:selected {{ background: {c['purple_dark']}; color: {c['purple_pale']}; }}
+    QMenu {{ background: {c['bg_mid']}; color: {c['text_primary']};
+        border: 1px solid {c['border']}; border-radius: 10px; padding: 6px; }}
+    QMenu::item {{ padding: 8px 30px 8px 20px; border-radius: 6px; margin: 1px 2px; }}
+    QMenu::item:selected {{ background: {c['purple_dark']}; color: {c['purple_pale']}; }}
+    QMenu::separator {{ height: 1px; background: {c['border']}; margin: 4px 12px; }}
+
+    /* Toolbar */
+    QToolBar {{ background: {c['bg_darkest']}; border: none; padding: 4px 8px; spacing: 2px; }}
+    QToolBar::separator {{ width: 1px; background: {c['border']}; margin: 4px 6px; }}
+
+    /* URL Bar */
+    QLineEdit {{ background: {c['bg_mid']}; color: {c['text_primary']};
+        border: 2px solid {c['border']}; border-radius: 22px; padding: 9px 18px; font-size: 14px;
+        selection-background-color: {c['selection']}; }}
+    QLineEdit:focus {{ border-color: {c['purple_mid']}; background: {c['bg_light']}; }}
+
+    /* Buttons */
+    QPushButton {{ background: {c['bg_lighter']}; color: {c['text_primary']};
+        border: 1px solid {c['border']}; border-radius: 10px; padding: 8px 14px;
+        font-weight: 600; min-width: 28px; }}
+    QPushButton:hover {{ background: {c['purple_dark']}; border-color: {c['purple_mid']};
+        color: {c['purple_pale']}; }}
+    QPushButton:pressed {{ background: {c['purple_mid']}; color: {c['bg_darkest']}; }}
+    QPushButton#navBtn {{ background: transparent; border: none; border-radius: 8px;
+        padding: 6px; min-width: 34px; min-height: 34px; }}
+    QPushButton#navBtn:hover {{ background: {c['bg_lighter']}; }}
+    QPushButton#navBtn:pressed {{ background: {c['purple_dark']}; }}
+    QPushButton#accentBtn {{ background: {c['purple_mid']}; color: {c['bg_darkest']};
+        border: none; font-weight: bold; }}
+    QPushButton#accentBtn:hover {{ background: {c['purple_light']}; }}
+    QPushButton#pillBtn {{ background: {c['bg_mid']}; border: 1px solid {c['border']};
+        border-radius: 14px; padding: 5px 14px; font-size: 12px; }}
+    QPushButton#pillBtn:hover {{ border-color: {c['purple_mid']}; color: {c['purple_light']}; }}
+
+    /* Tabs */
+    QTabWidget::pane {{ border: none; background: {c['bg_darkest']}; }}
+    QTabBar {{ background: {c['bg_darkest']}; }}
+    QTabBar::tab {{ background: {c['bg_mid']}; color: {c['text_secondary']};
+        padding: 8px 20px; margin-right: 1px; border-top-left-radius: 10px;
+        border-top-right-radius: 10px; border: 1px solid {c['border']}; border-bottom: none;
+        min-width: 100px; max-width: 220px; }}
+    QTabBar::tab:selected {{ background: {c['bg_light']}; color: {c['purple_light']};
+        border-color: {c['purple_mid']}; }}
+    QTabBar::tab:hover:!selected {{ background: {c['bg_lighter']}; color: {c['text_primary']}; }}
+    QTabBar::close-button {{ subcontrol-position: right; border-radius: 4px; padding: 2px; }}
+    QTabBar::close-button:hover {{ background: {c['error']}; }}
+
+    /* Tree Tabs */
+    QTreeWidget {{ background: {c['bg_dark']}; color: {c['text_primary']};
+        border: none; outline: none; font-size: 12px; }}
+    QTreeWidget::item {{ padding: 7px 8px; border-radius: 6px; margin: 1px 4px; }}
+    QTreeWidget::item:selected {{ background: {c['purple_dark']}; color: {c['purple_pale']}; }}
+    QTreeWidget::item:hover:!selected {{ background: {c['bg_lighter']}; }}
+    QTreeWidget::branch {{ background: transparent; }}
+    QTreeWidget::branch:has-siblings:!adjoins-item {{ border-image: none; }}
+    QTreeWidget::branch:has-children:closed,
+    QTreeWidget::branch:has-children:open {{ image: none; }}
+
+    /* Scrollbars */
+    QScrollBar:vertical {{ background: transparent; width: 8px; }}
+    QScrollBar::handle:vertical {{ background: {c['scrollbar']}; border-radius: 4px; min-height: 30px; }}
+    QScrollBar::handle:vertical:hover {{ background: {c['scrollbar_hover']}; }}
+    QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0; }}
+    QScrollBar:horizontal {{ background: transparent; height: 8px; }}
+    QScrollBar::handle:horizontal {{ background: {c['scrollbar']}; border-radius: 4px; min-width: 30px; }}
+    QScrollBar::handle:horizontal:hover {{ background: {c['scrollbar_hover']}; }}
+    QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {{ width: 0; }}
+
+    /* Status Bar */
+    QStatusBar {{ background: {c['bg_darkest']}; color: {c['text_muted']};
+        border-top: 1px solid {c['border']}; font-size: 11px; padding: 2px 8px; }}
+    QStatusBar::item {{ border: none; }}
+
+    /* Dialogs & Groups */
+    QDialog {{ background: {c['bg_dark']}; color: {c['text_primary']}; border-radius: 14px; }}
+    QGroupBox {{ font-weight: bold; border: 1px solid {c['border']}; border-radius: 10px;
+        margin-top: 14px; padding-top: 18px; color: {c['purple_light']}; }}
+    QGroupBox::title {{ subcontrol-origin: margin; subcontrol-position: top left;
+        padding: 4px 12px; background: {c['bg_dark']}; border-radius: 6px; }}
+
+    /* Inputs */
+    QCheckBox {{ spacing: 8px; }}
+    QCheckBox::indicator {{ width: 20px; height: 20px; border-radius: 6px;
+        border: 2px solid {c['border']}; background: {c['bg_mid']}; }}
+    QCheckBox::indicator:checked {{ background: {c['purple_mid']}; border-color: {c['purple_mid']}; }}
+    QComboBox {{ background: {c['bg_mid']}; color: {c['text_primary']};
+        border: 1px solid {c['border']}; border-radius: 8px; padding: 7px 14px; }}
+    QComboBox:hover {{ border-color: {c['purple_mid']}; }}
+    QComboBox QAbstractItemView {{ background: {c['bg_mid']}; color: {c['text_primary']};
+        border: 1px solid {c['border']}; selection-background-color: {c['purple_dark']}; }}
+    QSpinBox, QDoubleSpinBox {{ background: {c['bg_mid']}; color: {c['text_primary']};
+        border: 1px solid {c['border']}; border-radius: 8px; padding: 5px 10px; }}
+    QSlider::groove:horizontal {{ height: 6px; background: {c['bg_lighter']}; border-radius: 3px; }}
+    QSlider::handle:horizontal {{ background: {c['purple_mid']}; width: 18px; height: 18px;
+        margin: -6px 0; border-radius: 9px; }}
+    QSlider::handle:horizontal:hover {{ background: {c['purple_light']}; }}
+
+    /* Splitter / TextEdit / Labels / Tooltips */
+    QSplitter::handle {{ background: {c['border']}; width: 2px; }}
+    QSplitter::handle:hover {{ background: {c['purple_mid']}; }}
+    QTextEdit, QPlainTextEdit {{ background: {c['bg_mid']}; color: {c['text_primary']};
+        border: 1px solid {c['border']}; border-radius: 10px; padding: 8px;
+        selection-background-color: {c['selection']}; }}
+    QTextEdit:focus, QPlainTextEdit:focus {{ border-color: {c['purple_mid']}; }}
+    QLabel {{ color: {c['text_primary']}; background: transparent; }}
+    QLabel#sectionHeader {{ color: {c['purple_light']}; font-size: 15px; font-weight: bold; }}
+    QToolTip {{ background: {c['bg_mid']}; color: {c['text_primary']};
+        border: 1px solid {c['purple_mid']}; border-radius: 8px; padding: 6px 10px; }}
+    QMessageBox {{ background: {c['bg_dark']}; }}
+
+    /* List Widget (settings sidebar) */
+    QListWidget {{ background: {c['bg_dark']}; border: none; outline: none; }}
+    QListWidget::item {{ padding: 10px 16px; border-radius: 8px; margin: 2px 4px;
+        color: {c['text_secondary']}; }}
+    QListWidget::item:selected {{ background: {c['purple_dark']}; color: {c['purple_pale']}; }}
+    QListWidget::item:hover:!selected {{ background: {c['bg_lighter']}; }}
+
+    /* Progress Bar */
+    QProgressBar {{ background: {c['bg_lighter']}; border: none; border-radius: 4px;
+        height: 6px; text-align: center; }}
+    QProgressBar::chunk {{ background: {c['purple_mid']}; border-radius: 4px; }}
     """
+
+
+# ── SVG icons for HTML pages ────────────────────────────────────────
+_SVG = {
+    'ai': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 2L14 8 20 8 15 12 17 18 12 14 7 18 9 12 4 8 10 8Z"/></svg>',
+    'search': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>',
+    'settings': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>',
+    'database': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>',
+    'folder': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>',
+    'history': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>',
+    'bookmark': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>',
+    'download': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>',
+    'globe': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>',
+    'github': '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.3 3.44 9.8 8.2 11.39.6.11.82-.26.82-.58v-2.03c-3.34.73-4.04-1.61-4.04-1.61-.55-1.39-1.34-1.76-1.34-1.76-1.09-.75.08-.73.08-.73 1.21.08 1.85 1.24 1.85 1.24 1.07 1.84 2.81 1.31 3.5 1 .11-.78.42-1.31.76-1.61-2.67-.3-5.47-1.33-5.47-5.93 0-1.31.47-2.38 1.24-3.22-.12-.3-.54-1.52.12-3.18 0 0 1.01-.32 3.3 1.23a11.5 11.5 0 0 1 6.02 0c2.28-1.55 3.29-1.23 3.29-1.23.66 1.66.24 2.88.12 3.18.77.84 1.24 1.91 1.24 3.22 0 4.61-2.81 5.63-5.48 5.92.43.37.81 1.1.81 2.22v3.29c0 .32.21.7.82.58A12.01 12.01 0 0 0 24 12c0-6.63-5.37-12-12-12z"/></svg>',
+}
 
 
 def get_homepage_html(colors=None):
@@ -512,32 +219,70 @@ def get_homepage_html(colors=None):
 <html><head><meta charset="utf-8"><title>OyNIx</title>
 <style>
 *{{margin:0;padding:0;box-sizing:border-box}}
-body{{background:{c['bg_darkest']};color:{c['text_primary']};font-family:'Segoe UI','Ubuntu',sans-serif;min-height:100vh;overflow:hidden}}
+body{{background:{c['bg_darkest']};color:{c['text_primary']};font-family:'Segoe UI','Ubuntu',sans-serif;
+  min-height:100vh;overflow-x:hidden}}
 canvas#bg{{position:fixed;top:0;left:0;width:100%;height:100%;z-index:0}}
-.wrap{{position:relative;z-index:1;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;padding:30px 20px}}
-.logo{{font-size:5.5em;font-weight:900;letter-spacing:-3px;background:linear-gradient(135deg,{c['purple_mid']},{c['purple_glow']},{c['purple_soft']});-webkit-background-clip:text;-webkit-text-fill-color:transparent;margin-bottom:6px;animation:pulse 3s ease-in-out infinite alternate;opacity:0;animation:fadeIn .8s ease forwards,pulse 3s 1s ease-in-out infinite alternate}}
-.tagline{{color:{c['text_muted']};font-size:1em;letter-spacing:5px;text-transform:uppercase;margin-bottom:40px;opacity:0;animation:fadeIn .8s .3s ease forwards}}
-@keyframes pulse{{from{{filter:drop-shadow(0 0 15px rgba(123,79,191,.3))}}to{{filter:drop-shadow(0 0 35px rgba(123,79,191,.6))}}}}
+.wrap{{position:relative;z-index:1;display:flex;flex-direction:column;align-items:center;
+  justify-content:center;min-height:100vh;padding:30px 20px}}
+
+/* Logo */
+.logo{{font-size:5em;font-weight:900;letter-spacing:-2px;
+  background:linear-gradient(135deg,{c['purple_mid']},{c['purple_glow']},{c['purple_soft']});
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+  opacity:0;animation:fadeIn .7s ease forwards,glow 4s 1s ease-in-out infinite alternate}}
+.tagline{{color:{c['text_muted']};font-size:.9em;letter-spacing:6px;text-transform:uppercase;
+  margin-bottom:36px;opacity:0;animation:fadeIn .7s .2s ease forwards}}
+
 @keyframes fadeIn{{to{{opacity:1}}}}
-@keyframes slideUp{{from{{opacity:0;transform:translateY(20px)}}to{{opacity:1;transform:translateY(0)}}}}
-@keyframes scaleIn{{from{{opacity:0;transform:scale(.9)}}to{{opacity:1;transform:scale(1)}}}}
-.search-wrap{{position:relative;width:620px;max-width:90vw;margin-bottom:50px;opacity:0;animation:slideUp .6s .5s ease forwards}}
-.search-box{{width:100%;padding:16px 55px 16px 22px;font-size:1.1em;background:{c['bg_mid']};border:2px solid {c['border']};border-radius:50px;color:{c['text_primary']};outline:none;transition:all .3s}}
-.search-box:focus{{border-color:{c['purple_mid']};box-shadow:0 0 25px rgba(123,79,191,.3);background:{c['bg_light']}}}
+@keyframes glow{{from{{filter:drop-shadow(0 0 12px rgba(123,79,191,.2))}}
+  to{{filter:drop-shadow(0 0 30px rgba(123,79,191,.5))}}}}
+@keyframes slideUp{{from{{opacity:0;transform:translateY(16px)}}to{{opacity:1;transform:translateY(0)}}}}
+@keyframes scaleIn{{from{{opacity:0;transform:scale(.92)}}to{{opacity:1;transform:scale(1)}}}}
+
+/* Search */
+.search-wrap{{position:relative;width:580px;max-width:88vw;margin-bottom:44px;
+  opacity:0;animation:slideUp .5s .4s ease forwards}}
+.search-box{{width:100%;padding:15px 52px 15px 20px;font-size:1.05em;
+  background:{c['bg_mid']};border:2px solid rgba(58,58,74,0.4);border-radius:50px;
+  color:{c['text_primary']};outline:none;transition:all .3s ease;
+  backdrop-filter:blur(10px)}}
+.search-box:focus{{border-color:{c['purple_mid']};
+  box-shadow:0 0 30px rgba(123,79,191,.25),inset 0 0 20px rgba(123,79,191,.05);
+  background:{c['bg_light']}}}
 .search-box::placeholder{{color:{c['text_muted']}}}
-.si{{position:absolute;right:18px;top:50%;transform:translateY(-50%);font-size:1.2em;opacity:.4}}
-.er{{display:flex;gap:10px;justify-content:center;margin-top:14px}}
-.eb{{padding:5px 16px;border-radius:18px;border:1px solid {c['border']};background:{c['bg_mid']};color:{c['text_secondary']};cursor:pointer;font-size:.85em;transition:all .25s}}
-.eb:hover,.eb.a{{border-color:{c['purple_mid']};color:{c['purple_light']};background:{c['bg_lighter']}}}
-.eb.a{{background:{c['purple_dark']};color:{c['purple_pale']}}}
-.cards{{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;max-width:820px;width:100%}}
-.card{{background:linear-gradient(145deg,{c['bg_mid']},{c['bg_dark']});border:1px solid {c['border']};border-radius:14px;padding:22px 14px;text-align:center;cursor:pointer;transition:all .35s cubic-bezier(.4,0,.2,1);text-decoration:none;opacity:0;animation:scaleIn .5s ease forwards}}
-.card:nth-child(1){{animation-delay:.6s}}.card:nth-child(2){{animation-delay:.7s}}.card:nth-child(3){{animation-delay:.8s}}.card:nth-child(4){{animation-delay:.9s}}.card:nth-child(5){{animation-delay:1s}}.card:nth-child(6){{animation-delay:1.1s}}.card:nth-child(7){{animation-delay:1.15s}}.card:nth-child(8){{animation-delay:1.2s}}
-.card:hover{{transform:translateY(-7px) scale(1.02);border-color:{c['purple_mid']};box-shadow:0 14px 35px rgba(123,79,191,.2)}}
-.ci{{font-size:2em;margin-bottom:8px;display:block}}.ct{{color:{c['text_primary']};font-weight:600;font-size:.9em}}.cs{{color:{c['text_muted']};font-size:.75em;margin-top:3px}}
-.ft{{position:fixed;bottom:0;left:0;right:0;display:flex;justify-content:center;gap:40px;padding:14px;background:linear-gradient(transparent,{c['bg_darkest']})}}
-.st{{text-align:center}}.sn{{font-size:1.5em;font-weight:800;color:{c['purple_mid']}}}.sl{{color:{c['text_muted']};font-size:.8em}}
-.credit{{position:fixed;bottom:6px;right:14px;color:{c['text_muted']};font-size:.7em;opacity:.5;z-index:2}}
+.search-icon{{position:absolute;right:16px;top:50%;transform:translateY(-50%);
+  width:22px;height:22px;color:{c['text_muted']};opacity:.6}}
+.engines{{display:flex;gap:8px;justify-content:center;margin-top:12px}}
+.eng{{padding:5px 16px;border-radius:20px;border:1px solid rgba(58,58,74,0.4);
+  background:transparent;color:{c['text_secondary']};cursor:pointer;font-size:.82em;
+  transition:all .25s ease;backdrop-filter:blur(5px)}}
+.eng:hover,.eng.a{{border-color:{c['purple_mid']};color:{c['purple_light']};
+  background:rgba(123,79,191,.1)}}
+.eng.a{{background:rgba(123,79,191,.15);color:{c['purple_pale']};font-weight:600}}
+
+/* Cards */
+.cards{{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;max-width:780px;width:100%}}
+.card{{background:rgba(22,22,31,.6);border:1px solid rgba(58,58,74,0.3);border-radius:16px;
+  padding:24px 12px 18px;text-align:center;cursor:pointer;transition:all .4s cubic-bezier(.4,0,.2,1);
+  text-decoration:none;opacity:0;animation:scaleIn .4s ease forwards;backdrop-filter:blur(8px)}}
+.card:nth-child(1){{animation-delay:.5s}}.card:nth-child(2){{animation-delay:.57s}}
+.card:nth-child(3){{animation-delay:.64s}}.card:nth-child(4){{animation-delay:.71s}}
+.card:nth-child(5){{animation-delay:.78s}}.card:nth-child(6){{animation-delay:.85s}}
+.card:nth-child(7){{animation-delay:.92s}}.card:nth-child(8){{animation-delay:.99s}}
+.card:hover{{transform:translateY(-6px) scale(1.03);border-color:{c['purple_mid']};
+  box-shadow:0 16px 40px rgba(123,79,191,.18)}}
+.card-icon{{width:32px;height:32px;margin:0 auto 10px;color:{c['purple_light']};
+  opacity:.85;transition:all .3s}}
+.card:hover .card-icon{{color:{c['purple_glow']};opacity:1;transform:scale(1.1)}}
+.card-title{{color:{c['text_primary']};font-weight:600;font-size:.88em}}
+.card-sub{{color:{c['text_muted']};font-size:.72em;margin-top:3px}}
+
+/* Footer stats */
+.footer{{position:fixed;bottom:0;left:0;right:0;display:flex;justify-content:center;gap:48px;
+  padding:16px;background:linear-gradient(transparent,{c['bg_darkest']} 60%)}}
+.stat{{text-align:center}}.stat-num{{font-size:1.4em;font-weight:800;
+  color:{c['purple_mid']}}}.stat-label{{color:{c['text_muted']};font-size:.75em}}
+.credit{{position:fixed;bottom:6px;right:14px;color:{c['text_muted']};font-size:.65em;opacity:.4}}
 .credit a{{color:{c['purple_light']};text-decoration:none}}
 </style></head><body>
 <canvas id="bg"></canvas>
@@ -545,79 +290,80 @@ canvas#bg{{position:fixed;top:0;left:0;width:100%;height:100%;z-index:0}}
 <div class="logo">OyNIx</div>
 <div class="tagline">Nyx-Powered Local AI Browser</div>
 <div class="search-wrap">
-<input class="search-box" id="si" placeholder="Search the web or ask Nyx AI..." autofocus onkeypress="if(event.key==='Enter')go(this.value)">
-<span class="si">&#128270;</span>
-<div class="er">
-<button class="eb a" onclick="se('nyx',this)">Nyx</button>
-<button class="eb" onclick="se('duckduckgo',this)">DuckDuckGo</button>
-<button class="eb" onclick="se('google',this)">Google</button>
-<button class="eb" onclick="se('brave',this)">Brave</button>
+<input class="search-box" id="si" placeholder="Search the web or ask Nyx AI..." autofocus
+  onkeypress="if(event.key==='Enter')go(this.value)">
+<div class="search-icon">{_SVG['search']}</div>
+<div class="engines">
+<button class="eng a" onclick="se('nyx',this)">Nyx</button>
+<button class="eng" onclick="se('duckduckgo',this)">DuckDuckGo</button>
+<button class="eng" onclick="se('google',this)">Google</button>
+<button class="eng" onclick="se('brave',this)">Brave</button>
 </div></div>
 <div class="cards">
-<a class="card" href="oyn://ai-chat"><span class="ci">&#129302;</span><div class="ct">AI Chat</div><div class="cs">Local LLM</div></a>
-<a class="card" href="oyn://nyx-search"><span class="ci">&#128270;</span><div class="ct">Nyx Search</div><div class="cs">Auto-Indexed</div></a>
-<a class="card" href="oyn://settings"><span class="ci">&#9881;</span><div class="ct">Settings</div><div class="cs">Configure</div></a>
-<a class="card" href="oyn://database"><span class="ci">&#128218;</span><div class="ct">Site Database</div><div class="cs">Auto-Expands</div></a>
-<a class="card" href="oyn://categories"><span class="ci">&#128193;</span><div class="ct">Categories</div><div class="cs">Browse All</div></a>
-<a class="card" href="oyn://history"><span class="ci">&#128336;</span><div class="ct">History</div><div class="cs">Recent Pages</div></a>
-<a class="card" href="https://duckduckgo.com"><span class="ci">&#129413;</span><div class="ct">DuckDuckGo</div><div class="cs">Private Search</div></a>
-<a class="card" href="https://github.com"><span class="ci">&#128025;</span><div class="ct">GitHub</div><div class="cs">Code</div></a>
+<a class="card" href="oyn://ai-chat"><div class="card-icon">{_SVG['ai']}</div><div class="card-title">AI Chat</div><div class="card-sub">Local LLM</div></a>
+<a class="card" href="oyn://nyx-search"><div class="card-icon">{_SVG['search']}</div><div class="card-title">Nyx Search</div><div class="card-sub">Auto-Indexed</div></a>
+<a class="card" href="oyn://bookmarks"><div class="card-icon">{_SVG['bookmark']}</div><div class="card-title">Bookmarks</div><div class="card-sub">Your Saves</div></a>
+<a class="card" href="oyn://downloads"><div class="card-icon">{_SVG['download']}</div><div class="card-title">Downloads</div><div class="card-sub">Manage Files</div></a>
+<a class="card" href="oyn://database"><div class="card-icon">{_SVG['database']}</div><div class="card-title">Site Database</div><div class="card-sub">1400+ Sites</div></a>
+<a class="card" href="oyn://history"><div class="card-icon">{_SVG['history']}</div><div class="card-title">History</div><div class="card-sub">Recent Pages</div></a>
+<a class="card" href="oyn://settings"><div class="card-icon">{_SVG['settings']}</div><div class="card-title">Settings</div><div class="card-sub">Configure</div></a>
+<a class="card" href="https://github.com"><div class="card-icon">{_SVG['github']}</div><div class="card-title">GitHub</div><div class="card-sub">Code</div></a>
 </div></div>
-<div class="ft">
-<div class="st"><div class="sn">1400+</div><div class="sl">Curated Sites</div></div>
-<div class="st"><div class="sn">Auto</div><div class="sl">Expanding DB</div></div>
-<div class="st"><div class="sn">Local</div><div class="sl">AI Model</div></div>
-<div class="st"><div class="sn">Nyx</div><div class="sl">Search Engine</div></div>
+<div class="footer">
+<div class="stat"><div class="stat-num">1400+</div><div class="stat-label">Curated Sites</div></div>
+<div class="stat"><div class="stat-num">Auto</div><div class="stat-label">Expanding DB</div></div>
+<div class="stat"><div class="stat-num">Local</div><div class="stat-label">AI Model</div></div>
+<div class="stat"><div class="stat-num">Nyx</div><div class="stat-label">Search Engine</div></div>
 </div>
-<div class="credit">Coded by Claude (Anthropic) &middot; Native Desktop App &middot; <a href="oyn://about">About</a></div>
+<div class="credit">Coded by Claude &middot; <a href="oyn://about">About</a></div>
 <script>
 var E='nyx';
-function se(e,b){{E=e;document.querySelectorAll('.eb').forEach(x=>x.classList.remove('a'));b.classList.add('a');var p={{'nyx':'Search with Nyx...','duckduckgo':'DuckDuckGo...','google':'Google...','brave':'Brave...'}};document.getElementById('si').placeholder=p[e]||'Search...'}}
+function se(e,b){{E=e;document.querySelectorAll('.eng').forEach(x=>x.classList.remove('a'));
+  b.classList.add('a');
+  var p={{'nyx':'Search with Nyx...','duckduckgo':'DuckDuckGo...','google':'Google...','brave':'Brave...'}};
+  document.getElementById('si').placeholder=p[e]||'Search...'}}
 function go(q){{if(!q.trim())return;window.location='oyn://search?engine='+E+'&q='+encodeURIComponent(q)}}
-/* Particle canvas animation */
 var c=document.getElementById('bg'),x=c.getContext('2d'),W,H,pts=[];
 function resize(){{W=c.width=window.innerWidth;H=c.height=window.innerHeight}}
 window.addEventListener('resize',resize);resize();
-for(var i=0;i<80;i++)pts.push({{x:Math.random()*W,y:Math.random()*H,r:Math.random()*2+.5,dx:(Math.random()-.5)*.4,dy:(Math.random()-.5)*.4,o:Math.random()*.4+.1}});
+for(var i=0;i<90;i++)pts.push({{x:Math.random()*W,y:Math.random()*H,
+  r:Math.random()*1.8+.4,dx:(Math.random()-.5)*.35,dy:(Math.random()-.5)*.35,
+  o:Math.random()*.35+.08}});
 function draw(){{
 x.clearRect(0,0,W,H);
-for(var i=0;i<pts.length;i++){{
-var p=pts[i];
-p.x+=p.dx;p.y+=p.dy;
+for(var i=0;i<pts.length;i++){{var p=pts[i];p.x+=p.dx;p.y+=p.dy;
 if(p.x<0)p.x=W;if(p.x>W)p.x=0;if(p.y<0)p.y=H;if(p.y>H)p.y=0;
 x.beginPath();x.arc(p.x,p.y,p.r,0,Math.PI*2);
 x.fillStyle='rgba(123,79,191,'+p.o+')';x.fill();
-for(var j=i+1;j<pts.length;j++){{
-var q=pts[j],d=Math.hypot(p.x-q.x,p.y-q.y);
-if(d<130){{x.beginPath();x.moveTo(p.x,p.y);x.lineTo(q.x,q.y);
-x.strokeStyle='rgba(123,79,191,'+((.15)*(1-d/130))+')';x.lineWidth=.6;x.stroke()}}
-}}}}
-requestAnimationFrame(draw)}}
-draw();
+for(var j=i+1;j<pts.length;j++){{var q=pts[j],d=Math.hypot(p.x-q.x,p.y-q.y);
+if(d<120){{x.beginPath();x.moveTo(p.x,p.y);x.lineTo(q.x,q.y);
+x.strokeStyle='rgba(123,79,191,'+((.12)*(1-d/120))+')';x.lineWidth=.5;x.stroke()}}
+}}}}requestAnimationFrame(draw)}}draw();
 </script></body></html>'''
 
 
 def get_search_results_html(query, local_results, web_results, colors=None):
     """Generate Nyx-themed search results page."""
     c = colors or NYX_COLORS
-
     local_html = ""
     for i, r in enumerate(local_results):
+        score = r.get('score', '')
+        score_badge = f'<span class="badge score">{score:.0f}%</span>' if isinstance(score, (int, float)) else ''
         local_html += f'''
-        <div class="result" style="animation-delay:{i*0.06}s">
+        <div class="result" style="animation-delay:{i*0.05}s">
             <div class="r-top">
                 <a class="r-title" href="{r['url']}">{r['title']}</a>
                 <span class="badge local">Local</span>
-                <span class="badge rating">{r.get('rating','')}</span>
+                {score_badge}
+                <span class="r-cat">{r.get('category','')}</span>
             </div>
             <div class="r-url">{r['url']}</div>
             <div class="r-desc">{r.get('description','')}</div>
         </div>'''
-
     web_html = ""
     for i, r in enumerate(web_results):
         web_html += f'''
-        <div class="result" style="animation-delay:{(len(local_results)+i)*0.06}s">
+        <div class="result" style="animation-delay:{(len(local_results)+i)*0.05}s">
             <div class="r-top">
                 <a class="r-title" href="{r['url']}">{r['title']}</a>
                 <span class="badge web">Web</span>
@@ -625,102 +371,172 @@ def get_search_results_html(query, local_results, web_results, colors=None):
             <div class="r-url">{r['url']}</div>
             <div class="r-desc">{r.get('description','')}</div>
         </div>'''
-
     total = len(local_results) + len(web_results)
-
     return f'''<!DOCTYPE html>
-<html><head><meta charset="utf-8">
-<title>Nyx Search: {query}</title>
+<html><head><meta charset="utf-8"><title>Nyx Search: {query}</title>
 <style>
-* {{ margin:0;padding:0;box-sizing:border-box; }}
-body {{
-    background:{c['bg_darkest']};
-    color:{c['text_primary']};
-    font-family:'Segoe UI','Ubuntu',sans-serif;
-    padding:30px;
-}}
-.header {{
-    text-align:center;
-    margin-bottom:40px;
-    padding:24px;
-    background:linear-gradient(135deg,{c['bg_mid']},{c['bg_dark']});
-    border-radius:16px;
-    border:1px solid {c['border']};
-}}
-.header h1 {{
-    font-size:2em;
-    background:linear-gradient(135deg,{c['purple_mid']},{c['purple_glow']});
-    -webkit-background-clip:text;
-    -webkit-text-fill-color:transparent;
-}}
-.header .stats {{
-    color:{c['text_muted']};
-    margin-top:8px;
-}}
-.section {{
-    max-width:850px;
-    margin:0 auto 30px;
-}}
-.section-title {{
-    font-size:1.2em;
-    color:{c['purple_light']};
-    margin-bottom:16px;
-    padding-bottom:8px;
-    border-bottom:2px solid {c['border']};
-}}
-.result {{
-    background:{c['bg_mid']};
-    border:1px solid {c['border']};
-    border-radius:12px;
-    padding:16px 20px;
-    margin-bottom:12px;
-    transition:all 0.3s;
-    animation:fadeUp 0.4s ease-out both;
-}}
-.result:hover {{
-    border-color:{c['purple_mid']};
-    transform:translateY(-3px);
-    box-shadow:0 8px 24px rgba(123,79,191,0.15);
-}}
-@keyframes fadeUp {{
-    from {{ opacity:0;transform:translateY(12px); }}
-    to {{ opacity:1;transform:translateY(0); }}
-}}
-.r-top {{ display:flex; align-items:center; gap:10px; margin-bottom:6px; }}
-.r-title {{
-    color:{c['purple_light']};
-    text-decoration:none;
-    font-size:1.15em;
-    font-weight:600;
-}}
-.r-title:hover {{ color:{c['purple_glow']}; }}
-.badge {{
-    padding:3px 10px;
-    border-radius:12px;
-    font-size:0.75em;
-    font-weight:bold;
-}}
-.badge.local {{ background:{c['purple_dark']}; color:{c['purple_pale']}; }}
-.badge.web {{ background:{c['bg_lighter']}; color:{c['text_secondary']}; }}
-.badge.rating {{ background:rgba(242,201,76,0.15); color:#F2C94C; }}
-.r-url {{ color:{c['text_muted']}; font-size:0.85em; margin-bottom:6px; word-break:break-all; }}
-.r-desc {{ color:{c['text_secondary']}; line-height:1.5; }}
-.no-results {{
-    text-align:center;
-    padding:50px;
-    background:{c['bg_mid']};
-    border-radius:16px;
-    color:{c['text_muted']};
-}}
-</style></head>
-<body>
-<div class="header">
-    <h1>Nyx Search Results</h1>
-    <div class="stats">"{query}" &mdash; {total} results found</div>
-</div>
+*{{margin:0;padding:0;box-sizing:border-box}}
+body{{background:{c['bg_darkest']};color:{c['text_primary']};
+  font-family:'Segoe UI','Ubuntu',sans-serif;padding:24px 30px}}
+.header{{text-align:center;margin-bottom:32px;padding:22px;
+  background:rgba(22,22,31,.6);border-radius:18px;border:1px solid rgba(58,58,74,.3);
+  backdrop-filter:blur(10px)}}
+.header h1{{font-size:1.8em;background:linear-gradient(135deg,{c['purple_mid']},{c['purple_glow']});
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent}}
+.header .stats{{color:{c['text_muted']};margin-top:6px;font-size:.9em}}
+.section{{max-width:820px;margin:0 auto 24px}}
+.section-title{{font-size:1.1em;color:{c['purple_light']};margin-bottom:14px;padding-bottom:6px;
+  border-bottom:2px solid rgba(58,58,74,.3);display:flex;align-items:center;gap:8px}}
+.result{{background:rgba(22,22,31,.5);border:1px solid rgba(58,58,74,.3);border-radius:14px;
+  padding:16px 20px;margin-bottom:10px;transition:all .3s ease;
+  animation:fadeUp .35s ease-out both;backdrop-filter:blur(6px)}}
+.result:hover{{border-color:{c['purple_mid']};transform:translateX(4px);
+  box-shadow:0 6px 20px rgba(123,79,191,.12)}}
+@keyframes fadeUp{{from{{opacity:0;transform:translateY(10px)}}to{{opacity:1;transform:translateY(0)}}}}
+.r-top{{display:flex;align-items:center;gap:8px;margin-bottom:5px;flex-wrap:wrap}}
+.r-title{{color:{c['purple_light']};text-decoration:none;font-size:1.1em;font-weight:600}}
+.r-title:hover{{color:{c['purple_glow']}}}
+.badge{{padding:2px 10px;border-radius:10px;font-size:.7em;font-weight:bold}}
+.badge.local{{background:rgba(123,79,191,.2);color:{c['purple_pale']}}}
+.badge.web{{background:rgba(40,40,54,.8);color:{c['text_secondary']}}}
+.badge.score{{background:rgba(111,207,151,.15);color:#6FCF97}}
+.r-cat{{color:{c['text_muted']};font-size:.75em;font-style:italic}}
+.r-url{{color:{c['text_muted']};font-size:.8em;margin-bottom:5px;word-break:break-all}}
+.r-desc{{color:{c['text_secondary']};line-height:1.5;font-size:.92em}}
+.no-results{{text-align:center;padding:50px;background:rgba(22,22,31,.5);
+  border-radius:18px;color:{c['text_muted']}}}
+</style></head><body>
+<div class="header"><h1>Nyx Search Results</h1>
+<div class="stats">"{query}" &mdash; {total} results</div></div>
 <div class="section">
-    {"<div class='section-title'>Local Database</div>" + local_html if local_results else ""}
-    {"<div class='section-title'>Web Results</div>" + web_html if web_results else ""}
-    {"<div class='no-results'>No results found. Try different keywords.</div>" if total == 0 else ""}
-</div>
+{"<div class='section-title'>From Your Database</div>" + local_html if local_results else ""}
+{"<div class='section-title'>Web Results</div>" + web_html if web_results else ""}
+{"<div class='no-results'>No results found. Try different keywords.</div>" if total == 0 else ""}
+</div></body></html>'''
+
+
+def get_external_search_theme_css(colors=None):
+    """CSS injected into external search engine pages to apply Nyx theme."""
+    c = colors or NYX_COLORS
+    return f'''
+    body {{ background-color: {c['bg_darkest']} !important; color: {c['text_primary']} !important; }}
+    * {{ border-color: rgba(58,58,74,0.4) !important; }}
+    a {{ color: {c['purple_light']} !important; }}
+    a:visited {{ color: {c['purple_soft']} !important; }}
+    input, textarea, select {{ background-color: {c['bg_mid']} !important;
+        color: {c['text_primary']} !important; border: 1px solid {c['border']} !important;
+        border-radius: 8px !important; }}
+    input:focus, textarea:focus {{ border-color: {c['purple_mid']} !important;
+        box-shadow: 0 0 12px rgba(123,79,191,.2) !important; }}
+    img {{ opacity: 0.92; }}
+    header, nav, footer, [role="banner"], [role="navigation"] {{
+        background-color: {c['bg_dark']} !important; }}
+    button, [role="button"] {{ background-color: {c['bg_lighter']} !important;
+        color: {c['text_primary']} !important; border-radius: 8px !important; }}
+    button:hover, [role="button"]:hover {{ background-color: {c['purple_dark']} !important; }}
+    ::selection {{ background: rgba(123,79,191,0.3) !important; }}
+    ::-webkit-scrollbar {{ width: 8px; }}
+    ::-webkit-scrollbar-thumb {{ background: {c['scrollbar']}; border-radius: 4px; }}
+    ::-webkit-scrollbar-track {{ background: transparent; }}
+    '''
+
+
+def get_history_html(history_entries, colors=None):
+    """Generate history page HTML."""
+    c = colors or NYX_COLORS
+    rows = ""
+    for i, h in enumerate(history_entries):
+        rows += f'''<div class="entry" style="animation-delay:{i*0.03}s">
+            <div class="e-time">{h.get('time','')}</div>
+            <a class="e-title" href="{h['url']}">{h.get('title', h['url'])}</a>
+            <div class="e-url">{h['url']}</div>
+        </div>'''
+    return f'''<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>History</title>
+<style>
+*{{margin:0;padding:0;box-sizing:border-box}}
+body{{background:{c['bg_darkest']};color:{c['text_primary']};
+  font-family:'Segoe UI','Ubuntu',sans-serif;padding:30px}}
+h1{{font-size:1.6em;color:{c['purple_light']};margin-bottom:24px}}
+.entry{{background:rgba(22,22,31,.5);border:1px solid rgba(58,58,74,.3);border-radius:12px;
+  padding:12px 16px;margin-bottom:8px;animation:fadeUp .3s ease-out both;
+  transition:border-color .2s}}
+.entry:hover{{border-color:{c['purple_mid']}}}
+@keyframes fadeUp{{from{{opacity:0;transform:translateY(8px)}}to{{opacity:1;transform:translateY(0)}}}}
+.e-time{{color:{c['text_muted']};font-size:.75em;float:right}}
+.e-title{{color:{c['purple_light']};text-decoration:none;font-weight:600}}
+.e-title:hover{{color:{c['purple_glow']}}}
+.e-url{{color:{c['text_muted']};font-size:.8em;margin-top:2px}}
+.empty{{text-align:center;padding:40px;color:{c['text_muted']}}}
+</style></head><body>
+<h1>Browsing History</h1>
+{rows if rows else '<div class="empty">No history yet. Start browsing!</div>'}
+</body></html>'''
+
+
+def get_bookmarks_html(bookmarks, colors=None):
+    """Generate bookmarks page HTML."""
+    c = colors or NYX_COLORS
+    items = ""
+    for i, b in enumerate(bookmarks):
+        items += f'''<div class="bm" style="animation-delay:{i*0.04}s">
+            <a class="bm-title" href="{b['url']}">{b.get('title', b['url'])}</a>
+            <span class="bm-folder">{b.get('folder', '')}</span>
+            <div class="bm-url">{b['url']}</div>
+        </div>'''
+    return f'''<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>Bookmarks</title>
+<style>
+*{{margin:0;padding:0;box-sizing:border-box}}
+body{{background:{c['bg_darkest']};color:{c['text_primary']};
+  font-family:'Segoe UI','Ubuntu',sans-serif;padding:30px}}
+h1{{font-size:1.6em;color:{c['purple_light']};margin-bottom:24px}}
+.bm{{background:rgba(22,22,31,.5);border:1px solid rgba(58,58,74,.3);border-radius:12px;
+  padding:14px 18px;margin-bottom:8px;animation:fadeUp .3s ease-out both;transition:all .2s}}
+.bm:hover{{border-color:{c['purple_mid']};transform:translateX(4px)}}
+@keyframes fadeUp{{from{{opacity:0;transform:translateY(8px)}}to{{opacity:1;transform:translateY(0)}}}}
+.bm-title{{color:{c['purple_light']};text-decoration:none;font-weight:600;font-size:1.05em}}
+.bm-title:hover{{color:{c['purple_glow']}}}
+.bm-folder{{background:rgba(123,79,191,.15);color:{c['purple_pale']};padding:2px 10px;
+  border-radius:8px;font-size:.7em;margin-left:8px}}
+.bm-url{{color:{c['text_muted']};font-size:.8em;margin-top:3px}}
+.empty{{text-align:center;padding:40px;color:{c['text_muted']}}}
+</style></head><body>
+<h1>Bookmarks</h1>
+{items if items else '<div class="empty">No bookmarks yet. Press Ctrl+D to bookmark a page.</div>'}
+</body></html>'''
+
+
+def get_downloads_html(downloads, colors=None):
+    """Generate downloads page HTML."""
+    c = colors or NYX_COLORS
+    items = ""
+    for i, d in enumerate(downloads):
+        pct = d.get('progress', 100)
+        status = d.get('status', 'complete')
+        bar = f'<div class="prog"><div class="prog-fill" style="width:{pct}%"></div></div>' if status == 'downloading' else ''
+        items += f'''<div class="dl" style="animation-delay:{i*0.04}s">
+            <div class="dl-name">{d.get('filename','Unknown')}</div>
+            <div class="dl-info">{d.get('size','')} &middot; {status}</div>
+            {bar}
+        </div>'''
+    return f'''<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>Downloads</title>
+<style>
+*{{margin:0;padding:0;box-sizing:border-box}}
+body{{background:{c['bg_darkest']};color:{c['text_primary']};
+  font-family:'Segoe UI','Ubuntu',sans-serif;padding:30px}}
+h1{{font-size:1.6em;color:{c['purple_light']};margin-bottom:24px}}
+.dl{{background:rgba(22,22,31,.5);border:1px solid rgba(58,58,74,.3);border-radius:12px;
+  padding:14px 18px;margin-bottom:8px;animation:fadeUp .3s ease-out both}}
+@keyframes fadeUp{{from{{opacity:0;transform:translateY(8px)}}to{{opacity:1;transform:translateY(0)}}}}
+.dl-name{{color:{c['text_primary']};font-weight:600}}
+.dl-info{{color:{c['text_muted']};font-size:.8em;margin-top:3px}}
+.prog{{height:4px;background:{c['bg_lighter']};border-radius:2px;margin-top:8px;overflow:hidden}}
+.prog-fill{{height:100%;background:linear-gradient(90deg,{c['purple_mid']},{c['purple_glow']});
+  border-radius:2px;transition:width .3s}}
+.empty{{text-align:center;padding:40px;color:{c['text_muted']}}}
+</style></head><body>
+<h1>Downloads</h1>
+{items if items else '<div class="empty">No downloads yet.</div>'}
 </body></html>'''
