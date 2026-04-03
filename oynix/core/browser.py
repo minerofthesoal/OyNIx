@@ -1,5 +1,5 @@
 """
-OyNIx Browser v2.2 - Main Browser Core
+OyNIx Browser v2.3 - Main Browser Core
 Complete desktop browser with local LLM, Nyx search, tree tabs,
 bookmarks, downloads, history, find-in-page, command palette,
 forced theme on external search engines, XPI extension import,
@@ -32,7 +32,12 @@ from oynix.core.theme_engine import (
 )
 from oynix.core.tree_tabs import TabManager
 from oynix.core.nyx_search import nyx_search
-from oynix.core.ai_manager import ai_manager
+try:
+    from oynix.core.ai_manager import ai_manager
+    HAS_AI = True
+except (ImportError, OSError, Exception):
+    ai_manager = None
+    HAS_AI = False
 from oynix.core.database import database, guess_category
 from oynix.core.security import security_manager
 from oynix.core.github_sync import github_sync
@@ -303,7 +308,7 @@ class CommandPalette(QDialog):
 
 
 class OynixBrowser(QMainWindow):
-    """OyNIx Browser v2.2 — The Nyx-Powered Local AI Browser."""
+    """OyNIx Browser v2.3 — The Nyx-Powered Local AI Browser."""
 
     def __init__(self):
         super().__init__()
@@ -336,8 +341,9 @@ class OynixBrowser(QMainWindow):
         from oynix.UI.menus import create_oynix_menus
         self.menus = create_oynix_menus(self)
 
-        ai_manager.status_update.connect(self._on_ai_status)
-        ai_manager.load_model_async()
+        if ai_manager:
+            ai_manager.status_update.connect(self._on_ai_status)
+            ai_manager.load_model_async()
         self.new_tab(QUrl("oyn://home"))
         self._update_status("Ready")
 
@@ -566,7 +572,7 @@ class OynixBrowser(QMainWindow):
     def _setup_statusbar(self):
         self.status_bar = QStatusBar()
         self.setStatusBar(self.status_bar)
-        self.ai_status_label = QLabel("AI: Loading...")
+        self.ai_status_label = QLabel("AI: Loading..." if ai_manager else "AI: N/A")
         self.ai_status_label.setStyleSheet(
             f"color: {NYX_COLORS['text_muted']}; font-size: 11px; padding: 0 8px; background: transparent;")
         self.status_bar.addPermanentWidget(self.ai_status_label)
@@ -1653,6 +1659,9 @@ class OynixBrowser(QMainWindow):
         self.toggle_ai_panel()
 
     def _summarize_page(self):
+        if not ai_manager:
+            self._update_status("AI not available (llama_cpp not installed)")
+            return
         tab = self.current_tab()
         if tab:
             tab.page().toPlainText(lambda text: ai_manager.summarize(text[:3000]))
@@ -1664,12 +1673,18 @@ class OynixBrowser(QMainWindow):
         self._summarize_page()
 
     def extract_key_points(self):
+        if not ai_manager:
+            self._update_status("AI not available")
+            return
         tab = self.current_tab()
         if tab:
             tab.page().toPlainText(
                 lambda text: ai_manager.chat(f"Extract the key points from this text:\n{text[:2000]}"))
 
     def explain_simple(self):
+        if not ai_manager:
+            self._update_status("AI not available")
+            return
         tab = self.current_tab()
         if tab:
             tab.page().toPlainText(
@@ -1677,6 +1692,10 @@ class OynixBrowser(QMainWindow):
 
     def set_ai_model(self):
         """Show AI model info and allow switching."""
+        if not ai_manager:
+            QMessageBox.information(self, "AI",
+                "Local AI is not available.\nllama_cpp could not be loaded on this system.")
+            return
         models = ai_manager.get_available_models()
         current = ai_manager.model_key
         status = ai_manager.get_status()
@@ -1794,7 +1813,7 @@ class OynixBrowser(QMainWindow):
 
     def show_about(self):
         QMessageBox.about(self, "About OyNIx",
-            "OyNIx Browser v2.2\nThe Nyx-Powered Local AI Browser\n\n"
+            "OyNIx Browser v2.3\nThe Nyx-Powered Local AI Browser\n\n"
             "Features: Tree Tabs, Local LLM, Nyx Search,\n"
             "1400+ Site Database, Dynamic Refractions,\n"
             "C++/C# Turbo Indexer, Audio Player,\n"
@@ -1804,7 +1823,7 @@ class OynixBrowser(QMainWindow):
 
     def show_release_notes(self):
         QMessageBox.information(self, "Release Notes",
-            "v2.2 — Dynamic Refractions & Turbo Search\n\n"
+            "v2.3 — Dynamic Refractions & Turbo Search\n\n"
             "• Nyx-first search (no external redirects)\n"
             "• GPU-accelerated mouse-tracking refractions\n"
             "• Dynamic glass effects on all UI pages\n"
@@ -1817,7 +1836,7 @@ class OynixBrowser(QMainWindow):
             "• Audio player\n• Chrome history import")
 
     def check_updates(self):
-        QMessageBox.information(self, "Updates", "You are running OyNIx v2.2 (latest).")
+        QMessageBox.information(self, "Updates", "You are running OyNIx v2.3 (latest).")
 
     def import_settings(self):
         path, _ = QFileDialog.getOpenFileName(self, "Import Settings", "", "JSON (*.json)")
@@ -2279,7 +2298,7 @@ class OynixBrowser(QMainWindow):
             self.save_pw_bar.setGeometry(0, self.height() - 120, self.width(), 40)
 
     # ══════════════════════════════════════════════════════════════════
-    # v2.2 Features
+    # v2.3 Features
     # ══════════════════════════════════════════════════════════════════
 
     # ── 1. Tab Pinning ─────────────────────────────────────────────

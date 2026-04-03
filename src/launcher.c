@@ -159,7 +159,7 @@ int main(int argc, char *argv[]) {
 
     printf("\n");
     printf(PURPLE BOLD "  ╔═══════════════════════════════════════════════╗\n");
-    printf("  ║         OyNIx Browser v2.2                   ║\n");
+    printf("  ║         OyNIx Browser v2.3                   ║\n");
     printf("  ║    The Nyx-Powered Local AI Browser          ║\n");
     printf("  ╚═══════════════════════════════════════════════╝" RESET "\n\n");
 
