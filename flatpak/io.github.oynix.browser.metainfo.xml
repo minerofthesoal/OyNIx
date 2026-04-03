@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>io.github.oynix.browser</id>
+  <name>OyNIx Browser</name>
+  <summary>Nyx-powered local AI browser with tree tabs</summary>
+  <metadata_license>MIT</metadata_license>
+  <project_license>MIT</project_license>
+  <description>
+    <p>Custom Chromium-based desktop browser with built-in local LLM assistant,
+    Nyx search engine, tree-style tabs, audio player, and purple/black Nyx theme.</p>
+  </description>
+  <url type="homepage">https://github.com/minerofthesoal/OyNIx</url>
+  <launchable type="desktop-id">io.github.oynix.browser.desktop</launchable>
+</component>

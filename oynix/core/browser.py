@@ -442,6 +442,92 @@ class OynixBrowser(QMainWindow):
         nav_btn('downloads', 'Downloads (Ctrl+J)', self.show_downloads)
         nav_btn('new_tab', 'New Tab (Ctrl+T)', lambda: self.new_tab())
 
+        # Extension toolbar buttons (right side of nav bar)
+        tb.addSeparator()
+        self._ext_toolbar_btns = []
+        self._rebuild_extension_toolbar(tb)
+
+    def _rebuild_extension_toolbar(self, toolbar=None):
+        """Add/refresh extension action buttons in the toolbar."""
+        # Remove old extension buttons
+        for btn in self._ext_toolbar_btns:
+            btn.setParent(None)
+            btn.deleteLater()
+        self._ext_toolbar_btns.clear()
+
+        registry = load_registry()
+        if not registry:
+            return
+
+        if toolbar is None:
+            toolbar = self.findChild(QToolBar, "Navigation")
+        if not toolbar:
+            return
+
+        for ext in registry:
+            if not ext.get('enabled', True):
+                continue
+            name = ext.get('name', '?')
+            has_popup = ext.get('popup') is not None
+            desc = ext.get('description', '')[:40]
+
+            btn = QPushButton()
+            # Use first letter as icon fallback
+            icon_text = name[0].upper() if name else '?'
+            btn.setText(icon_text)
+            btn.setObjectName("extBtn")
+            btn.setToolTip(f"{name}\n{desc}" if desc else name)
+            btn.setFixedSize(30, 30)
+            btn.setStyleSheet(f"""
+                QPushButton#extBtn {{
+                    background: {NYX_COLORS['bg_lighter']};
+                    color: {NYX_COLORS['purple_pale']};
+                    border: 1px solid {NYX_COLORS['border']};
+                    border-radius: 6px;
+                    font-weight: bold;
+                    font-size: 13px;
+                }}
+                QPushButton#extBtn:hover {{
+                    background: {NYX_COLORS['purple_dark']};
+                    border-color: {NYX_COLORS['purple_mid']};
+                }}
+            """)
+
+            if has_popup:
+                btn.clicked.connect(lambda checked=False, e=ext: self._show_ext_popup(e))
+            else:
+                btn.clicked.connect(lambda checked=False, e=ext: self._toggle_ext_inline(e))
+
+            toolbar.addWidget(btn)
+            self._ext_toolbar_btns.append(btn)
+
+    def _show_ext_popup(self, ext):
+        """Show an extension's popup HTML in a small dialog."""
+        popup = ext.get('popup')
+        if not popup or not popup.get('html'):
+            return
+
+        dialog = QDialog(self)
+        dialog.setWindowTitle(ext.get('name', 'Extension'))
+        dialog.setFixedSize(400, 500)
+        layout = QVBoxLayout(dialog)
+        layout.setContentsMargins(0, 0, 0, 0)
+
+        popup_view = QWebEngineView()
+        popup_view.setHtml(popup['html'],
+                           QUrl.fromLocalFile(os.path.join(ext.get('path', ''), popup.get('file', ''))))
+        layout.addWidget(popup_view)
+        dialog.exec()
+
+    def _toggle_ext_inline(self, ext):
+        """Toggle an extension that has no popup (just enable/disable)."""
+        name = ext.get('name', '')
+        new_state = toggle_extension(name)
+        if new_state is not None:
+            state_str = 'enabled' if new_state else 'disabled'
+            self._update_status(f"Extension '{name}' {state_str}")
+            self._rebuild_extension_toolbar()
+
     def _setup_tab_manager(self):
         self.tab_manager = TabManager()
         self.tab_manager.current_view_changed.connect(self._on_current_view_changed)
