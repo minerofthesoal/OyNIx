@@ -277,6 +277,19 @@ canvas#bg{{position:fixed;top:0;left:0;width:100%;height:100%;z-index:0}}
 .card-title{{color:{c['text_primary']};font-weight:600;font-size:.88em}}
 .card-sub{{color:{c['text_muted']};font-size:.72em;margin-top:3px}}
 
+/* Reactive light glass: cursor-following glow */
+.card::before{{content:'';position:absolute;inset:0;border-radius:16px;
+  background:radial-gradient(300px circle at var(--cx,50%) var(--cy,50%),
+  rgba(123,79,191,.15),transparent 60%);opacity:0;transition:opacity .4s;pointer-events:none}}
+.card:hover::before{{opacity:1}}
+.search-wrap::after{{content:'';position:absolute;inset:-2px;border-radius:52px;
+  background:radial-gradient(400px circle at var(--sx,50%) var(--sy,50%),
+  rgba(123,79,191,.12),transparent 60%);pointer-events:none;opacity:0;transition:opacity .3s;z-index:-1}}
+.search-box:focus ~ .search-wrap::after,.search-wrap:hover::after{{opacity:1}}
+.glass-orb{{position:fixed;border-radius:50%;pointer-events:none;z-index:0;
+  filter:blur(80px);opacity:.08;animation:orbFloat 20s ease-in-out infinite alternate}}
+@keyframes orbFloat{{0%{{transform:translate(0,0)}}50%{{transform:translate(30px,-40px)}}100%{{transform:translate(-20px,20px)}}}}
+
 /* Footer stats */
 .footer{{position:fixed;bottom:0;left:0;right:0;display:flex;justify-content:center;gap:48px;
   padding:16px;background:linear-gradient(transparent,{c['bg_darkest']} 60%)}}
@@ -286,6 +299,9 @@ canvas#bg{{position:fixed;top:0;left:0;width:100%;height:100%;z-index:0}}
 .credit a{{color:{c['purple_light']};text-decoration:none}}
 </style></head><body>
 <canvas id="bg"></canvas>
+<div class="glass-orb" style="width:400px;height:400px;background:{c['purple_mid']};top:10%;left:-5%"></div>
+<div class="glass-orb" style="width:300px;height:300px;background:{c['purple_glow']};bottom:5%;right:-3%;animation-delay:-8s"></div>
+<div class="glass-orb" style="width:250px;height:250px;background:{c['purple_dark']};top:50%;left:60%;animation-delay:-14s"></div>
 <div class="wrap">
 <div class="logo">OyNIx</div>
 <div class="tagline">Nyx-Powered Local AI Browser</div>
@@ -339,38 +355,40 @@ for(var j=i+1;j<pts.length;j++){{var q=pts[j],d=Math.hypot(p.x-q.x,p.y-q.y);
 if(d<120){{x.beginPath();x.moveTo(p.x,p.y);x.lineTo(q.x,q.y);
 x.strokeStyle='rgba(123,79,191,'+((.12)*(1-d/120))+')';x.lineWidth=.5;x.stroke()}}
 }}}}requestAnimationFrame(draw)}}draw();
+// Reactive light glass — track cursor on cards and search
+document.querySelectorAll('.card').forEach(function(card){{
+  card.style.position='relative';
+  card.addEventListener('mousemove',function(e){{
+    var b=card.getBoundingClientRect();
+    card.style.setProperty('--cx',((e.clientX-b.left)/b.width*100)+'%');
+    card.style.setProperty('--cy',((e.clientY-b.top)/b.height*100)+'%');
+  }});
+}});
+var sw=document.querySelector('.search-wrap');
+if(sw)sw.addEventListener('mousemove',function(e){{
+  var b=sw.getBoundingClientRect();
+  sw.style.setProperty('--sx',((e.clientX-b.left)/b.width*100)+'%');
+  sw.style.setProperty('--sy',((e.clientY-b.top)/b.height*100)+'%');
+}});
 </script></body></html>'''
 
 
 def get_search_results_html(query, local_results, web_results, colors=None):
-    """Generate Nyx-themed search results page."""
+    """Generate Nyx-themed search results page with infinite scroll."""
     c = colors or NYX_COLORS
-    local_html = ""
-    for i, r in enumerate(local_results):
-        score = r.get('score', '')
-        score_badge = f'<span class="badge score">{score:.0f}%</span>' if isinstance(score, (int, float)) else ''
-        local_html += f'''
-        <div class="result" style="animation-delay:{i*0.05}s">
-            <div class="r-top">
-                <a class="r-title" href="{r['url']}">{r['title']}</a>
-                <span class="badge local">Local</span>
-                {score_badge}
-                <span class="r-cat">{r.get('category','')}</span>
-            </div>
-            <div class="r-url">{r['url']}</div>
-            <div class="r-desc">{r.get('description','')}</div>
-        </div>'''
-    web_html = ""
-    for i, r in enumerate(web_results):
-        web_html += f'''
-        <div class="result" style="animation-delay:{(len(local_results)+i)*0.05}s">
-            <div class="r-top">
-                <a class="r-title" href="{r['url']}">{r['title']}</a>
-                <span class="badge web">Web</span>
-            </div>
-            <div class="r-url">{r['url']}</div>
-            <div class="r-desc">{r.get('description','')}</div>
-        </div>'''
+    import json as _json
+
+    # Encode all results as JSON for the infinite scroll JS
+    all_local = _json.dumps([{
+        'url': r.get('url', ''), 'title': r.get('title', ''),
+        'description': r.get('description', ''), 'category': r.get('category', ''),
+        'score': r.get('score', 0), 'type': 'local'
+    } for r in local_results])
+    all_web = _json.dumps([{
+        'url': r.get('url', ''), 'title': r.get('title', ''),
+        'description': r.get('description', ''), 'type': 'web'
+    } for r in web_results])
+
     total = len(local_results) + len(web_results)
     return f'''<!DOCTYPE html>
 <html><head><meta charset="utf-8"><title>Nyx Search: {query}</title>
@@ -380,19 +398,26 @@ body{{background:{c['bg_darkest']};color:{c['text_primary']};
   font-family:'Segoe UI','Ubuntu',sans-serif;padding:24px 30px}}
 .header{{text-align:center;margin-bottom:32px;padding:22px;
   background:rgba(22,22,31,.6);border-radius:18px;border:1px solid rgba(58,58,74,.3);
-  backdrop-filter:blur(10px)}}
+  backdrop-filter:blur(10px);position:relative;overflow:hidden}}
+.header::before{{content:'';position:absolute;inset:0;
+  background:radial-gradient(ellipse at 50% 0%,rgba(123,79,191,.12),transparent 70%);pointer-events:none}}
 .header h1{{font-size:1.8em;background:linear-gradient(135deg,{c['purple_mid']},{c['purple_glow']});
-  -webkit-background-clip:text;-webkit-text-fill-color:transparent}}
-.header .stats{{color:{c['text_muted']};margin-top:6px;font-size:.9em}}
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;position:relative}}
+.header .stats{{color:{c['text_muted']};margin-top:6px;font-size:.9em;position:relative}}
 .section{{max-width:820px;margin:0 auto 24px}}
 .section-title{{font-size:1.1em;color:{c['purple_light']};margin-bottom:14px;padding-bottom:6px;
   border-bottom:2px solid rgba(58,58,74,.3);display:flex;align-items:center;gap:8px}}
 .result{{background:rgba(22,22,31,.5);border:1px solid rgba(58,58,74,.3);border-radius:14px;
   padding:16px 20px;margin-bottom:10px;transition:all .3s ease;
-  animation:fadeUp .35s ease-out both;backdrop-filter:blur(6px)}}
+  opacity:0;transform:translateY(14px);backdrop-filter:blur(6px);
+  position:relative;overflow:hidden}}
+.result.visible{{opacity:1;transform:translateY(0);transition:opacity .4s ease,transform .4s ease}}
+.result::before{{content:'';position:absolute;top:0;left:0;width:100%;height:100%;
+  background:radial-gradient(circle at var(--mx,50%) var(--my,50%),rgba(123,79,191,.06),transparent 60%);
+  pointer-events:none;opacity:0;transition:opacity .3s}}
+.result:hover::before{{opacity:1}}
 .result:hover{{border-color:{c['purple_mid']};transform:translateX(4px);
   box-shadow:0 6px 20px rgba(123,79,191,.12)}}
-@keyframes fadeUp{{from{{opacity:0;transform:translateY(10px)}}to{{opacity:1;transform:translateY(0)}}}}
 .r-top{{display:flex;align-items:center;gap:8px;margin-bottom:5px;flex-wrap:wrap}}
 .r-title{{color:{c['purple_light']};text-decoration:none;font-size:1.1em;font-weight:600}}
 .r-title:hover{{color:{c['purple_glow']}}}
@@ -405,14 +430,75 @@ body{{background:{c['bg_darkest']};color:{c['text_primary']};
 .r-desc{{color:{c['text_secondary']};line-height:1.5;font-size:.92em}}
 .no-results{{text-align:center;padding:50px;background:rgba(22,22,31,.5);
   border-radius:18px;color:{c['text_muted']}}}
+#loader{{text-align:center;padding:20px;display:none}}
+#loader .spinner{{display:inline-block;width:28px;height:28px;border:3px solid {c['bg_lighter']};
+  border-top-color:{c['purple_mid']};border-radius:50%;animation:spin .7s linear infinite}}
+@keyframes spin{{to{{transform:rotate(360deg)}}}}
+#end-msg{{text-align:center;padding:16px;color:{c['text_muted']};font-size:.85em;display:none}}
 </style></head><body>
 <div class="header"><h1>Nyx Search Results</h1>
-<div class="stats">"{query}" &mdash; {total} results</div></div>
-<div class="section">
-{"<div class='section-title'>From Your Database</div>" + local_html if local_results else ""}
-{"<div class='section-title'>Web Results</div>" + web_html if web_results else ""}
-{"<div class='no-results'>No results found. Try different keywords.</div>" if total == 0 else ""}
-</div></body></html>'''
+<div class="stats">"{query}" &mdash; <span id="count">0</span> results shown</div></div>
+<div class="section" id="results-container">
+<div class="section-title" id="local-header" style="display:none">From Your Database</div>
+<div id="local-results"></div>
+<div class="section-title" id="web-header" style="display:none">Web Results</div>
+<div id="web-results"></div>
+<div id="no-results" class="no-results" style="display:none">No results found. Try different keywords.</div>
+</div>
+<div id="loader"><div class="spinner"></div></div>
+<div id="end-msg">All results loaded</div>
+<script>
+var localData={all_local};
+var webData={all_web};
+var PAGE=10,localIdx=0,webIdx=0,loading=false;
+function makeCard(r){{
+  var d=document.createElement('div');d.className='result';
+  var scoreBadge=r.score?'<span class="badge score">'+Math.round(r.score)+'%</span>':'';
+  var catSpan=r.category?'<span class="r-cat">'+r.category+'</span>':'';
+  var typeBadge=r.type==='local'?'<span class="badge local">Local</span>':'<span class="badge web">Web</span>';
+  d.innerHTML='<div class="r-top"><a class="r-title" href="'+r.url+'">'+r.title+'</a>'+typeBadge+scoreBadge+catSpan+'</div>'
+    +'<div class="r-url">'+r.url+'</div><div class="r-desc">'+(r.description||'')+'</div>';
+  d.addEventListener('mousemove',function(e){{var b=d.getBoundingClientRect();
+    d.style.setProperty('--mx',(((e.clientX-b.left)/b.width)*100)+'%');
+    d.style.setProperty('--my',(((e.clientY-b.top)/b.height)*100)+'%')}});
+  return d;
+}}
+function loadMore(){{
+  if(loading)return;loading=true;
+  document.getElementById('loader').style.display='block';
+  setTimeout(function(){{
+    var added=0;
+    while(localIdx<localData.length&&added<PAGE){{
+      document.getElementById('local-results').appendChild(makeCard(localData[localIdx]));
+      localIdx++;added++;
+    }}
+    while(webIdx<webData.length&&added<PAGE){{
+      document.getElementById('web-results').appendChild(makeCard(webData[webIdx]));
+      webIdx++;added++;
+    }}
+    if(localIdx>0)document.getElementById('local-header').style.display='';
+    if(webIdx>0)document.getElementById('web-header').style.display='';
+    document.getElementById('count').textContent=localIdx+webIdx;
+    document.getElementById('loader').style.display='none';
+    loading=false;
+    if(localIdx>=localData.length&&webIdx>=webData.length){{
+      document.getElementById('end-msg').style.display='block';
+      if(localIdx+webIdx===0)document.getElementById('no-results').style.display='block';
+    }}
+    // Animate newly visible cards
+    document.querySelectorAll('.result:not(.visible)').forEach(function(el){{
+      var observer=new IntersectionObserver(function(entries){{
+        entries.forEach(function(e){{if(e.isIntersecting){{e.target.classList.add('visible');observer.unobserve(e.target);}}}});
+      }},{{threshold:0.1}});observer.observe(el);
+    }});
+  }},80);
+}}
+// Infinite scroll
+window.addEventListener('scroll',function(){{
+  if(window.innerHeight+window.scrollY>=document.body.offsetHeight-300)loadMore();
+}});
+loadMore(); // initial batch
+</script></body></html>'''
 
 
 def get_external_search_theme_css(colors=None):

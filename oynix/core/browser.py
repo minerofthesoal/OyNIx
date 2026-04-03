@@ -42,10 +42,18 @@ from oynix.core.extensions import (
     load_registry, get_content_scripts_for_url, get_extra_styles_for_url
 )
 from oynix.UI.ai_chat import AIChatPanel
+from oynix.core.credentials import credential_manager, CredentialDialog, SavePasswordBar
+from oynix.core.search_builder import SearchEngineBuilder, load_custom_engines, get_custom_search_url
 try:
     from oynix.UI.icons import svg_icon
 except ImportError:
     svg_icon = None
+
+try:
+    from oynix.core.audio_player import AudioPlayer
+    HAS_AUDIO = True
+except ImportError:
+    HAS_AUDIO = False
 
 # Config defaults
 DEFAULT_CONFIG = {
@@ -75,8 +83,14 @@ DOWNLOADS_DIR = os.path.expanduser("~/Downloads")
 
 
 class OynixWebPage(QWebEnginePage):
-    """Custom web page with security integration."""
+    """Custom web page with security integration and oyn:// interception."""
+    oyn_url_requested = pyqtSignal(QUrl)
+
     def acceptNavigationRequest(self, url, nav_type, is_main_frame):
+        # Intercept oyn:// URLs so homepage search bar and card links work
+        if is_main_frame and url.scheme() == 'oyn':
+            self.oyn_url_requested.emit(url)
+            return False  # Don't navigate — handled by signal
         if is_main_frame and security_manager.security_checks_enabled:
             ok, info = security_manager.check_url_security(url, self.parent())
             return ok
@@ -214,7 +228,9 @@ class OynixBrowser(QMainWindow):
         self._setup_toolbar()
         self._setup_tab_manager()
         self._setup_ai_panel()
+        self._setup_audio_player()
         self._setup_find_bar()
+        self._setup_credential_bar()
         self._setup_statusbar()
         self._setup_shortcuts()
         self._apply_theme()
@@ -317,6 +333,17 @@ class OynixBrowser(QMainWindow):
         self.main_splitter.addWidget(self.ai_panel)
         self.main_splitter.setSizes([1200, 0])
 
+    def _setup_audio_player(self):
+        if HAS_AUDIO:
+            self.audio_player = AudioPlayer()
+            self.audio_player.hide()
+            self.main_splitter.addWidget(self.audio_player)
+        else:
+            self.audio_player = None
+
+    def _setup_credential_bar(self):
+        self.save_pw_bar = SavePasswordBar(credential_manager, self)
+
     def _setup_find_bar(self):
         self.find_bar = FindBar(self)
 
@@ -370,6 +397,7 @@ class OynixBrowser(QMainWindow):
         browser = QWebEngineView()
         page = OynixWebPage(browser)
         browser.setPage(page)
+        page.oyn_url_requested.connect(lambda u, b=browser: self._handle_oyn_url(u, b))
         browser.urlChanged.connect(lambda u, b=browser: self._on_url_changed(u, b))
         browser.loadFinished.connect(lambda ok, b=browser: self._on_load_finished(ok, b))
         browser.titleChanged.connect(lambda t, b=browser: self._on_title_changed(t, b))
@@ -422,7 +450,13 @@ class OynixBrowser(QMainWindow):
             'brave': f'https://search.brave.com/search?q={query}',
             'bing': f'https://www.bing.com/search?q={query}',
         }
-        return urls.get(engine, f'https://duckduckgo.com/?q={query}')
+        if engine in urls:
+            return urls[engine]
+        # Check custom engines
+        custom_url = get_custom_search_url(engine, query)
+        if custom_url:
+            return custom_url
+        return f'https://duckduckgo.com/?q={query}'
 
     def navigate_home(self):
         tab = self.current_tab()
@@ -483,13 +517,13 @@ class OynixBrowser(QMainWindow):
                 r['score'] = min(score, 100)
                 scored.append(r)
         scored.sort(key=lambda x: x.get('score', 0), reverse=True)
-        html = get_search_results_html(query, scored[:20], [], self.theme_colors)
+        html = get_search_results_html(query, scored, [], self.theme_colors)
         tab = self.current_tab()
         if tab:
             tab.setHtml(html, QUrl(f"oyn://search?q={query}"))
         # Async web results
         nyx_search.web_results_ready.connect(
-            lambda web: self._on_web_results(query, scored[:20], web))
+            lambda web: self._on_web_results(query, scored, web))
 
     def _on_web_results(self, query, local, web_results):
         try:
@@ -588,6 +622,10 @@ class OynixBrowser(QMainWindow):
         if not url_str.startswith(("oyn://", "about:", "data:")):
             self._inject_extensions(browser, url_str)
 
+        # Auto-fill credentials on login pages
+        if not url_str.startswith(("oyn://", "about:", "data:")):
+            self._check_login_page(url_str, browser)
+
         self._refresh_stats()
 
     def _compare_site(self, url_str, title):
@@ -658,7 +696,10 @@ class OynixBrowser(QMainWindow):
             ("Print Page", ""), ("Save Page", ""), ("View Source", ""),
             ("Install Extension", ""), ("Manage Extensions", ""),
             ("Manage Database", ""), ("Scan Community Databases", ""),
-            ("Import Database File", ""),
+            ("Import Database File", ""), ("Audio Player", ""),
+            ("Passwords & Passkeys", ""), ("Import Chrome History", ""),
+            ("Import Chrome Searches", ""), ("Import Google Takeout", ""),
+            ("Search Engine Builder", ""),
         ]
         palette = CommandPalette(commands, self)
         palette.command_selected.connect(self._run_command)
@@ -681,6 +722,12 @@ class OynixBrowser(QMainWindow):
             "Manage Database": self.manage_database,
             "Scan Community Databases": self.scan_community_databases,
             "Import Database File": self.pick_database_file,
+            "Audio Player": self.toggle_audio_player,
+            "Passwords & Passkeys": self.show_passwords,
+            "Import Chrome History": self.import_chrome_history,
+            "Import Chrome Searches": self.import_chrome_searches,
+            "Import Google Takeout": self.import_google_takeout,
+            "Search Engine Builder": self.show_search_builder,
         }
         fn = mapping.get(name)
         if fn:
@@ -1186,7 +1233,31 @@ class OynixBrowser(QMainWindow):
                 lambda text: ai_manager.chat(f"Explain this simply:\n{text[:2000]}"))
 
     def set_ai_model(self):
-        QMessageBox.information(self, "AI Model", "Current: TinyLlama 1.1B Chat (GGUF Q4)\nModel auto-downloads on first launch.")
+        """Show AI model info and allow switching."""
+        models = ai_manager.get_available_models()
+        current = ai_manager.model_key
+        status = ai_manager.get_status()
+
+        items = []
+        for key, info in models.items():
+            marker = " [ACTIVE]" if key == current else ""
+            items.append(f"{info['name']}{marker}\n  {info['description']}")
+
+        model_names = list(models.keys())
+        model_labels = [models[k]['name'] for k in model_names]
+        current_idx = model_names.index(current) if current in model_names else 0
+
+        from PyQt6.QtWidgets import QInputDialog
+        choice, ok = QInputDialog.getItem(
+            self, "AI Model",
+            f"Status: {status['status']}\nCurrent: {models.get(current, {}).get('name', current)}\n\nSelect model:",
+            model_labels, current_idx, False)
+        if ok and choice:
+            idx = model_labels.index(choice)
+            new_key = model_names[idx]
+            if new_key != current:
+                ai_manager.switch_model(new_key)
+                self._update_status(f"Switching AI to {choice}...")
 
     # ── Window ─────────────────────────────────────────────────────
     def new_window(self):
@@ -1311,8 +1382,146 @@ class OynixBrowser(QMainWindow):
             f"Trusted: {len(security_manager.trusted_domains)}\n"
             f"Blocked: {len(security_manager.blocked_domains)}")
 
-    # FindBar layout fix
+    # ── Audio Player ────────────────────────────────────────────────
+    def toggle_audio_player(self):
+        if not self.audio_player:
+            QMessageBox.information(self, "Audio Player",
+                "Audio player requires PyQt6.QtMultimedia.\n"
+                "Install: pip install PyQt6-Multimedia")
+            return
+        if self.audio_player.isVisible():
+            self.audio_player.hide()
+        else:
+            self.audio_player.show()
+
+    # ── Credential Manager ────────────────────────────────────────
+    def show_passwords(self):
+        dialog = CredentialDialog(credential_manager, self)
+        dialog.exec()
+
+    def _check_login_page(self, url_str, browser):
+        """Inject JS to detect login forms and offer auto-fill."""
+        if not credential_manager.is_unlocked:
+            return
+        creds = credential_manager.get_credentials(url_str)
+        if creds:
+            # Auto-fill first credential
+            c = creds[0]
+            js = f'''(function(){{
+                var u=document.querySelector('input[type="email"],input[name="username"],input[name="user"],input[name="login"],input[autocomplete="username"]');
+                var p=document.querySelector('input[type="password"]');
+                if(u)u.value={json.dumps(c['username'])};
+                if(p)p.value={json.dumps(c['password'])};
+            }})()'''
+            browser.page().runJavaScript(js)
+
+    # ── Chrome Import ─────────────────────────────────────────────
+    def import_chrome_history(self):
+        """Import browsing history from Google Chrome."""
+        from oynix.core.chrome_import import import_chrome_history, find_chrome_history_db
+        db_path = find_chrome_history_db()
+        if not db_path:
+            path, _ = QFileDialog.getOpenFileName(
+                self, "Select Chrome History DB", "",
+                "SQLite (History);;All (*)")
+            if not path:
+                return
+            db_path = path
+
+        entries, msg = import_chrome_history(db_path)
+        if not entries:
+            QMessageBox.information(self, "Chrome Import", msg)
+            return
+
+        reply = QMessageBox.question(self, "Chrome Import",
+            f"{msg}\n\nImport {len(entries)} entries into OyNIx?\n"
+            "They will be added to your history and database.")
+        if reply != QMessageBox.StandardButton.Yes:
+            return
+
+        # Add to history
+        for e in entries:
+            self._history.insert(0, {
+                'url': e['url'], 'title': e['title'],
+                'time': e.get('time', ''), 'source': 'chrome'
+            })
+        self._history = self._history[:5000]
+        self._save_json(HISTORY_FILE, self._history)
+
+        # Add to database
+        added = 0
+        for e in entries:
+            result = database.add_site(e['url'], e['title'], source='chrome')
+            if result:
+                added += 1
+        self._refresh_stats()
+        self._update_status(f"Chrome import: {len(entries)} history + {added} new DB sites")
+
+    def import_chrome_searches(self):
+        """Import search queries from Chrome history."""
+        from oynix.core.chrome_import import import_chrome_search_history, find_chrome_history_db
+        db_path = find_chrome_history_db()
+        if not db_path:
+            path, _ = QFileDialog.getOpenFileName(
+                self, "Select Chrome History DB", "",
+                "SQLite (History);;All (*)")
+            if not path:
+                return
+            db_path = path
+
+        searches, msg = import_chrome_search_history(db_path)
+        if not searches:
+            QMessageBox.information(self, "Chrome Search Import", msg)
+            return
+
+        QMessageBox.information(self, "Chrome Search Import",
+            f"{msg}\n\nSearch queries have been indexed for Nyx search.")
+        for s in searches:
+            nyx_search.index_page(
+                s['url'], f"Search: {s['query']}", s['query'])
+
+    def import_google_takeout(self):
+        """Import from Google Takeout JSON export."""
+        path, _ = QFileDialog.getOpenFileName(
+            self, "Import Google Takeout", "",
+            "JSON (*.json);;All (*)")
+        if not path:
+            return
+        from oynix.core.chrome_import import import_google_takeout
+        history, searches, msg = import_google_takeout(path)
+        if not history and not searches:
+            QMessageBox.information(self, "Takeout Import", msg)
+            return
+
+        reply = QMessageBox.question(self, "Takeout Import",
+            f"{msg}\n\nImport into OyNIx?")
+        if reply != QMessageBox.StandardButton.Yes:
+            return
+
+        for e in history:
+            self._history.insert(0, e)
+        self._history = self._history[:5000]
+        self._save_json(HISTORY_FILE, self._history)
+
+        added = 0
+        for e in history:
+            if database.add_site(e.get('url',''), e.get('title',''), source='takeout'):
+                added += 1
+        for s in searches:
+            nyx_search.index_page(s['url'], f"Search: {s['query']}", s['query'])
+
+        self._refresh_stats()
+        self._update_status(f"Takeout: {len(history)} history + {len(searches)} searches + {added} DB sites")
+
+    # ── Search Engine Builder ─────────────────────────────────────
+    def show_search_builder(self):
+        dialog = SearchEngineBuilder(self)
+        dialog.exec()
+
+    # FindBar + SavePW bar layout fix
     def resizeEvent(self, event):
         super().resizeEvent(event)
         if hasattr(self, 'find_bar'):
             self.find_bar.setGeometry(0, self.height() - 80, self.width(), 40)
+        if hasattr(self, 'save_pw_bar'):
+            self.save_pw_bar.setGeometry(0, self.height() - 120, self.width(), 40)

@@ -208,6 +208,22 @@ else
     VERIFY_OK=0
 fi
 
+# ── Install desktop file (no terminal needed) ─────────────────
+echo -e "${PURPLE}[desktop]${NC} Installing desktop launcher..."
+DESKTOP_SRC="$SCRIPT_DIR/oynix.desktop"
+if [ -f "$DESKTOP_SRC" ]; then
+    APPS_DIR="$HOME/.local/share/applications"
+    mkdir -p "$APPS_DIR"
+    LAUNCHER_PATH="$(readlink -f "$SCRIPT_DIR/oynix-browser" 2>/dev/null || echo "$SCRIPT_DIR/oynix-browser")"
+    sed "s|Exec=oynix %u|Exec=$LAUNCHER_PATH %u|" "$DESKTOP_SRC" > "$APPS_DIR/oynix.desktop"
+    chmod +x "$APPS_DIR/oynix.desktop"
+    # Update desktop database if available
+    if command -v update-desktop-database &>/dev/null; then
+        update-desktop-database "$APPS_DIR" 2>/dev/null || true
+    fi
+    echo "  Desktop launcher installed — OyNIx will appear in your app menu"
+fi
+
 echo ""
 if [ "$VERIFY_OK" = "1" ]; then
     echo -e "${PURPLE}${BOLD}  Installation complete!${NC}"
@@ -216,7 +232,7 @@ else
 fi
 echo ""
 echo "  To run OyNIx Browser:"
-echo "    ./oynix-browser"
+echo "    ./oynix-browser  (or find 'OyNIx Browser' in your app menu)"
 echo ""
 echo "  Or directly:"
 echo "    $PYTHON_CMD -m oynix"
