@@ -304,6 +304,21 @@ class GitHubSync(QObject):
         with open(queue_file, 'w') as f:
             json.dump([], f)
 
+    # ── Community Folder Scanner ──────────────────────────────────────
+    def scan_community_folder(self, on_new_files=None, on_done=None):
+        """Scan the GitHub repo's database/community/ folder for new DB files."""
+        repo = self.config.get('repo', '')
+        if not repo:
+            self.status_update.emit("No repository configured for community sync")
+            return
+        self._scanner = CommunityFolderScanner(repo, self.config.get('token'))
+        self._scanner.progress.connect(self.status_update.emit)
+        if on_new_files:
+            self._scanner.new_files_found.connect(on_new_files)
+        if on_done:
+            self._scanner.finished.connect(on_done)
+        self._scanner.start()
+
     # ── Community Auto-Upload ────────────────────────────────────────
     def community_upload(self, new_sites, callback=None):
         """
@@ -402,6 +417,144 @@ class CommunityUploader(QThread):
 
         except Exception as e:
             self.finished.emit(False, f"Community upload error: {e}")
+
+
+class CommunityFolderScanner(QThread):
+    """
+    Scans a GitHub repo's database/community/ folder for new DB files.
+    Users drop exported JSON database files into this folder.
+    The browser checks for NEW files it hasn't seen before, parses them,
+    and offers to merge new sites (skipping duplicates).
+    """
+    progress = pyqtSignal(str)
+    new_files_found = pyqtSignal(list)  # list of {filename, url, sites: [...]}
+    finished = pyqtSignal(bool, str)
+
+    FOLDER = "database/community"
+
+    def __init__(self, repo, token=None):
+        super().__init__()
+        self.repo = repo
+        self.token = token
+        self._seen_file = os.path.join(SYNC_DIR, "seen_community_files.json")
+
+    def _load_seen(self):
+        try:
+            with open(self._seen_file) as f:
+                return set(json.load(f))
+        except (FileNotFoundError, json.JSONDecodeError):
+            return set()
+
+    def _save_seen(self, seen):
+        os.makedirs(os.path.dirname(self._seen_file), exist_ok=True)
+        with open(self._seen_file, 'w') as f:
+            json.dump(list(seen), f)
+
+    def run(self):
+        if not HAS_REQUESTS:
+            self.finished.emit(False, "requests library not installed")
+            return
+        try:
+            headers = {'Accept': 'application/vnd.github.v3+json'}
+            if self.token:
+                headers['Authorization'] = f'token {self.token}'
+
+            # List files in community folder
+            api_url = f"https://api.github.com/repos/{self.repo}/contents/{self.FOLDER}"
+            self.progress.emit("Checking community database folder...")
+            resp = requests.get(api_url, headers=headers, timeout=15)
+
+            if resp.status_code != 200:
+                self.finished.emit(False, f"Could not access {self.FOLDER}: {resp.status_code}")
+                return
+
+            files = resp.json()
+            if not isinstance(files, list):
+                self.finished.emit(False, "Unexpected response from GitHub")
+                return
+
+            seen = self._load_seen()
+            json_files = [f for f in files
+                          if f.get('name', '').endswith('.json') and f['name'] not in seen]
+
+            if not json_files:
+                self.finished.emit(True, "No new community database files found")
+                return
+
+            self.progress.emit(f"Found {len(json_files)} new database file(s)")
+            new_entries = []
+
+            for file_info in json_files:
+                fname = file_info['name']
+                download_url = file_info.get('download_url', '')
+                if not download_url:
+                    continue
+
+                self.progress.emit(f"Downloading {fname}...")
+                file_resp = requests.get(download_url, headers=headers, timeout=15)
+                if file_resp.status_code != 200:
+                    continue
+
+                try:
+                    data = file_resp.json()
+                    sites = self._extract_sites(data)
+                    if sites:
+                        new_entries.append({
+                            'filename': fname,
+                            'url': download_url,
+                            'sites': sites,
+                            'count': len(sites),
+                        })
+                except (json.JSONDecodeError, ValueError):
+                    continue
+
+                seen.add(fname)
+
+            self._save_seen(seen)
+
+            if new_entries:
+                self.new_files_found.emit(new_entries)
+                total = sum(e['count'] for e in new_entries)
+                self.finished.emit(True, f"Found {total} sites in {len(new_entries)} new file(s)")
+            else:
+                self.finished.emit(True, "No valid sites found in new files")
+
+        except Exception as e:
+            self.finished.emit(False, f"Scan error: {e}")
+
+    def _extract_sites(self, data):
+        """Extract site entries from various JSON formats."""
+        sites = []
+        if isinstance(data, list):
+            # Flat list of site dicts
+            for item in data:
+                if isinstance(item, dict) and item.get('url'):
+                    sites.append({
+                        'url': item['url'],
+                        'title': item.get('title', ''),
+                        'description': item.get('description', item.get('desc', '')),
+                        'category': item.get('category', 'community'),
+                    })
+        elif isinstance(data, dict):
+            # OyNIx export format: {curated: {cat: [...]}, discovered: {cat: [...]}}
+            for section in ('curated', 'discovered', 'sites'):
+                if section in data and isinstance(data[section], dict):
+                    for cat, entries in data[section].items():
+                        if isinstance(entries, list):
+                            for item in entries:
+                                if isinstance(item, dict) and item.get('url'):
+                                    sites.append({
+                                        'url': item['url'],
+                                        'title': item.get('title', ''),
+                                        'description': item.get('description', item.get('desc', '')),
+                                        'category': cat,
+                                    })
+            # Also handle flat sites list inside a dict
+            if 'sites' in data and isinstance(data['sites'], list):
+                for item in data['sites']:
+                    if isinstance(item, dict) and item.get('url'):
+                        sites.append(item)
+        return sites
 
 
 # Lazy singleton - must not create QObject before QApplication exists

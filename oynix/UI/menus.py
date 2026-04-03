@@ -44,7 +44,7 @@ class OynixMenuBar:
         self._a(imp, "Bookmarks...", self.b.import_bookmarks)
         self._a(imp, "History...", self.b.import_history)
         self._a(imp, "Settings...", self.b.import_settings)
-        self._a(imp, "XPI Extension...", self.b.import_xpi_extension)
+        self._a(imp, "Extension (.npi/.xpi)...", self.b.import_extension)
         exp = m.addMenu("Export")
         self._a(exp, "Bookmarks...", self.b.export_bookmarks)
         self._a(exp, "History...", self.b.export_history)
@@ -88,7 +88,10 @@ class OynixMenuBar:
         gh = m.addMenu("GitHub Sync")
         self._a(gh, "Upload Database", self.b.upload_to_github)
         self._a(gh, "Import from GitHub", self.b.import_from_github)
+        self._a(gh, "Scan Community Databases", self.b.scan_community_databases)
         self._a(gh, "Configure...", self.b.configure_github)
+        m.addSeparator()
+        self._a(m, "Import Database File...", self.b.pick_database_file)
 
     def _tools_menu(self):
         m = self.menubar.addMenu("Tools")
@@ -98,7 +101,7 @@ class OynixMenuBar:
         self._a(m, "Command Palette", self.b.show_command_palette, "Ctrl+K")
         m.addSeparator()
         self._a(m, "Extensions", self.b.manage_extensions)
-        self._a(m, "Import XPI...", self.b.import_xpi_extension)
+        self._a(m, "Install Extension...", self.b.import_extension)
         m.addSeparator()
         priv = m.addMenu("Privacy & Security")
         self._a(priv, "Clear Browsing Data", self.b.clear_data)

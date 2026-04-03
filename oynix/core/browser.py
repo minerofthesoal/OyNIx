@@ -37,6 +37,10 @@ from oynix.core.database import database, guess_category
 from oynix.core.security import security_manager
 from oynix.core.github_sync import github_sync
 
+from oynix.core.extensions import (
+    install_extension, uninstall_extension, toggle_extension,
+    load_registry, get_content_scripts_for_url, get_extra_styles_for_url
+)
 from oynix.UI.ai_chat import AIChatPanel
 try:
     from oynix.UI.icons import svg_icon
@@ -580,6 +584,10 @@ class OynixBrowser(QMainWindow):
                 js = f"(function(){{var s=document.createElement('style');s.textContent=`{css}`;document.head.appendChild(s)}})()"
                 browser.page().runJavaScript(js)
 
+        # Inject extension content scripts / styles
+        if not url_str.startswith(("oyn://", "about:", "data:")):
+            self._inject_extensions(browser, url_str)
+
         self._refresh_stats()
 
     def _compare_site(self, url_str, title):
@@ -648,7 +656,9 @@ class OynixBrowser(QMainWindow):
             ("Zoom In", "Ctrl++"), ("Zoom Out", "Ctrl+-"), ("Full Screen", "F11"),
             ("Home", ""), ("Reload", "F5"), ("Toggle Reader Mode", ""),
             ("Print Page", ""), ("Save Page", ""), ("View Source", ""),
-            ("Import XPI Extension", ""), ("Manage Database", ""),
+            ("Install Extension", ""), ("Manage Extensions", ""),
+            ("Manage Database", ""), ("Scan Community Databases", ""),
+            ("Import Database File", ""),
         ]
         palette = CommandPalette(commands, self)
         palette.command_selected.connect(self._run_command)
@@ -666,8 +676,11 @@ class OynixBrowser(QMainWindow):
             "Home": self.navigate_home, "Reload": self._reload,
             "Toggle Reader Mode": self.toggle_reader_mode, "Print Page": self.print_page,
             "Save Page": self.save_page, "View Source": self.view_source,
-            "Import XPI Extension": self.import_xpi_extension,
+            "Install Extension": self.import_extension,
+            "Manage Extensions": self.manage_extensions,
             "Manage Database": self.manage_database,
+            "Scan Community Databases": self.scan_community_databases,
+            "Import Database File": self.pick_database_file,
         }
         fn = mapping.get(name)
         if fn:
@@ -879,57 +892,246 @@ class OynixBrowser(QMainWindow):
         tab.page().runJavaScript(js)
         self._update_status("Reader mode enabled")
 
-    # ── XPI Extension Import ───────────────────────────────────────
-    def import_xpi_extension(self):
-        path, _ = QFileDialog.getOpenFileName(self, "Import Firefox Extension",
-                                               "", "XPI Files (*.xpi);;All Files (*)")
+    # ── Extensions (.npi / .xpi) ─────────────────────────────────
+    def import_extension(self):
+        """Install an extension from .npi (OyNIx) or .xpi (Firefox) file."""
+        path, _ = QFileDialog.getOpenFileName(
+            self, "Install Extension", "",
+            "OyNIx Extensions (*.npi);;Firefox Extensions (*.xpi);;All Files (*)")
         if not path:
             return
-        ext_dir = os.path.expanduser("~/.config/oynix/extensions")
-        os.makedirs(ext_dir, exist_ok=True)
-        import zipfile
-        try:
-            with zipfile.ZipFile(path, 'r') as zf:
-                # Read manifest
-                manifest = json.loads(zf.read('manifest.json'))
-                name = manifest.get('name', os.path.basename(path))
-                version = manifest.get('version', '?')
-                dest = os.path.join(ext_dir, name.replace(' ', '_'))
-                os.makedirs(dest, exist_ok=True)
-                zf.extractall(dest)
-                # Try to load content scripts
-                content_scripts = manifest.get('content_scripts', [])
-                self._update_status(f"Extension '{name}' v{version} imported to {dest}")
-                info = f"Extension: {name} v{version}\n"
-                if content_scripts:
-                    info += f"Content scripts: {len(content_scripts)} entries\n"
-                    info += "Note: Content scripts will be injected on matching pages."
-                else:
-                    info += "No content scripts found."
-                QMessageBox.information(self, "Extension Imported", info)
-                # Save to extension registry
-                reg_path = os.path.join(ext_dir, '_registry.json')
-                registry = self._load_json(reg_path, [])
-                registry.append({'name': name, 'version': version, 'path': dest,
-                                 'content_scripts': content_scripts, 'enabled': True})
-                self._save_json(reg_path, registry)
-        except (zipfile.BadZipFile, KeyError) as e:
-            QMessageBox.warning(self, "Invalid Extension", f"Could not load XPI: {e}")
-        except Exception as e:
-            QMessageBox.warning(self, "Error", str(e))
+        ok, info, error = install_extension(path)
+        if ok:
+            fmt = info.get('format', 'unknown').upper()
+            name = info.get('name', '?')
+            ver = info.get('version', '?')
+            cs = len(info.get('content_scripts', []))
+            feats = info.get('oynix_features', [])
+            msg = f"Installed: {name} v{ver} ({fmt})\n\n"
+            if cs:
+                msg += f"Content scripts: {cs} rule(s)\n"
+            if info.get('popup'):
+                msg += "Has popup UI\n"
+            if feats:
+                msg += f"OyNIx features: {', '.join(feats)}\n"
+            msg += f"\nPermissions: {', '.join(info.get('permissions', ['none']))}"
+            QMessageBox.information(self, "Extension Installed", msg)
+            self._update_status(f"Extension '{name}' installed")
+        else:
+            QMessageBox.warning(self, "Install Failed", error)
+
+    # Keep old name as alias
+    import_xpi_extension = import_extension
 
     def manage_extensions(self):
-        ext_dir = os.path.expanduser("~/.config/oynix/extensions")
-        reg_path = os.path.join(ext_dir, '_registry.json')
-        registry = self._load_json(reg_path, [])
+        """Show extension manager dialog."""
+        registry = load_registry()
         if not registry:
-            QMessageBox.information(self, "Extensions", "No extensions installed.\nUse File > Import XPI to add one.")
+            reply = QMessageBox.question(self, "Extensions",
+                "No extensions installed.\n\nInstall one now?",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+            if reply == QMessageBox.StandardButton.Yes:
+                self.import_extension()
             return
-        text = "Installed Extensions:\n\n"
+
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Extensions Manager")
+        dialog.setMinimumSize(500, 400)
+        layout = QVBoxLayout(dialog)
+
+        header = QLabel("Installed Extensions")
+        header.setObjectName("sectionHeader")
+        layout.addWidget(header)
+
+        ext_list = QListWidget()
         for ext in registry:
-            status = "Enabled" if ext.get('enabled') else "Disabled"
-            text += f"  {ext['name']} v{ext['version']} [{status}]\n"
-        QMessageBox.information(self, "Extensions", text)
+            status = "ON" if ext.get('enabled', True) else "OFF"
+            fmt = ext.get('format', '?').upper()
+            item_text = f"[{status}] {ext['name']} v{ext.get('version','?')} ({fmt})"
+            if ext.get('description'):
+                item_text += f"\n    {ext['description'][:80]}"
+            item = QListWidgetItem(item_text)
+            item.setData(Qt.ItemDataRole.UserRole, ext['name'])
+            ext_list.addItem(item)
+        layout.addWidget(ext_list)
+
+        btn_row = QHBoxLayout()
+        install_btn = QPushButton("Install New...")
+        install_btn.setObjectName("accentBtn")
+        install_btn.clicked.connect(lambda: (dialog.accept(), self.import_extension()))
+        btn_row.addWidget(install_btn)
+
+        toggle_btn = QPushButton("Toggle On/Off")
+        toggle_btn.clicked.connect(lambda: self._toggle_ext(ext_list))
+        btn_row.addWidget(toggle_btn)
+
+        remove_btn = QPushButton("Uninstall")
+        remove_btn.clicked.connect(lambda: self._uninstall_ext(ext_list, dialog))
+        btn_row.addWidget(remove_btn)
+
+        btn_row.addStretch()
+        close_btn = QPushButton("Close")
+        close_btn.clicked.connect(dialog.accept)
+        btn_row.addWidget(close_btn)
+        layout.addLayout(btn_row)
+
+        dialog.exec()
+
+    def _toggle_ext(self, ext_list):
+        current = ext_list.currentItem()
+        if not current:
+            return
+        name = current.data(Qt.ItemDataRole.UserRole)
+        new_state = toggle_extension(name)
+        if new_state is not None:
+            status = "ON" if new_state else "OFF"
+            self._update_status(f"Extension '{name}' {'enabled' if new_state else 'disabled'}")
+            # Refresh list
+            current.setText(current.text().replace("[ON]", f"[{status}]").replace("[OFF]", f"[{status}]"))
+
+    def _uninstall_ext(self, ext_list, dialog):
+        current = ext_list.currentItem()
+        if not current:
+            return
+        name = current.data(Qt.ItemDataRole.UserRole)
+        reply = QMessageBox.question(self, "Uninstall", f"Uninstall '{name}'?")
+        if reply == QMessageBox.StandardButton.Yes:
+            ok, msg = uninstall_extension(name)
+            if ok:
+                ext_list.takeItem(ext_list.row(current))
+                self._update_status(msg)
+
+    def _inject_extensions(self, browser, url_str):
+        """Inject extension content scripts and styles into a loaded page."""
+        # Content scripts from extensions
+        scripts = get_content_scripts_for_url(url_str)
+        for cs in scripts:
+            for js_code in cs.get('js', []):
+                browser.page().runJavaScript(js_code)
+            for css_code in cs.get('css', []):
+                js = f"(function(){{var s=document.createElement('style');s.textContent=`{css_code}`;document.head.appendChild(s)}})()"
+                browser.page().runJavaScript(js)
+
+        # NPI extra styles
+        extra_styles = get_extra_styles_for_url(url_str)
+        for css in extra_styles:
+            js = f"(function(){{var s=document.createElement('style');s.textContent=`{css}`;document.head.appendChild(s)}})()"
+            browser.page().runJavaScript(js)
+
+    # ── Community Database Folder ──────────────────────────────────
+    def scan_community_databases(self):
+        """Check GitHub repo's community folder for new database files."""
+        if not github_sync.is_configured():
+            QMessageBox.information(self, "Community Databases",
+                "Configure GitHub sync first (Search > GitHub Sync > Configure)")
+            return
+        github_sync.scan_community_folder(
+            on_new_files=self._on_community_files_found,
+            on_done=lambda ok, msg: self._update_status(msg))
+
+    def _on_community_files_found(self, file_entries):
+        """Handle new community database files found on GitHub."""
+        dialog = QDialog(self)
+        dialog.setWindowTitle("New Community Databases Found")
+        dialog.setMinimumSize(520, 380)
+        layout = QVBoxLayout(dialog)
+
+        header = QLabel(f"Found {len(file_entries)} new database file(s)")
+        header.setObjectName("sectionHeader")
+        layout.addWidget(header)
+
+        desc = QLabel("Select which databases to merge into your browser:")
+        desc.setStyleSheet(f"color: {NYX_COLORS['text_secondary']}; background: transparent;")
+        layout.addWidget(desc)
+
+        file_list = QListWidget()
+        file_list.setSelectionMode(QListWidget.SelectionMode.MultiSelection)
+        for entry in file_entries:
+            item = QListWidgetItem(f"{entry['filename']}  ({entry['count']} sites)")
+            item.setData(Qt.ItemDataRole.UserRole, entry)
+            item.setSelected(True)
+            file_list.addItem(item)
+        layout.addWidget(file_list)
+
+        btn_row = QHBoxLayout()
+        merge_btn = QPushButton("Merge Selected")
+        merge_btn.setObjectName("accentBtn")
+        btn_row.addWidget(merge_btn)
+        skip_btn = QPushButton("Skip All")
+        btn_row.addWidget(skip_btn)
+        layout.addLayout(btn_row)
+
+        def merge():
+            selected = file_list.selectedItems()
+            total_added = 0
+            for item in selected:
+                entry = item.data(Qt.ItemDataRole.UserRole)
+                for site in entry['sites']:
+                    added = database.add_site(
+                        site.get('url', ''), site.get('title', ''),
+                        site.get('description', ''), source='community')
+                    if added:
+                        total_added += 1
+            self._update_status(f"Merged {total_added} new sites from community databases")
+            self._refresh_stats()
+            dialog.accept()
+
+        merge_btn.clicked.connect(merge)
+        skip_btn.clicked.connect(dialog.reject)
+        dialog.exec()
+
+    def pick_database_file(self):
+        """Let user pick a local JSON database file to merge."""
+        path, _ = QFileDialog.getOpenFileName(
+            self, "Select Database File", "",
+            "JSON Files (*.json);;All Files (*)")
+        if not path:
+            return
+        try:
+            with open(path) as f:
+                data = json.load(f)
+
+            # Try to extract sites from various formats
+            sites = []
+            if isinstance(data, list):
+                sites = [s for s in data if isinstance(s, dict) and s.get('url')]
+            elif isinstance(data, dict):
+                for section in ('curated', 'discovered', 'sites'):
+                    if section in data and isinstance(data[section], dict):
+                        for cat, entries in data[section].items():
+                            if isinstance(entries, list):
+                                for item in entries:
+                                    if isinstance(item, dict) and item.get('url'):
+                                        sites.append(item)
+                    elif section in data and isinstance(data[section], list):
+                        sites.extend([s for s in data[section]
+                                      if isinstance(s, dict) and s.get('url')])
+
+            if not sites:
+                QMessageBox.information(self, "No Sites Found",
+                    "Could not find any site entries in this file.\n"
+                    "Expected JSON format: list of {url, title, description} objects.")
+                return
+
+            reply = QMessageBox.question(self, "Import Database",
+                f"Found {len(sites)} sites in {os.path.basename(path)}.\n\n"
+                f"Merge into your browser database?\n(Duplicates will be skipped)")
+            if reply != QMessageBox.StandardButton.Yes:
+                return
+
+            added = 0
+            for s in sites:
+                result = database.add_site(
+                    s.get('url', ''), s.get('title', ''),
+                    s.get('description', s.get('desc', '')), source='imported')
+                if result:
+                    added += 1
+            self._update_status(f"Imported {added} new sites (skipped {len(sites)-added} duplicates)")
+            self._refresh_stats()
+        except json.JSONDecodeError:
+            QMessageBox.warning(self, "Error", "Invalid JSON file")
+        except Exception as e:
+            QMessageBox.warning(self, "Error", str(e))
 
     # ── Database ───────────────────────────────────────────────────
     def manage_database(self):
