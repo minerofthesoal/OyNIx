@@ -37,6 +37,23 @@
 #include "UrlBar.h"
 #include "FindBar.h"
 
+#include "ai/AiChatPanel.h"
+#include "ai/AiManager.h"
+#include "ui/CommandPalette.h"
+#include "ui/DownloadManager.h"
+#include "ui/SettingsDialog.h"
+#include "ui/TreeTabSidebar.h"
+#include "ui/BookmarkPanel.h"
+#include "media/AudioPlayer.h"
+#include "data/BookmarkManager.h"
+#include "data/HistoryManager.h"
+#include "data/SessionManager.h"
+#include "security/SecurityManager.h"
+
+#include <QSplitter>
+#include <QWebEngineProfile>
+#include <QWebEngineDownloadRequest>
+
 // ── Helpers ──────────────────────────────────────────────────────────
 
 static const char * const kConfigFile = "browser_config.json";
@@ -52,25 +69,95 @@ BrowserWindow::BrowserWindow(QWidget *parent)
 
     loadConfig();
 
-    // Central tab widget
+    // Initialize data subsystems
+    m_bookmarkManager = new BookmarkManager(configPath(), this);
+    m_sessionManager  = new SessionManager(this);
+
+    // Central layout: tree-tabs | tab-widget | ai-panel
+    m_splitter = new QSplitter(Qt::Horizontal, this);
+
+    // Tree tab sidebar (left)
     m_tabWidget = new TabWidget(this);
-    setCentralWidget(m_tabWidget);
+    m_treeTabSidebar = new TreeTabSidebar(m_tabWidget, this);
+    m_treeTabSidebar->setVisible(m_config[QStringLiteral("tree_tabs")].toBool());
+
+    // AI chat panel (right)
+    m_aiPanel = new AiChatPanel(this);
+
+    m_splitter->addWidget(m_treeTabSidebar);
+    m_splitter->addWidget(m_tabWidget);
+    m_splitter->addWidget(m_aiPanel);
+    m_splitter->setStretchFactor(0, 0);
+    m_splitter->setStretchFactor(1, 1);
+    m_splitter->setStretchFactor(2, 0);
+    m_splitter->setHandleWidth(1);
+    setCentralWidget(m_splitter);
+
+    // Download manager (dock)
+    m_downloadManager = new DownloadManager(this);
+    m_downloadManager->hide();
+
+    // Audio player
+    m_audioPlayer = new AudioPlayer(this);
+    m_audioPlayer->hide();
+
+    // Command palette
+    m_commandPalette = new CommandPalette(this);
+
+    // Bookmark panel
+    m_bookmarkPanel = new BookmarkPanel(m_bookmarkManager, this);
+    m_bookmarkPanel->hide();
 
     connect(m_tabWidget, &TabWidget::currentTitleChanged, this, &BrowserWindow::updateWindowTitle);
     connect(m_tabWidget, &TabWidget::currentUrlChanged, this, [this](const QUrl &url) {
         if (m_urlBar) m_urlBar->setDisplayUrl(url);
         updateSecurityIndicator(url);
+        handleSecurityCheck(url);
+    });
+
+    // Download handling
+    connect(QWebEngineProfile::defaultProfile(), &QWebEngineProfile::downloadRequested,
+            this, &BrowserWindow::handleDownload);
+
+    // Tree tab sidebar connections
+    connect(m_treeTabSidebar, &TreeTabSidebar::newTabRequested, this, [this]() { newTab(); });
+    connect(m_treeTabSidebar, &TreeTabSidebar::closeTabRequested, this, &BrowserWindow::closeTab);
+
+    // Bookmark panel connections
+    connect(m_bookmarkPanel, &BookmarkPanel::bookmarkActivated, this, &BrowserWindow::navigateTo);
+
+    // AI panel connections
+    connect(m_aiPanel, &AiChatPanel::summarizePageRequested, this, [this]() {
+        auto *view = m_tabWidget ? m_tabWidget->currentWebView() : nullptr;
+        if (view) {
+            view->page()->toPlainText([this, view](const QString &text) {
+                AiManager::instance().summarizePage(text, view->title());
+            });
+        }
     });
 
     createMenuBar();
     createNavigationToolbar();
     createStatusBar();
     createFindBar();
+    registerCommands();
 
     applyTheme();
 
-    // Open a default tab
-    newTab(QUrl(QStringLiteral("oyn://home")));
+    // Restore session or open default tab
+    if (m_config[QStringLiteral("restore_session")].toBool() && m_sessionManager) {
+        const QJsonArray tabs = m_sessionManager->loadSession();
+        if (!tabs.isEmpty()) {
+            for (const auto &val : tabs) {
+                auto tab = val.toObject();
+                newTab(QUrl(tab[QStringLiteral("url")].toString()));
+            }
+        } else {
+            newTab(QUrl(QStringLiteral("oyn://home")));
+        }
+    } else {
+        newTab(QUrl(QStringLiteral("oyn://home")));
+    }
 
     // Shortcuts
     new QShortcut(QKeySequence(QStringLiteral("Ctrl+T")), this, [this]{ newTab(); });
@@ -81,6 +168,20 @@ BrowserWindow::BrowserWindow(QWidget *parent)
     new QShortcut(QKeySequence(QStringLiteral("Ctrl+F")), this, [this]{
         if (m_findBar) m_findBar->showBar();
     });
+    new QShortcut(QKeySequence(QStringLiteral("Ctrl+K")), this, [this]{
+        if (m_commandPalette) m_commandPalette->toggle();
+    });
+    new QShortcut(QKeySequence(QStringLiteral("Ctrl+Shift+A")), this, [this]{
+        if (m_aiPanel) m_aiPanel->togglePanel();
+    });
+    new QShortcut(QKeySequence(QStringLiteral("Ctrl+D")), this, [this]{
+        auto *v = m_tabWidget ? m_tabWidget->currentWebView() : nullptr;
+        if (v && m_bookmarkManager)
+            m_bookmarkManager->add(v->url().toString(), v->title());
+    });
+    new QShortcut(QKeySequence(QStringLiteral("Ctrl+B")), this, [this]{
+        if (m_bookmarkPanel) m_bookmarkPanel->setVisible(!m_bookmarkPanel->isVisible());
+    });
     new QShortcut(QKeySequence(QStringLiteral("F11")), this, [this]{ toggleFullscreen(); });
     new QShortcut(QKeySequence(QStringLiteral("Ctrl++")), this, [this]{ zoomIn(); });
     new QShortcut(QKeySequence(QStringLiteral("Ctrl+-")), this, [this]{ zoomOut(); });
@@ -89,6 +190,9 @@ BrowserWindow::BrowserWindow(QWidget *parent)
 
 BrowserWindow::~BrowserWindow()
 {
+    // Auto-save session
+    if (m_sessionManager && m_sessionManager->autoSave() && m_tabWidget)
+        m_sessionManager->saveSession(m_tabWidget);
     saveConfig();
 }
 
@@ -207,7 +311,15 @@ void BrowserWindow::createMenuBar()
 
     m_viewMenu->addSeparator();
     {
-        auto *a = m_viewMenu->addAction(tr("Toggle AI Panel"), this, []{ /* placeholder */ });
+        auto *a = m_viewMenu->addAction(tr("Toggle Tree Tabs"), this, [this]{
+            if (m_treeTabSidebar) m_treeTabSidebar->setVisible(!m_treeTabSidebar->isVisible());
+        });
+        a->setShortcut(QKeySequence(QStringLiteral("Ctrl+Shift+T")));
+    }
+    {
+        auto *a = m_viewMenu->addAction(tr("Toggle AI Panel"), this, [this]{
+            if (m_aiPanel) m_aiPanel->togglePanel();
+        });
         a->setShortcut(QKeySequence(QStringLiteral("Ctrl+Shift+A")));
     }
 
@@ -230,17 +342,41 @@ void BrowserWindow::createMenuBar()
     m_toolsMenu->addAction(tr("Profiles"),        this, [this]{
         navigateTo(QUrl(QStringLiteral("oyn://profiles")));
     });
-    m_toolsMenu->addAction(tr("Sessions"),        this, []{ /* placeholder */ });
+    m_toolsMenu->addAction(tr("Sessions"),        this, [this]{
+        navigateTo(QUrl(QStringLiteral("oyn://sessions")));
+    });
     m_toolsMenu->addSeparator();
-    m_toolsMenu->addAction(tr("Audio Player"),    this, []{ /* placeholder */ });
+    m_toolsMenu->addAction(tr("Audio Player"),    this, [this]{
+        if (m_audioPlayer) m_audioPlayer->setVisible(!m_audioPlayer->isVisible());
+    });
     {
-        auto *a = m_toolsMenu->addAction(tr("Command Palette"), this, []{ /* placeholder */ });
+        auto *a = m_toolsMenu->addAction(tr("Command Palette"), this, [this]{
+            if (m_commandPalette) m_commandPalette->toggle();
+        });
         a->setShortcut(QKeySequence(QStringLiteral("Ctrl+Shift+P")));
     }
 
     // ── AI ───────────────────────────────────────────────────────────
     m_aiMenu = mb->addMenu(tr("&AI"));
-    m_aiMenu->addAction(tr("AI Assistant"), this, []{ /* placeholder */ });
+    m_aiMenu->addAction(tr("AI Assistant"), this, [this]{
+        if (m_aiPanel) m_aiPanel->togglePanel();
+    });
+    m_aiMenu->addAction(tr("Summarize Page"), this, [this]{
+        auto *view = m_tabWidget ? m_tabWidget->currentWebView() : nullptr;
+        if (view) {
+            view->page()->toPlainText([this, view](const QString &text) {
+                AiManager::instance().summarizePage(text, view->title());
+            });
+            if (m_aiPanel && !m_aiPanel->isPanelVisible()) m_aiPanel->showPanel();
+        }
+    });
+    m_aiMenu->addSeparator();
+    m_aiMenu->addAction(tr("AI Settings..."), this, [this]{
+        // Open settings dialog on AI tab
+        SettingsDialog dlg(m_config, this);
+        if (dlg.exec() == QDialog::Accepted)
+            m_config = dlg.updatedConfig();
+    });
 
     // ── Developer ────────────────────────────────────────────────────
     m_developerMenu = mb->addMenu(tr("&Developer"));
@@ -479,10 +615,32 @@ void BrowserWindow::reload()
 
 // ── Page slots ───────────────────────────────────────────────────────
 
-void BrowserWindow::showBookmarks()  { navigateTo(QUrl(QStringLiteral("oyn://bookmarks"))); }
+void BrowserWindow::showBookmarks()
+{
+    if (m_bookmarkPanel)
+        m_bookmarkPanel->setVisible(!m_bookmarkPanel->isVisible());
+}
+
 void BrowserWindow::showHistory()    { navigateTo(QUrl(QStringLiteral("oyn://history")));   }
-void BrowserWindow::showDownloads()  { navigateTo(QUrl(QStringLiteral("oyn://downloads"))); }
-void BrowserWindow::showSettings()   { navigateTo(QUrl(QStringLiteral("oyn://settings")));  }
+
+void BrowserWindow::showDownloads()
+{
+    if (m_downloadManager)
+        m_downloadManager->setVisible(!m_downloadManager->isVisible());
+}
+
+void BrowserWindow::showSettings()
+{
+    SettingsDialog dlg(m_config, this);
+    connect(&dlg, &SettingsDialog::themeChangeRequested, this, &BrowserWindow::setTheme);
+    if (dlg.exec() == QDialog::Accepted) {
+        m_config = dlg.updatedConfig();
+        saveConfig();
+        applyTheme();
+        if (m_treeTabSidebar)
+            m_treeTabSidebar->setVisible(m_config[QStringLiteral("tree_tabs")].toBool());
+    }
+}
 
 // ── Zoom ─────────────────────────────────────────────────────────────
 
@@ -565,6 +723,132 @@ void BrowserWindow::updateDbStats()
 {
     if (m_dbStatsLabel)
         m_dbStatsLabel->setText(tr("DB: ready"));
+}
+
+// ── Download handling ────────────────────────────────────────────
+void BrowserWindow::handleDownload(QWebEngineDownloadRequest *download)
+{
+    if (!m_downloadManager) return;
+    m_downloadManager->addDownload(download);
+    m_downloadManager->show();
+}
+
+// ── Security check ──────────────────────────────────────────────────
+void BrowserWindow::handleSecurityCheck(const QUrl &url)
+{
+    auto &sec = SecurityManager::instance();
+    if (sec.shouldPrompt(url)) {
+        const auto info = sec.securityInfo(url);
+        const auto cat = info[QStringLiteral("category")].toString();
+        const auto result = QMessageBox::warning(this,
+            QStringLiteral("Security Alert"),
+            QStringLiteral("You are navigating to a %1 login page:\n%2\n\n"
+                "Make sure this is the genuine site before entering credentials.")
+                .arg(cat, url.toString()),
+            QMessageBox::Ok | QMessageBox::Cancel);
+        if (result == QMessageBox::Cancel) {
+            // Navigate back
+            goBack();
+        }
+    }
+}
+
+// ── Command palette registration ─────────────────────────────────────
+void BrowserWindow::registerCommands()
+{
+    if (!m_commandPalette) return;
+
+    using Cmd = CommandPalette::Command;
+
+    m_commandPalette->registerCommand({QStringLiteral("new_tab"),
+        QStringLiteral("New Tab"), QStringLiteral("Open a new browser tab"),
+        QStringLiteral("Ctrl+T"), QStringLiteral("Navigation"),
+        [this]{ newTab(); }});
+
+    m_commandPalette->registerCommand({QStringLiteral("close_tab"),
+        QStringLiteral("Close Tab"), QStringLiteral("Close the current tab"),
+        QStringLiteral("Ctrl+W"), QStringLiteral("Navigation"),
+        [this]{ closeTab(); }});
+
+    m_commandPalette->registerCommand({QStringLiteral("go_home"),
+        QStringLiteral("Go Home"), QStringLiteral("Navigate to homepage"),
+        QStringLiteral("Alt+Home"), QStringLiteral("Navigation"),
+        [this]{ goHome(); }});
+
+    m_commandPalette->registerCommand({QStringLiteral("go_back"),
+        QStringLiteral("Go Back"), QStringLiteral("Navigate back"),
+        QStringLiteral("Alt+Left"), QStringLiteral("Navigation"),
+        [this]{ goBack(); }});
+
+    m_commandPalette->registerCommand({QStringLiteral("go_forward"),
+        QStringLiteral("Go Forward"), QStringLiteral("Navigate forward"),
+        QStringLiteral("Alt+Right"), QStringLiteral("Navigation"),
+        [this]{ goForward(); }});
+
+    m_commandPalette->registerCommand({QStringLiteral("reload"),
+        QStringLiteral("Reload Page"), QStringLiteral("Reload the current page"),
+        QStringLiteral("F5"), QStringLiteral("Navigation"),
+        [this]{ reload(); }});
+
+    m_commandPalette->registerCommand({QStringLiteral("bookmarks"),
+        QStringLiteral("Bookmarks"), QStringLiteral("Show bookmarks panel"),
+        QStringLiteral("Ctrl+B"), QStringLiteral("Tools"),
+        [this]{ showBookmarks(); }});
+
+    m_commandPalette->registerCommand({QStringLiteral("history"),
+        QStringLiteral("History"), QStringLiteral("Show browsing history"),
+        QString(), QStringLiteral("Tools"),
+        [this]{ showHistory(); }});
+
+    m_commandPalette->registerCommand({QStringLiteral("downloads"),
+        QStringLiteral("Downloads"), QStringLiteral("Show downloads"),
+        QString(), QStringLiteral("Tools"),
+        [this]{ showDownloads(); }});
+
+    m_commandPalette->registerCommand({QStringLiteral("settings"),
+        QStringLiteral("Settings"), QStringLiteral("Open browser settings"),
+        QString(), QStringLiteral("Tools"),
+        [this]{ showSettings(); }});
+
+    m_commandPalette->registerCommand({QStringLiteral("ai_panel"),
+        QStringLiteral("Toggle AI Assistant"), QStringLiteral("Show/hide Nyx AI panel"),
+        QStringLiteral("Ctrl+Shift+A"), QStringLiteral("AI"),
+        [this]{ if (m_aiPanel) m_aiPanel->togglePanel(); }});
+
+    m_commandPalette->registerCommand({QStringLiteral("audio_player"),
+        QStringLiteral("Audio Player"), QStringLiteral("Show/hide audio player"),
+        QString(), QStringLiteral("Tools"),
+        [this]{ if (m_audioPlayer) m_audioPlayer->setVisible(!m_audioPlayer->isVisible()); }});
+
+    m_commandPalette->registerCommand({QStringLiteral("tree_tabs"),
+        QStringLiteral("Toggle Tree Tabs"), QStringLiteral("Show/hide tree tab sidebar"),
+        QStringLiteral("Ctrl+Shift+T"), QStringLiteral("View"),
+        [this]{ if (m_treeTabSidebar) m_treeTabSidebar->setVisible(!m_treeTabSidebar->isVisible()); }});
+
+    m_commandPalette->registerCommand({QStringLiteral("fullscreen"),
+        QStringLiteral("Toggle Fullscreen"), QStringLiteral("Enter/exit fullscreen"),
+        QStringLiteral("F11"), QStringLiteral("View"),
+        [this]{ toggleFullscreen(); }});
+
+    m_commandPalette->registerCommand({QStringLiteral("zoom_in"),
+        QStringLiteral("Zoom In"), QStringLiteral("Increase page zoom"),
+        QStringLiteral("Ctrl++"), QStringLiteral("View"),
+        [this]{ zoomIn(); }});
+
+    m_commandPalette->registerCommand({QStringLiteral("zoom_out"),
+        QStringLiteral("Zoom Out"), QStringLiteral("Decrease page zoom"),
+        QStringLiteral("Ctrl+-"), QStringLiteral("View"),
+        [this]{ zoomOut(); }});
+
+    m_commandPalette->registerCommand({QStringLiteral("find"),
+        QStringLiteral("Find in Page"), QStringLiteral("Search text in page"),
+        QStringLiteral("Ctrl+F"), QStringLiteral("Edit"),
+        [this]{ if (m_findBar) m_findBar->showBar(); }});
+
+    m_commandPalette->registerCommand({QStringLiteral("about"),
+        QStringLiteral("About OyNIx"), QStringLiteral("Show about dialog"),
+        QString(), QStringLiteral("Help"),
+        [this]{ showAbout(); }});
 }
 
 // ── Events ───────────────────────────────────────────────────────────

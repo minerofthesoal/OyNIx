@@ -29,6 +29,7 @@ endif()
 # ── Source files ────────────────────────────────────────────────────
 set(OYNIX_SOURCES
     src/main.cpp
+    # Core
     src/core/BrowserWindow.cpp
     src/core/BrowserWindow.h
     src/core/TabWidget.cpp
@@ -41,8 +42,29 @@ set(OYNIX_SOURCES
     src/core/UrlBar.h
     src/core/FindBar.cpp
     src/core/FindBar.h
+    # AI
+    src/ai/AiManager.cpp
+    src/ai/AiManager.h
+    src/ai/AiChatPanel.cpp
+    src/ai/AiChatPanel.h
+    # UI
+    src/ui/CommandPalette.cpp
+    src/ui/CommandPalette.h
+    src/ui/DownloadManager.cpp
+    src/ui/DownloadManager.h
+    src/ui/SettingsDialog.cpp
+    src/ui/SettingsDialog.h
+    src/ui/TreeTabSidebar.cpp
+    src/ui/TreeTabSidebar.h
+    src/ui/BookmarkPanel.cpp
+    src/ui/BookmarkPanel.h
+    # Media
+    src/media/AudioPlayer.cpp
+    src/media/AudioPlayer.h
+    # Theme
     src/theme/ThemeEngine.cpp
     src/theme/ThemeEngine.h
+    # Data
     src/data/Database.cpp
     src/data/Database.h
     src/data/BookmarkManager.cpp
@@ -53,16 +75,31 @@ set(OYNIX_SOURCES
     src/data/ProfileManager.h
     src/data/CredentialManager.cpp
     src/data/CredentialManager.h
+    src/data/ChromeImport.cpp
+    src/data/ChromeImport.h
+    src/data/NydtaFormat.cpp
+    src/data/NydtaFormat.h
+    src/data/SessionManager.cpp
+    src/data/SessionManager.h
+    # Search
     src/search/NyxSearch.cpp
     src/search/NyxSearch.h
     src/search/WebResultsFetcher.cpp
     src/search/WebResultsFetcher.h
+    src/search/SearchEngineBuilder.cpp
+    src/search/SearchEngineBuilder.h
+    # Security
+    src/security/SecurityManager.cpp
+    src/security/SecurityManager.h
+    # Extensions
     src/extensions/ExtensionManager.cpp
     src/extensions/ExtensionManager.h
     src/extensions/NpiCompiler.cpp
     src/extensions/NpiCompiler.h
+    # Sync
     src/sync/GitHubSync.cpp
     src/sync/GitHubSync.h
+    # Pages
     src/pages/InternalPages.cpp
     src/pages/InternalPages.h
 )
