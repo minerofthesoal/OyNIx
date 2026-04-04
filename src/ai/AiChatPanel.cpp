@@ -151,24 +151,16 @@ void AiChatPanel::setupUi()
 
 void AiChatPanel::setupStyles()
 {
+    // Minimal overrides — global theme handles base styling
     setStyleSheet(QStringLiteral(
-        "AiChatPanel { background: #0a0a12; border-left: 1px solid #7B4FBF; }"
-        "#aiTitle { color: #E8E0F0; font-size: 14px; font-weight: bold; }"
-        "#aiStatus { color: #A8A0B8; font-size: 11px; }"
+        "AiChatPanel { border-left: 1px solid palette(mid); }"
+        "#aiTitle { font-size: 13px; font-weight: 600; }"
+        "#aiStatus { font-size: 11px; opacity: 0.6; }"
         "#aiScrollArea { background: transparent; border: none; }"
-        "#aiInput { background: #12121e; color: #E8E0F0; border: 1px solid #2a2a40;"
-        "  border-radius: 8px; padding: 6px; font-size: 13px; }"
-        "#aiInput:focus { border-color: #7B4FBF; }"
-        "#aiSendBtn { background: #7B4FBF; color: white; border: none;"
-        "  border-radius: 18px; font-size: 16px; font-weight: bold; }"
-        "#aiSendBtn:hover { background: #9B6FDF; }"
-        "#aiPill { background: rgba(123,79,191,0.2); color: #B090E0;"
-        "  border: 1px solid rgba(123,79,191,0.4); border-radius: 12px;"
-        "  padding: 4px 10px; font-size: 11px; }"
-        "#aiPill:hover { background: rgba(123,79,191,0.4); }"
-        "QScrollBar:vertical { background: #0a0a12; width: 6px; }"
-        "QScrollBar::handle:vertical { background: #7B4FBF; border-radius: 3px; min-height: 20px; }"
-        "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }"
+        "#aiInput { border-radius: 8px; padding: 6px; }"
+        "#aiSendBtn { border-radius: 16px; font-size: 14px; font-weight: bold;"
+        "  min-width: 32px; min-height: 32px; padding: 0; }"
+        "#aiPill { border-radius: 10px; padding: 3px 10px; font-size: 11px; }"
     ));
 }
 
@@ -180,13 +172,13 @@ QWidget *AiChatPanel::createMessageBubble(const QString &text, bool isUser)
     layout->setContentsMargins(4, 2, 4, 2);
 
     auto *avatar = new QLabel(isUser ? QStringLiteral("U") : QStringLiteral("N"), bubble);
-    avatar->setFixedSize(28, 28);
+    avatar->setFixedSize(26, 26);
     avatar->setAlignment(Qt::AlignCenter);
     avatar->setStyleSheet(isUser
-        ? QStringLiteral("background: #4a3090; color: white; border-radius: 14px;"
-                         " font-size: 12px; font-weight: bold;")
-        : QStringLiteral("background: #7B4FBF; color: white; border-radius: 14px;"
-                         " font-size: 12px; font-weight: bold;"));
+        ? QStringLiteral("background: #3d3a6b; color: #d4d2ee; border-radius: 13px;"
+                         " font-size: 11px; font-weight: 600;")
+        : QStringLiteral("background: #6e6ab3; color: #1a1b26; border-radius: 13px;"
+                         " font-size: 11px; font-weight: 600;"));
 
     auto *contentWidget = new QWidget(bubble);
     auto *contentLayout = new QVBoxLayout(contentWidget);
@@ -197,14 +189,14 @@ QWidget *AiChatPanel::createMessageBubble(const QString &text, bool isUser)
     msgLabel->setWordWrap(true);
     msgLabel->setTextFormat(Qt::PlainText);
     msgLabel->setStyleSheet(isUser
-        ? QStringLiteral("background: #1e1e30; color: #E8E0F0; border-radius: 10px;"
+        ? QStringLiteral("background: #2a2d42; color: #c8cad8; border-radius: 8px;"
                          " padding: 8px 12px; font-size: 13px;")
-        : QStringLiteral("background: #16162a; color: #D0C8E0; border-radius: 10px;"
+        : QStringLiteral("background: #24263a; color: #b4b1e0; border-radius: 8px;"
                          " padding: 8px 12px; font-size: 13px;"));
 
     auto *timeLabel = new QLabel(QDateTime::currentDateTime().toString(QStringLiteral("hh:mm")),
                                  contentWidget);
-    timeLabel->setStyleSheet(QStringLiteral("color: #605878; font-size: 10px; padding-left: 4px;"));
+    timeLabel->setStyleSheet(QStringLiteral("color: #565b7e; font-size: 10px; padding-left: 4px;"));
 
     contentLayout->addWidget(msgLabel);
     contentLayout->addWidget(timeLabel);
@@ -241,7 +233,7 @@ QWidget *AiChatPanel::createTypingIndicator()
 
     for (int i = 0; i < 3; ++i) {
         auto *dot = new QLabel(QStringLiteral("."), widget);
-        dot->setStyleSheet(QStringLiteral("color: #7B4FBF; font-size: 24px; font-weight: bold;"));
+        dot->setStyleSheet(QStringLiteral("color: #6e6ab3; font-size: 20px; font-weight: bold;"));
         layout->addWidget(dot);
     }
     layout->addStretch();
@@ -319,11 +311,11 @@ void AiChatPanel::updateStatusDot()
     const auto status = AiManager::instance().status();
     QString color;
     switch (status) {
-    case AiManager::Status::Ready:       color = QStringLiteral("#00ff88"); break;
-    case AiManager::Status::Loading:     color = QStringLiteral("#ffaa00"); break;
-    case AiManager::Status::Downloading: color = QStringLiteral("#00aaff"); break;
-    case AiManager::Status::Error:       color = QStringLiteral("#ff4444"); break;
-    case AiManager::Status::Fallback:    color = QStringLiteral("#888888"); break;
+    case AiManager::Status::Ready:       color = QStringLiteral("#73c991"); break;
+    case AiManager::Status::Loading:     color = QStringLiteral("#e5a84b"); break;
+    case AiManager::Status::Downloading: color = QStringLiteral("#6e9dd4"); break;
+    case AiManager::Status::Error:       color = QStringLiteral("#d4565e"); break;
+    case AiManager::Status::Fallback:    color = QStringLiteral("#565b7e"); break;
     }
     m_statusDot->setStyleSheet(QStringLiteral(
         "background: %1; border-radius: 5px;").arg(color));

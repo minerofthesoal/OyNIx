@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(OyNIx VERSION 3.0.0 LANGUAGES CXX)
+project(OyNIx VERSION 3.1.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -10,7 +10,7 @@ set(CMAKE_AUTOUIC ON)
 # ── Find Qt6 ────────────────────────────────────────────────────────
 find_package(Qt6 REQUIRED COMPONENTS
     Core Widgets WebEngineWidgets WebEngineCore WebEngineQuick
-    Network Sql Concurrent
+    Network Sql Concurrent WebChannel
 )
 
 # Optional multimedia
@@ -42,6 +42,9 @@ set(OYNIX_SOURCES
     src/core/UrlBar.h
     src/core/FindBar.cpp
     src/core/FindBar.h
+    # Interop (C# NativeAOT bridge)
+    src/interop/CoreBridge.cpp
+    src/interop/CoreBridge.h
     # AI
     src/ai/AiManager.cpp
     src/ai/AiManager.h
@@ -58,6 +61,8 @@ set(OYNIX_SOURCES
     src/ui/TreeTabSidebar.h
     src/ui/BookmarkPanel.cpp
     src/ui/BookmarkPanel.h
+    src/ui/ExtensionPanel.cpp
+    src/ui/ExtensionPanel.h
     # Media
     src/media/AudioPlayer.cpp
     src/media/AudioPlayer.h
@@ -124,7 +129,9 @@ target_include_directories(oynix PRIVATE
 target_link_libraries(oynix PRIVATE
     Qt6::Core Qt6::Widgets Qt6::WebEngineWidgets Qt6::WebEngineCore
     Qt6::WebEngineQuick Qt6::Network Qt6::Sql Qt6::Concurrent
+    Qt6::WebChannel
     ${SQLITE3_LIBRARIES}
+    dl  # for dlopen/dlsym (CoreBridge)
 )
 
 if(Qt6Multimedia_FOUND)
@@ -132,8 +139,33 @@ if(Qt6Multimedia_FOUND)
     target_compile_definitions(oynix PRIVATE HAS_MULTIMEDIA)
 endif()
 
+# ── C# NativeAOT Core Library ──────────────────────────────────────
+# Build the C# core as a native shared library
+set(DOTNET_DIR "${CMAKE_SOURCE_DIR}/core/OyNIx.Core")
+set(DOTNET_OUTPUT "${CMAKE_BINARY_DIR}/dotnet")
+
+add_custom_command(
+    OUTPUT "${DOTNET_OUTPUT}/OyNIxCore.so"
+    COMMAND ${CMAKE_COMMAND} -E env PATH="/opt/dotnet:$ENV{PATH}"
+        dotnet publish "${DOTNET_DIR}/OyNIx.Core.csproj"
+        -c Release -r linux-x64 -o "${DOTNET_OUTPUT}"
+    WORKING_DIRECTORY "${DOTNET_DIR}"
+    DEPENDS "${DOTNET_DIR}/OyNIx.Core.csproj"
+    COMMENT "Building C# NativeAOT core library"
+)
+
+add_custom_target(dotnet_core DEPENDS "${DOTNET_OUTPUT}/OyNIxCore.so")
+add_dependencies(oynix dotnet_core)
+
+# Copy the .so next to the executable for runtime loading
+add_custom_command(TARGET oynix POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_BINARY_DIR}/dotnet"
+    COMMENT "C# core library available at ${DOTNET_OUTPUT}/OyNIxCore.so"
+)
+
 # ── Install ─────────────────────────────────────────────────────────
 install(TARGETS oynix DESTINATION bin)
+install(FILES "${DOTNET_OUTPUT}/OyNIxCore.so" DESTINATION lib)
 install(DIRECTORY themes/ DESTINATION share/oynix/themes)
 
 # Platform-specific
@@ -145,6 +177,7 @@ endif()
 message(STATUS "OyNIx Browser v${PROJECT_VERSION}")
 message(STATUS "  Qt6: ${Qt6_VERSION}")
 message(STATUS "  SQLite3: ${SQLITE3_LIBRARIES}")
+message(STATUS "  C# Core: NativeAOT (.NET 8)")
 if(Qt6Multimedia_FOUND)
     message(STATUS "  Multimedia: YES")
 else()

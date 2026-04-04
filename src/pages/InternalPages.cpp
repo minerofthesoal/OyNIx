@@ -4,146 +4,101 @@
 
 namespace InternalPages {
 
-// ── Shared CSS (glassmorphism, animations, cards) ──────────────────
+// ── Shared CSS — clean, professional, no glassmorphism ─────────────
 QString sharedCss(const QMap<QString, QString> &c) {
     return QStringLiteral(R"CSS(
 * { margin: 0; padding: 0; box-sizing: border-box; }
-body { background: %1; color: %2; font-family: 'Segoe UI', 'Ubuntu', sans-serif;
-  min-height: 100vh; overflow-x: hidden; }
-a { color: %3; text-decoration: none; }
-a:hover { color: %4; text-decoration: underline; }
+body { background: %1; color: %2; font-family: -apple-system, 'Segoe UI', 'Ubuntu', sans-serif;
+  min-height: 100vh; overflow-x: hidden; line-height: 1.5; }
+a { color: %3; text-decoration: none; transition: color .15s; }
+a:hover { color: %4; }
 
-.glass-orb { position: fixed; border-radius: 50%; filter: blur(80px); opacity: 0.12;
-  pointer-events: none; z-index: 0; }
+.wrap { display: flex; flex-direction: column; align-items: center;
+  justify-content: center; min-height: 100vh; padding: 40px 24px; }
 
-.wrap { position: relative; z-index: 1; display: flex; flex-direction: column;
-  align-items: center; justify-content: center; min-height: 100vh; padding: 30px 20px; }
+.container { max-width: 860px; margin: 0 auto; padding: 32px 24px; }
 
-.container { position: relative; z-index: 1; max-width: 900px; margin: 0 auto; padding: 24px; }
+.card { background: %5; border: 1px solid %6; border-radius: 8px;
+  padding: 16px; transition: border-color .15s, background .15s; }
+.card:hover { border-color: %7; background: %8; }
 
-.glass-card { background: rgba(22,22,31,0.6); border: 1px solid rgba(58,58,74,0.3);
-  border-radius: 16px; padding: 20px; backdrop-filter: blur(10px);
-  transition: all .4s cubic-bezier(.4,0,.2,1); }
-.glass-card:hover { border-color: %5; transform: translateY(-2px);
-  box-shadow: 0 8px 28px rgba(123,79,191,0.15); }
+.header { text-align: center; margin-bottom: 40px; }
 
-.header { text-align: center; margin-bottom: 32px; padding: 22px;
-  background: rgba(22,22,31,0.6); border-radius: 18px;
-  border: 1px solid rgba(58,58,74,0.3); backdrop-filter: blur(12px);
-  animation: shimmerIn .5s ease forwards; }
+.section-title { font-size: 1.1em; font-weight: 600; color: %3;
+  margin: 28px 0 12px; padding-bottom: 8px; border-bottom: 1px solid %6; }
 
-.section-title { font-size: 1.2em; color: %3; margin: 24px 0 12px; padding-bottom: 6px;
-  border-bottom: 2px solid rgba(58,58,74,0.3); }
+.btn { display: inline-block; padding: 8px 18px; border-radius: 6px;
+  border: 1px solid %6; color: %2; cursor: pointer;
+  font-size: 0.85em; transition: all .15s; text-decoration: none; }
+.btn:hover { border-color: %7; background: %5; }
+.btn-accent { background: %7; color: %1; border-color: %7; font-weight: 600; }
+.btn-accent:hover { background: %3; }
 
-.btn { display: inline-block; padding: 8px 20px; border-radius: 12px;
-  border: 1px solid rgba(58,58,74,0.4); color: %2; cursor: pointer;
-  font-size: 0.9em; transition: all .3s; text-decoration: none; }
-.btn:hover { border-color: %5; color: %3; background: rgba(123,79,191,0.1);
-  text-decoration: none; }
-.btn-accent { background: %5; color: %1; border-color: %5; font-weight: bold; }
-.btn-accent:hover { background: %3; color: %1; }
-
-@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-@keyframes slideUp { from { opacity: 0; transform: translateY(20px); }
-  to { opacity: 1; transform: translateY(0); } }
-@keyframes shimmerIn { from { opacity: 0; transform: scale(0.97); }
-  to { opacity: 1; transform: scale(1); } }
-@keyframes glowPulse { 0% { text-shadow: 0 0 20px rgba(123,79,191,0.3); }
-  100% { text-shadow: 0 0 40px rgba(123,79,191,0.5); } }
+.badge { display: inline-block; padding: 2px 8px; border-radius: 4px;
+  font-size: .75em; font-weight: 600; }
 )CSS")
         .arg(c["bg-darkest"], c["text-primary"], c["purple-light"],
-             c["purple-glow"], c["purple-mid"]);
+             c["purple-glow"], c["bg-mid"], c["border"],
+             c["purple-mid"], c["bg-light"]);
 }
 
-// ── Mouse-tracking refraction JS ───────────────────────────────────
-QString refractionJs() {
-    return QStringLiteral(R"JS(
-document.addEventListener('mousemove', function(e) {
-    var targets = document.querySelectorAll('.refract-target');
-    for (var i = 0; i < targets.length; i++) {
-        var r = targets[i].getBoundingClientRect();
-        var x = ((e.clientX - r.left) / r.width) * 100;
-        var y = ((e.clientY - r.top) / r.height) * 100;
-        targets[i].style.setProperty('--mx', x + '%');
-        targets[i].style.setProperty('--my', y + '%');
-    }
-});
-)JS");
-}
-
-// ── Homepage ───────────────────────────────────────────────────────
+// ── Homepage — clean, minimal ──────────────────────────────────────
 QString homePage(const QMap<QString, QString> &c) {
     return QStringLiteral(R"HTML(<!DOCTYPE html>
 <html><head><meta charset="utf-8"><title>OyNIx</title>
 <style>
 %1
 
-.logo { font-size: 5em; font-weight: 900; letter-spacing: -2px;
-  background: linear-gradient(135deg, %2, %3, %4);
-  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-  opacity: 0; animation: fadeIn .7s ease forwards, glowPulse 4s 1s ease-in-out infinite alternate; }
+.logo { font-size: 2.8em; font-weight: 700; color: %2; letter-spacing: -1px;
+  margin-bottom: 4px; }
+.tagline { color: %3; font-size: .85em; letter-spacing: 2px; text-transform: uppercase;
+  margin-bottom: 40px; }
 
-.tagline { color: %5; font-size: .9em; letter-spacing: 6px; text-transform: uppercase;
-  margin-bottom: 36px; opacity: 0; animation: shimmerIn .8s .2s ease forwards; }
+.search-wrap { width: 520px; max-width: 90vw; margin-bottom: 48px; }
+.search-box { width: 100%%; padding: 12px 20px; font-size: 0.95em;
+  background: %4; border: 1px solid %5; border-radius: 8px;
+  color: %6; outline: none; transition: border-color .15s; }
+.search-box:focus { border-color: %7; }
+.search-box::placeholder { color: %3; }
 
-.search-wrap { position: relative; width: 580px; max-width: 88vw; margin-bottom: 44px;
-  opacity: 0; animation: slideUp .6s .4s ease forwards; }
+.shortcuts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;
+  max-width: 520px; width: 100%%; }
+.shortcut { display: flex; align-items: center; gap: 10px;
+  padding: 12px 16px; border-radius: 8px; text-decoration: none;
+  color: %6; background: %4; border: 1px solid %5;
+  transition: border-color .15s, background .15s; }
+.shortcut:hover { border-color: %7; background: %8; }
+.shortcut-icon { font-size: 1.2em; width: 28px; text-align: center; }
+.shortcut-label { font-size: .85em; font-weight: 500; }
 
-.search-box { width: 100%%; padding: 15px 52px 15px 20px; font-size: 1.05em;
-  background: %6; border: 2px solid rgba(58,58,74,0.4); border-radius: 50px;
-  color: %7; outline: none; transition: all .4s cubic-bezier(.4,0,.2,1); }
-.search-box:focus { border-color: %2; box-shadow: 0 0 40px rgba(123,79,191,.3);
-  background: %8; }
-.search-box::placeholder { color: %5; }
-
-.cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px;
-  max-width: 780px; width: 100%%; }
-.card { background: rgba(22,22,31,0.6); border: 1px solid rgba(58,58,74,0.3);
-  border-radius: 16px; padding: 24px 12px 18px; text-align: center; cursor: pointer;
-  transition: all .45s cubic-bezier(.4,0,.2,1); text-decoration: none;
-  opacity: 0; animation: shimmerIn .5s ease forwards; color: %7; }
-.card:nth-child(1){animation-delay:.5s} .card:nth-child(2){animation-delay:.57s}
-.card:nth-child(3){animation-delay:.64s} .card:nth-child(4){animation-delay:.71s}
-.card:nth-child(5){animation-delay:.78s} .card:nth-child(6){animation-delay:.85s}
-.card:hover { border-color: %2; transform: translateY(-4px);
-  box-shadow: 0 12px 32px rgba(123,79,191,.2); }
-.card-icon { font-size: 2em; margin-bottom: 8px; }
-.card-title { font-weight: 600; font-size: .95em; }
-
-.version { position: fixed; bottom: 12px; right: 16px; color: %5;
-  font-size: .75em; opacity: 0; animation: fadeIn 1s 1.5s forwards; }
+.version { position: fixed; bottom: 10px; right: 14px; color: %3; font-size: .7em; }
 </style></head><body>
-<div class="glass-orb" style="width:400px;height:400px;background:%2;top:-5%%;right:-5%%"></div>
-<div class="glass-orb" style="width:300px;height:300px;background:%9;bottom:5%%;left:-3%%"></div>
 <div class="wrap">
   <div class="logo">OyNIx</div>
-  <div class="tagline">The Nyx-Powered Browser</div>
-  <div class="search-wrap refract-target">
-    <input class="search-box" id="searchInput" placeholder="Search with Nyx or enter URL..."
+  <div class="tagline">Browse. Search. Build.</div>
+  <div class="search-wrap">
+    <input class="search-box" id="searchInput" placeholder="Search or enter URL"
       autofocus onkeydown="if(event.key==='Enter'){var v=this.value.trim();if(v)window.location='oyn://search?q='+encodeURIComponent(v)}">
   </div>
-  <div class="cards">
-    <a class="card" href="oyn://bookmarks"><div class="card-icon">&#9733;</div><div class="card-title">Bookmarks</div></a>
-    <a class="card" href="oyn://history"><div class="card-icon">&#128337;</div><div class="card-title">History</div></a>
-    <a class="card" href="oyn://downloads"><div class="card-icon">&#11015;</div><div class="card-title">Downloads</div></a>
-    <a class="card" href="oyn://settings"><div class="card-icon">&#9881;</div><div class="card-title">Settings</div></a>
-    <a class="card" href="oyn://profiles"><div class="card-icon">&#128100;</div><div class="card-title">Profiles</div></a>
-    <a class="card" href="oyn://extensions"><div class="card-icon">&#128268;</div><div class="card-title">Extensions</div></a>
+  <div class="shortcuts">
+    <a class="shortcut" href="oyn://bookmarks"><span class="shortcut-icon">&#9733;</span><span class="shortcut-label">Bookmarks</span></a>
+    <a class="shortcut" href="oyn://history"><span class="shortcut-icon">&#8635;</span><span class="shortcut-label">History</span></a>
+    <a class="shortcut" href="oyn://downloads"><span class="shortcut-icon">&#8615;</span><span class="shortcut-label">Downloads</span></a>
+    <a class="shortcut" href="oyn://settings"><span class="shortcut-icon">&#9881;</span><span class="shortcut-label">Settings</span></a>
+    <a class="shortcut" href="oyn://profiles"><span class="shortcut-icon">&#9673;</span><span class="shortcut-label">Profiles</span></a>
+    <a class="shortcut" href="oyn://extensions"><span class="shortcut-icon">&#9883;</span><span class="shortcut-label">Extensions</span></a>
   </div>
 </div>
-<div class="version">OyNIx v3.0 &mdash; Chromium WebEngine</div>
-<script>%10</script>
+<div class="version">OyNIx v3.1</div>
 </body></html>)HTML")
-        .arg(sharedCss(c))                // %1
-        .arg(c["purple-mid"])             // %2
-        .arg(c["purple-glow"])            // %3
-        .arg(c["purple-soft"])            // %4
-        .arg(c["text-muted"])             // %5
-        .arg(c["bg-mid"])                 // %6
-        .arg(c["text-primary"])           // %7
-        .arg(c["bg-light"])              // %8
-        .arg(c["purple-dark"])            // %9
-        .arg(refractionJs());             // %10
+        .arg(sharedCss(c))
+        .arg(c["text-primary"])    // %2 logo
+        .arg(c["text-muted"])      // %3 tagline/placeholder
+        .arg(c["bg-mid"])          // %4 input/card bg
+        .arg(c["border"])          // %5 border
+        .arg(c["text-primary"])    // %6 text
+        .arg(c["purple-mid"])      // %7 focus/hover accent
+        .arg(c["bg-light"]);       // %8 hover bg
 }
 
 // ── Search Results ─────────────────────────────────────────────────
@@ -212,7 +167,7 @@ QString searchPage(const QString &query,
              "<div class='section-title'>From Your Database</div>" + buildCards(localResults, "nyx"))  // %10
         .arg(webResults.isEmpty() ? "" :
              "<div class='section-title'>Web Results</div>" + buildCards(webResults, "web"))  // %11
-        .arg(refractionJs());             // %12
+        .arg(QString());                   // %12 (no JS)
 }
 
 // ── Bookmarks Page ─────────────────────────────────────────────────

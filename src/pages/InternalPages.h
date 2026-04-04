@@ -37,10 +37,7 @@ QString profilesPage(const QJsonArray &profiles,
                      const QString &activeProfile,
                      const QMap<QString, QString> &colors);
 
-/// CSS for Nyx glassmorphism + animations (shared by all pages)
+/// Shared CSS for internal pages
 QString sharedCss(const QMap<QString, QString> &c);
-
-/// JavaScript for mouse-tracking refraction effect
-QString refractionJs();
 
 }  // namespace InternalPages

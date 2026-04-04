@@ -6,4 +6,7 @@ __pycache__/
 .venv/
 *.spec
 aqtinstall.log
-build/
+
+# .NET build artifacts
+core/**/bin/
+core/**/obj/

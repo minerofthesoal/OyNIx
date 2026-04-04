@@ -167,19 +167,7 @@ bool UrlBar::looksLikeUrl(const QString &input) const
 
 void UrlBar::applyStyle()
 {
-    setStyleSheet(QStringLiteral(
-        "UrlBar {"
-        "  background-color: #08080d;"
-        "  color: #E8E0F0;"
-        "  border: 2px solid #7B4FBF;"
-        "  border-radius: 6px;"
-        "  padding: 4px 8px 4px 4px;"
-        "  font-size: 14px;"
-        "  selection-background-color: #7B4FBF;"
-        "}"
-        "UrlBar:focus {"
-        "  border-color: #9B6FDF;"
-        "  background-color: #0e0e16;"
-        "}"
-    ));
+    // Inherits from ThemeEngine global stylesheet (QLineEdit rules).
+    // Only override the few bits specific to the URL bar.
+    setStyleSheet(QString());
 }

@@ -17,20 +17,21 @@ ThemeEngine::ThemeEngine(QObject *parent) : QObject(parent) {
 }
 
 void ThemeEngine::loadDefaultColors() {
+    // Obsidian — professional dark theme inspired by mature IDEs/browsers
     m_colors = {
-        {"bg-darkest",    "#08080d"},   {"bg-dark",       "#0e0e16"},
-        {"bg-mid",        "#16161f"},   {"bg-light",      "#1e1e2a"},
-        {"bg-lighter",    "#282836"},   {"bg-surface",    "#303042"},
-        {"purple-dark",   "#4a2d7a"},   {"purple-mid",    "#7B4FBF"},
-        {"purple-light",  "#9B6FDF"},   {"purple-glow",   "#B088F0"},
-        {"purple-soft",   "#C9A8F0"},   {"purple-pale",   "#E0D0F8"},
-        {"text-primary",  "#E8E0F0"},   {"text-secondary","#A8A0B8"},
-        {"text-muted",    "#605878"},   {"text-accent",   "#C9A8F0"},
-        {"success",       "#6FCF97"},   {"warning",       "#F2C94C"},
-        {"error",         "#EB5757"},   {"info",          "#7B4FBF"},
-        {"border",        "rgba(58,58,74,0.6)"},
-        {"border-active", "#7B4FBF"},   {"selection",     "rgba(123,79,191,0.25)"},
-        {"scrollbar",     "#3a2560"},   {"scrollbar-hover","#7B4FBF"},
+        {"bg-darkest",    "#1a1b26"},   {"bg-dark",       "#1f2133"},
+        {"bg-mid",        "#24263a"},   {"bg-light",      "#2a2d42"},
+        {"bg-lighter",    "#333650"},   {"bg-surface",    "#3b3e56"},
+        {"purple-dark",   "#3d3a6b"},   {"purple-mid",    "#6e6ab3"},
+        {"purple-light",  "#8884c7"},   {"purple-glow",   "#a09cd8"},
+        {"purple-soft",   "#b4b1e0"},   {"purple-pale",   "#d4d2ee"},
+        {"text-primary",  "#c8cad8"},   {"text-secondary","#8b8fa5"},
+        {"text-muted",    "#565b7e"},   {"text-accent",   "#9f9bdb"},
+        {"success",       "#73c991"},   {"warning",       "#e5a84b"},
+        {"error",         "#d4565e"},   {"info",          "#6e6ab3"},
+        {"border",        "#383b52"},
+        {"border-active", "#565b7e"},   {"selection",     "rgba(110,106,179,0.2)"},
+        {"scrollbar",     "#383b52"},   {"scrollbar-hover","#565b7e"},
     };
 }
 
@@ -87,7 +88,7 @@ QString ThemeEngine::getColor(const QString &key) const {
 }
 
 QStringList ThemeEngine::availableThemes() const {
-    return {"nyx", "nyx-midnight", "nyx-violet", "nyx-amethyst", "nyx-ember"};
+    return {"obsidian", "midnight", "slate", "nord", "ember"};
 }
 
 QString ThemeEngine::generateQtStylesheet() const {

@@ -161,14 +161,8 @@ void WebView::contextMenuEvent(QContextMenuEvent *event)
 
     menu->setAttribute(Qt::WA_DeleteOnClose);
 
-    const QString bg      = QStringLiteral("#08080d");
-    const QString purple  = QStringLiteral("#7B4FBF");
-    const QString text    = QStringLiteral("#E8E0F0");
-    menu->setStyleSheet(QStringLiteral(
-        "QMenu { background: %1; color: %3; border: 1px solid %2; }"
-        "QMenu::item:selected { background: %2; }"
-        "QMenu::separator { background: %2; height: 1px; margin: 4px 8px; }")
-        .arg(bg, purple, text));
+    // Context menu inherits from ThemeEngine global stylesheet
+    // No manual styling needed
 
     // Add "Open Link in New Tab" if a link was right-clicked
     const QUrl pageUrl = page()->url();

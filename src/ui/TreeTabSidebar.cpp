@@ -46,22 +46,17 @@ void TreeTabSidebar::setupUi()
     headerLayout->setContentsMargins(8, 6, 8, 6);
 
     auto *titleLabel = new QLabel(QStringLiteral("Tabs"), this);
-    titleLabel->setStyleSheet(QStringLiteral("color: #E8E0F0; font-size: 13px; font-weight: bold;"));
+    titleLabel->setObjectName(QStringLiteral("panelTitle"));
     headerLayout->addWidget(titleLabel);
 
     m_tabCountLabel = new QLabel(QStringLiteral("0"), this);
-    m_tabCountLabel->setStyleSheet(QStringLiteral(
-        "background: #7B4FBF; color: white; border-radius: 8px;"
-        " padding: 1px 6px; font-size: 10px; font-weight: bold;"));
+    m_tabCountLabel->setObjectName(QStringLiteral("badge"));
     headerLayout->addWidget(m_tabCountLabel);
     headerLayout->addStretch();
 
     m_newTabBtn = new QPushButton(QStringLiteral("+"), this);
     m_newTabBtn->setFixedSize(24, 24);
-    m_newTabBtn->setStyleSheet(QStringLiteral(
-        "QPushButton { background: transparent; color: #E8E0F0; border: none;"
-        "  font-size: 16px; font-weight: bold; }"
-        "QPushButton:hover { background: rgba(123,79,191,0.3); border-radius: 4px; }"));
+    m_newTabBtn->setObjectName(QStringLiteral("navBtn"));
     connect(m_newTabBtn, &QPushButton::clicked, this, &TreeTabSidebar::newTabRequested);
     headerLayout->addWidget(m_newTabBtn);
 
@@ -96,19 +91,14 @@ void TreeTabSidebar::setupUi()
 
 void TreeTabSidebar::setupStyles()
 {
+    // Minimal overrides — the global theme handles most styling.
     setStyleSheet(QStringLiteral(
-        "TreeTabSidebar { background: #0a0a12; border-right: 1px solid #2a2a40; }"));
+        "TreeTabSidebar { border-right: 1px solid palette(mid); }"));
 
     m_treeWidget->setStyleSheet(QStringLiteral(
-        "QTreeWidget { background: #0a0a12; color: #E8E0F0; border: none;"
-        "  font-size: 12px; outline: none; }"
-        "QTreeWidget::item { padding: 4px 6px; border-radius: 4px; margin: 1px 4px; }"
-        "QTreeWidget::item:selected { background: rgba(123,79,191,0.4); }"
-        "QTreeWidget::item:hover { background: rgba(123,79,191,0.2); }"
+        "QTreeWidget { border: none; outline: none; }"
+        "QTreeWidget::item { padding: 5px 8px; margin: 1px 4px; }"
         "QTreeWidget::branch { background: transparent; }"
-        "QScrollBar:vertical { background: #0a0a12; width: 6px; }"
-        "QScrollBar::handle:vertical { background: #7B4FBF; border-radius: 3px; }"
-        "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }"
     ));
 }
 
