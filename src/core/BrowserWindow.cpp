@@ -54,6 +54,9 @@
 #include "extensions/ExtensionBridge.h"
 #include "data/Database.h"
 #include "search/NyxSearch.h"
+#include "interop/CoreBridge.h"
+#include "ui/ExtensionPanel.h"
+#include "theme/ThemeEngine.h"
 
 #include <QSplitter>
 #include <QWebEngineProfile>
@@ -74,12 +77,15 @@ BrowserWindow::BrowserWindow(QWidget *parent)
 
     loadConfig();
 
+    // Initialize C# core via NativeAOT bridge
+    CoreBridge::instance().initialize(configPath());
+
     // Initialize data subsystems
     m_bookmarkManager  = new BookmarkManager(configPath(), this);
     m_sessionManager   = new SessionManager(this);
     m_extensionManager = new ExtensionManager(this);
 
-    // Central layout: tree-tabs | tab-widget | ai-panel
+    // Central layout: tree-tabs | tab-widget | ext-panel | ai-panel
     m_splitter = new QSplitter(Qt::Horizontal, this);
 
     // Tree tab sidebar (left)
@@ -87,15 +93,21 @@ BrowserWindow::BrowserWindow(QWidget *parent)
     m_treeTabSidebar = new TreeTabSidebar(m_tabWidget, this);
     m_treeTabSidebar->setVisible(m_config[QStringLiteral("tree_tabs")].toBool());
 
+    // Extension panel (inline, hidden by default)
+    m_extensionPanel = new ExtensionPanel(this);
+    m_extensionPanel->hide();
+
     // AI chat panel (right)
     m_aiPanel = new AiChatPanel(this);
 
     m_splitter->addWidget(m_treeTabSidebar);
     m_splitter->addWidget(m_tabWidget);
+    m_splitter->addWidget(m_extensionPanel);
     m_splitter->addWidget(m_aiPanel);
     m_splitter->setStretchFactor(0, 0);
     m_splitter->setStretchFactor(1, 1);
     m_splitter->setStretchFactor(2, 0);
+    m_splitter->setStretchFactor(3, 0);
     m_splitter->setHandleWidth(1);
     setCentralWidget(m_splitter);
 
@@ -322,11 +334,11 @@ void BrowserWindow::createMenuBar()
     themeGroup->setExclusive(true);
 
     const QStringList themeNames = {
-        QStringLiteral("Nyx Dark"),
-        QStringLiteral("Midnight"),
-        QStringLiteral("Aether Light"),
-        QStringLiteral("Solarized"),
-        QStringLiteral("System"),
+        QStringLiteral("obsidian"),
+        QStringLiteral("midnight"),
+        QStringLiteral("slate"),
+        QStringLiteral("nord"),
+        QStringLiteral("ember"),
     };
 
     for (const auto &name : themeNames) {
@@ -365,7 +377,9 @@ void BrowserWindow::createMenuBar()
     m_toolsMenu->addAction(tr("Bookmarks"),       this, &BrowserWindow::showBookmarks);
     m_toolsMenu->addSeparator();
     m_toolsMenu->addAction(tr("Reading List"),    this, []{ /* placeholder */ });
-    m_toolsMenu->addAction(tr("Extensions"),      this, []{ /* placeholder */ });
+    m_toolsMenu->addAction(tr("Extensions"),      this, [this]{
+        if (m_extensionPanel) m_extensionPanel->setVisible(!m_extensionPanel->isVisible());
+    });
     m_toolsMenu->addAction(tr("Profiles"),        this, [this]{
         navigateTo(QUrl(QStringLiteral("oyn://profiles")));
     });
@@ -486,10 +500,11 @@ void BrowserWindow::createStatusBar()
 
     auto dbStats = Database::instance()->getStats();
     const int siteCount = dbStats[QStringLiteral("site_count")].toInt();
+    const int pageCount = dbStats[QStringLiteral("page_count")].toInt();
     statusBar()->showMessage(
-        tr("OyNIx Browser is ready! Features: Tree Tabs | Nyx Search | Local AI | %1 Sites")
-            .arg(siteCount > 0 ? QString::number(siteCount) : QStringLiteral("0")),
-        6000);
+        tr("OyNIx v3.1 ready — %1 sites indexed, %2 pages")
+            .arg(siteCount).arg(pageCount),
+        5000);
 }
 
 // ── Find bar ─────────────────────────────────────────────────────────
@@ -520,7 +535,7 @@ void BrowserWindow::loadConfig()
     if (!m_config.contains(QStringLiteral("homepage")))
         m_config[QStringLiteral("homepage")] = QStringLiteral("oyn://home");
     if (!m_config.contains(QStringLiteral("theme")))
-        m_config[QStringLiteral("theme")] = QStringLiteral("Nyx Dark");
+        m_config[QStringLiteral("theme")] = QStringLiteral("obsidian");
     if (!m_config.contains(QStringLiteral("search_engine")))
         m_config[QStringLiteral("search_engine")] = QStringLiteral("DuckDuckGo");
 }
@@ -541,22 +556,10 @@ void BrowserWindow::saveConfig()
 
 void BrowserWindow::applyTheme()
 {
-    // Nyx Dark default inline stylesheet (ThemeEngine can override later)
-    const QString sheet = QStringLiteral(
-        "QMainWindow { background-color: #08080d; }"
-        "QMenuBar { background-color: #0e0e16; color: #E8E0F0; }"
-        "QMenuBar::item:selected { background-color: #7B4FBF; }"
-        "QMenu { background-color: #0e0e16; color: #E8E0F0; border: 1px solid #7B4FBF; }"
-        "QMenu::item:selected { background-color: #7B4FBF; }"
-        "QToolBar { background-color: #0e0e16; border: none; spacing: 4px; }"
-        "QStatusBar { background-color: #0e0e16; color: #A8A0B8; }"
-        "QTabWidget::pane { border: 1px solid #7B4FBF; }"
-        "QTabBar::tab { background: #0e0e16; color: #E8E0F0; padding: 6px 14px;"
-        "              border: 1px solid #7B4FBF; border-bottom: none; border-radius: 4px 4px 0 0; }"
-        "QTabBar::tab:selected { background: #7B4FBF; }"
-        "QTabBar::tab:hover { background: #9B6FDF; }"
-    );
-    setStyleSheet(sheet);
+    const QString themeName = m_config.value(QStringLiteral("theme"))
+                                  .toString(QStringLiteral("obsidian"));
+    ThemeEngine::instance().loadTheme(themeName);
+    setStyleSheet(ThemeEngine::instance().getQtStylesheet());
 }
 
 void BrowserWindow::setTheme(const QString &themeName)
@@ -731,9 +734,9 @@ void BrowserWindow::performSearch(const QString &query)
 void BrowserWindow::showAbout()
 {
     QMessageBox::about(this, tr("About OyNIx Browser"),
-                       tr("<h2>OyNIx Browser v3.0</h2>"
-                          "<p>A Chromium-based desktop browser built with "
-                          "Qt6 WebEngine and C++17.</p>"
+                       tr("<h2>OyNIx Browser v3.1</h2>"
+                          "<p>Chromium-based desktop browser built with "
+                          "Qt6 WebEngine, C++17, and .NET 8 (C#) core.</p>"
                           "<p>&copy; 2026 OyNIx Project</p>"));
 }
 
