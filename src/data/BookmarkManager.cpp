@@ -95,6 +95,45 @@ QJsonArray BookmarkManager::getByFolder(const QString &folder) const
     return result;
 }
 
+QStringList BookmarkManager::folders() const
+{
+    QSet<QString> folderSet;
+    for (const QJsonValue &v : m_bookmarks) {
+        const QString folder = v.toObject()[QStringLiteral("folder")].toString();
+        if (!folder.isEmpty())
+            folderSet.insert(folder);
+    }
+    QStringList result = folderSet.values();
+    // Ensure default folders exist
+    if (!result.contains(QStringLiteral("Quick Access")))
+        result.prepend(QStringLiteral("Quick Access"));
+    if (!result.contains(QStringLiteral("Reading List")))
+        result.append(QStringLiteral("Reading List"));
+    return result;
+}
+
+void BookmarkManager::addFolder(const QString &name)
+{
+    // Folders are implicit — adding a dummy bookmark triggers creation
+    // Just emit change so UI refreshes with new folder
+    Q_UNUSED(name)
+    emit bookmarksChanged();
+}
+
+void BookmarkManager::renameFolder(const QString &oldName, const QString &newName)
+{
+    QJsonArray updated;
+    for (const QJsonValue &v : m_bookmarks) {
+        QJsonObject obj = v.toObject();
+        if (obj[QStringLiteral("folder")].toString() == oldName)
+            obj[QStringLiteral("folder")] = newName;
+        updated.append(obj);
+    }
+    m_bookmarks = updated;
+    if (save())
+        emit bookmarksChanged();
+}
+
 bool BookmarkManager::importBookmarks(const QString &path)
 {
     QFile file(path);

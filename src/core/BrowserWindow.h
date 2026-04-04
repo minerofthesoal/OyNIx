@@ -25,6 +25,16 @@ class NyxSearch;
 class ExtensionManager;
 class ProfileManager;
 class GitHubSync;
+class AiChatPanel;
+class CommandPalette;
+class DownloadManager;
+class AudioPlayer;
+class TreeTabSidebar;
+class BookmarkPanel;
+class SessionManager;
+class SecurityManager;
+class QSplitter;
+class QWebEngineDownloadRequest;
 
 class BrowserWindow : public QMainWindow
 {
@@ -72,11 +82,15 @@ private:
     void createNavigationToolbar();
     void createStatusBar();
     void createFindBar();
+    void createSidePanels();
+    void registerCommands();
 
     void loadConfig();
     void saveConfig();
     void applyTheme();
     void handleInternalUrl(const QUrl &url);
+    void handleDownload(QWebEngineDownloadRequest *download);
+    void handleSecurityCheck(const QUrl &url);
     void updateWindowTitle(const QString &title);
     void updateSecurityIndicator(const QUrl &url);
     void updateDbStats();
@@ -110,6 +124,16 @@ private:
 
     // Config
     QJsonObject m_config;
+
+    // Side panels
+    QSplitter        *m_splitter         = nullptr;
+    AiChatPanel      *m_aiPanel          = nullptr;
+    TreeTabSidebar   *m_treeTabSidebar   = nullptr;
+    BookmarkPanel    *m_bookmarkPanel    = nullptr;
+    DownloadManager  *m_downloadManager  = nullptr;
+    AudioPlayer      *m_audioPlayer      = nullptr;
+    CommandPalette   *m_commandPalette   = nullptr;
+    SessionManager   *m_sessionManager   = nullptr;
 
     // Sub-systems (owned, lazily created)
     ThemeEngine      *m_themeEngine      = nullptr;
