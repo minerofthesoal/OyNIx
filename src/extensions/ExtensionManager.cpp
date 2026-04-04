@@ -1,4 +1,5 @@
 #include "ExtensionManager.h"
+#include "ExtensionBridge.h"
 
 #include <QCoreApplication>
 #include <QDir>
@@ -12,8 +13,14 @@
 #include <QRegularExpression>
 #include <QStandardPaths>
 #include <QUrl>
+#include <QWebEnginePage>
+#include <QWebEngineView>
+#include <QWebEngineProfile>
+#include <QWebChannel>
 
 #include "../data/Database.h"
+#include "../core/TabWidget.h"
+#include "../data/BookmarkManager.h"
 
 // ---------------------------------------------------------------------------
 // Construction
@@ -356,6 +363,133 @@ QJsonObject ExtensionManager::readManifest(const QString &extDir) const
         return {};
 
     return obj;
+}
+
+// ---------------------------------------------------------------------------
+// URL pattern matching
+// ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// Browser context
+// ---------------------------------------------------------------------------
+void ExtensionManager::setBrowserContext(TabWidget *tabWidget, BookmarkManager *bookmarkManager)
+{
+    m_tabWidget = tabWidget;
+    m_bookmarkManager = bookmarkManager;
+}
+
+// ---------------------------------------------------------------------------
+// Background scripts
+// ---------------------------------------------------------------------------
+void ExtensionManager::startBackgroundScripts()
+{
+    for (auto it = m_registry.begin(); it != m_registry.end(); ++it) {
+        const QJsonObject entry = it.value().toObject();
+        if (!entry[QStringLiteral("enabled")].toBool(true))
+            continue;
+        if (!entry.contains(QStringLiteral("background")))
+            continue;
+        runBackgroundScript(it.key(), entry);
+    }
+}
+
+void ExtensionManager::runBackgroundScript(const QString &extensionName, const QJsonObject &entry)
+{
+    const QJsonObject bg = entry[QStringLiteral("background")].toObject();
+    const QString extPath = entry[QStringLiteral("path")].toString();
+
+    QString scriptFile;
+    if (bg.contains(QStringLiteral("service_worker")))
+        scriptFile = bg[QStringLiteral("service_worker")].toString();
+    else if (bg.contains(QStringLiteral("scripts"))) {
+        const QJsonArray scripts = bg[QStringLiteral("scripts")].toArray();
+        if (!scripts.isEmpty()) scriptFile = scripts[0].toString();
+    } else if (bg.contains(QStringLiteral("page"))) {
+        // Background page — load as HTML
+        scriptFile = bg[QStringLiteral("page")].toString();
+    }
+
+    if (scriptFile.isEmpty()) return;
+
+    const QString fullPath = extPath + QLatin1Char('/') + scriptFile;
+
+    // Create an offscreen page for the background script
+    auto *page = new QWebEnginePage(QWebEngineProfile::defaultProfile(), this);
+    m_backgroundPages[extensionName] = page;
+
+    // Set up the API bridge
+    auto *bridge = new ExtensionBridge(extensionName, m_tabWidget, this, m_bookmarkManager, this);
+    m_bridges[extensionName] = bridge;
+
+    auto *channel = new QWebChannel(page);
+    channel->registerObject(QStringLiteral("bridge"), bridge);
+    page->setWebChannel(channel);
+
+    if (scriptFile.endsWith(QStringLiteral(".html"))) {
+        // Load as HTML page
+        page->load(QUrl::fromLocalFile(fullPath));
+    } else {
+        // Load script into a minimal HTML page
+        QFile f(fullPath);
+        QString jsContent;
+        if (f.open(QIODevice::ReadOnly))
+            jsContent = QString::fromUtf8(f.readAll());
+
+        const QString html = QStringLiteral(
+            "<html><head>"
+            "<script src='qrc:///qtwebchannel/qwebchannel.js'></script>"
+            "<script>%1</script>"
+            "<script>%2</script>"
+            "</head><body></body></html>")
+            .arg(ExtensionBridge::generateApiShim(), jsContent);
+
+        page->setHtml(html, QUrl::fromLocalFile(extPath + QLatin1Char('/')));
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Extension popup
+// ---------------------------------------------------------------------------
+QString ExtensionManager::getPopupPath(const QString &extensionName) const
+{
+    if (!m_registry.contains(extensionName)) return {};
+
+    const QJsonObject entry = m_registry[extensionName].toObject();
+    const QJsonObject action = entry[QStringLiteral("action")].toObject();
+    const QString popup = action[QStringLiteral("default_popup")].toString();
+
+    if (popup.isEmpty()) return {};
+
+    return entry[QStringLiteral("path")].toString() + QLatin1Char('/') + popup;
+}
+
+QWebEngineView *ExtensionManager::createPopupView(const QString &extensionName, QWidget *parent)
+{
+    const QString popupPath = getPopupPath(extensionName);
+    if (popupPath.isEmpty()) return nullptr;
+
+    auto *view = new QWebEngineView(parent);
+    auto *page = new QWebEnginePage(QWebEngineProfile::defaultProfile(), view);
+
+    // Set up the API bridge
+    auto *bridge = new ExtensionBridge(extensionName, m_tabWidget, this, m_bookmarkManager, view);
+    auto *channel = new QWebChannel(page);
+    channel->registerObject(QStringLiteral("bridge"), bridge);
+    page->setWebChannel(channel);
+
+    view->setPage(page);
+
+    // Inject the API shim after the page loads
+    QObject::connect(page, &QWebEnginePage::loadFinished, view, [page](bool ok) {
+        if (!ok) return;
+        // Inject qwebchannel.js and then the API shim
+        page->runJavaScript(ExtensionBridge::generateApiShim());
+    });
+
+    const QJsonObject entry = m_registry[extensionName].toObject();
+    const QString extPath = entry[QStringLiteral("path")].toString();
+    view->load(QUrl::fromLocalFile(popupPath));
+
+    return view;
 }
 
 // ---------------------------------------------------------------------------

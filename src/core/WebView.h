@@ -6,6 +6,7 @@
 
 class WebPage;
 class QMenu;
+class ExtensionManager;
 
 class WebView : public QWebEngineView
 {
@@ -21,6 +22,9 @@ public:
 
     void setZoomForDomain(const QString &domain, qreal zoom);
     [[nodiscard]] qreal zoomForDomain(const QString &domain) const;
+
+    /// Set the extension manager for content script injection
+    void setExtensionManager(ExtensionManager *manager) { m_extensionManager = manager; }
 
 public slots:
     void toggleAudioMute();
@@ -44,9 +48,11 @@ private:
     void onAudibleChanged(bool audible);
 
     void applyDomainZoom(const QUrl &url);
+    void injectContentScripts(const QUrl &url);
 
     WebPage *m_page         = nullptr;
     int      m_loadProgress = 0;
+    ExtensionManager *m_extensionManager = nullptr;
 
     static QHash<QString, qreal> s_domainZoomLevels;
 };
