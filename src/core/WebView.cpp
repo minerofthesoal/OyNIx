@@ -1,5 +1,6 @@
 #include "core/WebView.h"
 #include "core/WebPage.h"
+#include "extensions/ExtensionManager.h"
 
 #include <QContextMenuEvent>
 #include <QMenu>
@@ -87,9 +88,11 @@ void WebView::onLoadProgress(int progress)
     m_loadProgress = progress;
 }
 
-void WebView::onLoadFinished(bool /*ok*/)
+void WebView::onLoadFinished(bool ok)
 {
     m_loadProgress = 100;
+    if (ok)
+        injectContentScripts(url());
 }
 
 void WebView::onUrlChanged(const QUrl &url)
@@ -119,6 +122,33 @@ QWebEngineView *WebView::createWindow(QWebEnginePage::WebWindowType /*type*/)
             });
 
     return newView;
+}
+
+// ── Content script injection ─────────────────────────────────────────
+void WebView::injectContentScripts(const QUrl &pageUrl)
+{
+    if (!m_extensionManager || !m_page) return;
+
+    auto scripts = m_extensionManager->getContentScriptsForUrl(pageUrl);
+
+    // Inject CSS
+    for (const auto &css : scripts.cssContents) {
+        const QString safeCSS = QString::fromUtf8(QUrl::toPercentEncoding(css));
+        const QString js = QStringLiteral(
+            "(function() {"
+            "  var s = document.createElement('style');"
+            "  s.setAttribute('data-oynix-ext', 'true');"
+            "  s.textContent = decodeURIComponent('%1');"
+            "  (document.head || document.documentElement).appendChild(s);"
+            "})();"
+        ).arg(safeCSS);
+        m_page->runJavaScript(js);
+    }
+
+    // Inject JS
+    for (const auto &jsCode : scripts.jsContents) {
+        m_page->runJavaScript(jsCode);
+    }
 }
 
 // ── Context menu ──────────────────────────────────────────────────────

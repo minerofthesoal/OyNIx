@@ -96,6 +96,8 @@ WebView *TabWidget::addNewTab(const QUrl &url)
         return currentWebView();
 
     auto *view = new WebView(this);
+    if (m_extensionManager)
+        view->setExtensionManager(m_extensionManager);
 
     // Connect WebView signals to update tab state
     connect(view, &QWebEngineView::titleChanged, this, [this, view](const QString &title) {

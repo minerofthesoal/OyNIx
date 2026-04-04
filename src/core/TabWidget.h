@@ -7,6 +7,7 @@
 class WebView;
 class QMenu;
 class QToolButton;
+class ExtensionManager;
 
 class TabWidget : public QTabWidget
 {
@@ -16,6 +17,7 @@ public:
     static constexpr int MaxTabs = 50;
 
     explicit TabWidget(QWidget *parent = nullptr);
+    void setExtensionManager(ExtensionManager *mgr) { m_extensionManager = mgr; }
     ~TabWidget() override;
 
     WebView *addNewTab(const QUrl &url = QUrl(QStringLiteral("oyn://home")));
@@ -59,4 +61,5 @@ private:
     QToolButton *m_newTabButton = nullptr;
     QSet<int>    m_pinnedIndices;  // track by widget pointer instead — see cpp
     QSet<WebView *> m_pinnedTabs;
+    ExtensionManager *m_extensionManager = nullptr;
 };

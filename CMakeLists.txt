@@ -94,6 +94,8 @@ set(OYNIX_SOURCES
     # Extensions
     src/extensions/ExtensionManager.cpp
     src/extensions/ExtensionManager.h
+    src/extensions/ExtensionBridge.cpp
+    src/extensions/ExtensionBridge.h
     src/extensions/NpiCompiler.cpp
     src/extensions/NpiCompiler.h
     # Sync

@@ -49,6 +49,8 @@
 #include "data/HistoryManager.h"
 #include "data/SessionManager.h"
 #include "security/SecurityManager.h"
+#include "extensions/ExtensionManager.h"
+#include "extensions/ExtensionBridge.h"
 
 #include <QSplitter>
 #include <QWebEngineProfile>
@@ -70,8 +72,9 @@ BrowserWindow::BrowserWindow(QWidget *parent)
     loadConfig();
 
     // Initialize data subsystems
-    m_bookmarkManager = new BookmarkManager(configPath(), this);
-    m_sessionManager  = new SessionManager(this);
+    m_bookmarkManager  = new BookmarkManager(configPath(), this);
+    m_sessionManager   = new SessionManager(this);
+    m_extensionManager = new ExtensionManager(this);
 
     // Central layout: tree-tabs | tab-widget | ai-panel
     m_splitter = new QSplitter(Qt::Horizontal, this);
@@ -136,6 +139,10 @@ BrowserWindow::BrowserWindow(QWidget *parent)
         }
     });
 
+    // Extension system setup
+    m_extensionManager->setBrowserContext(m_tabWidget, m_bookmarkManager);
+    m_tabWidget->setExtensionManager(m_extensionManager);
+
     createMenuBar();
     createNavigationToolbar();
     createStatusBar();
@@ -143,6 +150,9 @@ BrowserWindow::BrowserWindow(QWidget *parent)
     registerCommands();
 
     applyTheme();
+
+    // Start extension background scripts after UI is ready
+    m_extensionManager->startBackgroundScripts();
 
     // Restore session or open default tab
     if (m_config[QStringLiteral("restore_session")].toBool() && m_sessionManager) {

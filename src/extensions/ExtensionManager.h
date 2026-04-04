@@ -6,6 +6,13 @@
 #include <QObject>
 #include <QString>
 
+class QWebEnginePage;
+class QWebEngineView;
+class QWebChannel;
+class TabWidget;
+class BookmarkManager;
+class ExtensionBridge;
+
 class ExtensionManager : public QObject
 {
     Q_OBJECT
@@ -30,6 +37,18 @@ public:
 
     bool convertXpiToNpi(const QString &xpiPath, const QString &outputPath);
 
+    /// Set browser context needed for extension API bridge
+    void setBrowserContext(TabWidget *tabWidget, BookmarkManager *bookmarkManager);
+
+    /// Initialize background scripts for all enabled extensions
+    void startBackgroundScripts();
+
+    /// Get the popup HTML path for an extension (empty if none)
+    [[nodiscard]] QString getPopupPath(const QString &extensionName) const;
+
+    /// Create a popup QWebEngineView with the chrome.* API bridge injected
+    QWebEngineView *createPopupView(const QString &extensionName, QWidget *parent);
+
 signals:
     void extensionInstalled(const QString &name);
     void extensionUninstalled(const QString &name);
@@ -46,6 +65,16 @@ private:
     [[nodiscard]] QJsonObject readManifest(const QString &extDir) const;
     [[nodiscard]] bool urlMatchesPattern(const QUrl &url, const QString &pattern) const;
 
+    void runBackgroundScript(const QString &extensionName, const QJsonObject &entry);
+
     // name -> extension metadata
     QJsonObject m_registry;
+
+    // Browser context
+    TabWidget *m_tabWidget = nullptr;
+    BookmarkManager *m_bookmarkManager = nullptr;
+
+    // Background pages (one per extension with background script)
+    QMap<QString, QWebEnginePage *> m_backgroundPages;
+    QMap<QString, ExtensionBridge *> m_bridges;
 };
