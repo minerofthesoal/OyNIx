@@ -1,0 +1,113 @@
+cmake_minimum_required(VERSION 3.16)
+project(OyNIx VERSION 3.0.0 LANGUAGES CXX)
+
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_AUTOMOC ON)
+set(CMAKE_AUTORCC ON)
+set(CMAKE_AUTOUIC ON)
+
+# ── Find Qt6 ────────────────────────────────────────────────────────
+find_package(Qt6 REQUIRED COMPONENTS
+    Core Widgets WebEngineWidgets WebEngineCore WebEngineQuick
+    Network Sql Concurrent
+)
+
+# Optional multimedia
+find_package(Qt6 COMPONENTS Multimedia QUIET)
+
+# ── SQLite3 (system or bundled) ─────────────────────────────────────
+find_package(PkgConfig QUIET)
+if(PkgConfig_FOUND)
+    pkg_check_modules(SQLITE3 QUIET sqlite3)
+endif()
+if(NOT SQLITE3_FOUND)
+    find_path(SQLITE3_INCLUDE_DIRS sqlite3.h)
+    find_library(SQLITE3_LIBRARIES sqlite3)
+endif()
+
+# ── Source files ────────────────────────────────────────────────────
+set(OYNIX_SOURCES
+    src/main.cpp
+    src/core/BrowserWindow.cpp
+    src/core/BrowserWindow.h
+    src/core/TabWidget.cpp
+    src/core/TabWidget.h
+    src/core/WebView.cpp
+    src/core/WebView.h
+    src/core/WebPage.cpp
+    src/core/WebPage.h
+    src/core/UrlBar.cpp
+    src/core/UrlBar.h
+    src/core/FindBar.cpp
+    src/core/FindBar.h
+    src/theme/ThemeEngine.cpp
+    src/theme/ThemeEngine.h
+    src/data/Database.cpp
+    src/data/Database.h
+    src/data/BookmarkManager.cpp
+    src/data/BookmarkManager.h
+    src/data/HistoryManager.cpp
+    src/data/HistoryManager.h
+    src/data/ProfileManager.cpp
+    src/data/ProfileManager.h
+    src/data/CredentialManager.cpp
+    src/data/CredentialManager.h
+    src/search/NyxSearch.cpp
+    src/search/NyxSearch.h
+    src/search/WebResultsFetcher.cpp
+    src/search/WebResultsFetcher.h
+    src/extensions/ExtensionManager.cpp
+    src/extensions/ExtensionManager.h
+    src/extensions/NpiCompiler.cpp
+    src/extensions/NpiCompiler.h
+    src/sync/GitHubSync.cpp
+    src/sync/GitHubSync.h
+    src/pages/InternalPages.cpp
+    src/pages/InternalPages.h
+)
+
+# ── Qt Resources ────────────────────────────────────────────────────
+qt6_add_resources(OYNIX_RESOURCES resources/oynix.qrc)
+
+# ── Build executable ────────────────────────────────────────────────
+if(WIN32)
+    add_executable(oynix WIN32 ${OYNIX_SOURCES} ${OYNIX_RESOURCES})
+else()
+    add_executable(oynix ${OYNIX_SOURCES} ${OYNIX_RESOURCES})
+endif()
+
+target_include_directories(oynix PRIVATE
+    ${CMAKE_SOURCE_DIR}/src
+    ${SQLITE3_INCLUDE_DIRS}
+)
+
+target_link_libraries(oynix PRIVATE
+    Qt6::Core Qt6::Widgets Qt6::WebEngineWidgets Qt6::WebEngineCore
+    Qt6::WebEngineQuick Qt6::Network Qt6::Sql Qt6::Concurrent
+    ${SQLITE3_LIBRARIES}
+)
+
+if(Qt6Multimedia_FOUND)
+    target_link_libraries(oynix PRIVATE Qt6::Multimedia)
+    target_compile_definitions(oynix PRIVATE HAS_MULTIMEDIA)
+endif()
+
+# ── Install ─────────────────────────────────────────────────────────
+install(TARGETS oynix DESTINATION bin)
+install(DIRECTORY themes/ DESTINATION share/oynix/themes)
+
+# Platform-specific
+if(UNIX AND NOT APPLE)
+    install(FILES resources/oynix.desktop DESTINATION share/applications)
+    install(FILES resources/oynix.png DESTINATION share/icons/hicolor/256x256/apps)
+endif()
+
+message(STATUS "OyNIx Browser v${PROJECT_VERSION}")
+message(STATUS "  Qt6: ${Qt6_VERSION}")
+message(STATUS "  SQLite3: ${SQLITE3_LIBRARIES}")
+if(Qt6Multimedia_FOUND)
+    message(STATUS "  Multimedia: YES")
+else()
+    message(STATUS "  Multimedia: NO (audio player disabled)")
+endif()
