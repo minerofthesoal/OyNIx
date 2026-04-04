@@ -317,24 +317,23 @@ class AudioPlayer(QWidget):
         self._media_timer.start(3000)  # scan every 3 seconds
 
     def _scan_tabs_for_media(self):
-        """Scan all open tabs for playing audio/video elements."""
-        if not hasattr(self, '_browser'):
-            return
-        tab_mgr = getattr(self._browser, 'tab_manager', None)
-        if not tab_mgr:
-            return
-        self._pending_scans = 0
-        self._new_web_media = []
-        for i in range(tab_mgr.count()):
-            browser = tab_mgr.widget(i)
-            if browser and hasattr(browser, 'page'):
-                self._pending_scans += 1
-                page = browser.page()
-                tab_url = browser.url().toString()
-                tab_title = browser.page().title() or tab_url
-                page.runJavaScript(DETECT_MEDIA_JS,
-                    lambda result, url=tab_url, title=tab_title: self._on_media_scan(result, url, title))
-
+    """Scan all open tabs for playing audio/video elements."""
+    if not hasattr(self, '_browser'):
+        return
+    tab_mgr = getattr(self._browser, 'tab_manager', None)
+    if not tab_mgr:
+        return
+    self._pending_scans = 0
+    self._new_web_media = []
+    for i in range(len(tab_mgr._views)):          # ← fixed
+        browser = tab_mgr._views[i]               # ← fixed
+        if browser and hasattr(browser, 'page'):
+            self._pending_scans += 1
+            page = browser.page()
+            tab_url = browser.url().toString()
+            tab_title = browser.page().title() or tab_url
+            page.runJavaScript(DETECT_MEDIA_JS,
+                lambda result, url=tab_url, title=tab_title: self._on_media_scan(result, url, title))
     def _on_media_scan(self, result, tab_url, tab_title):
         """Handle JS callback from a tab's media scan."""
         self._pending_scans -= 1
