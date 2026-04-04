@@ -370,3 +370,18 @@ void AiChatPanel::setPanelWidth(int w)
     m_panelWidth = w;
     setFixedWidth(w);
 }
+
+bool AiChatPanel::eventFilter(QObject *obj, QEvent *event)
+{
+    if (obj == m_inputField && event->type() == QEvent::KeyPress) {
+        auto *keyEvent = static_cast<QKeyEvent *>(event);
+        // Enter sends message; Shift+Enter inserts newline
+        if ((keyEvent->key() == Qt::Key_Return || keyEvent->key() == Qt::Key_Enter)
+            && !(keyEvent->modifiers() & Qt::ShiftModifier))
+        {
+            sendMessage();
+            return true;
+        }
+    }
+    return QWidget::eventFilter(obj, event);
+}

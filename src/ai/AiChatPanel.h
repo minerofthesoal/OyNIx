@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QWidget>
+#include <QEvent>
 #include <QJsonArray>
 
 class QVBoxLayout;
@@ -28,6 +29,8 @@ public:
     void togglePanel();
     void showPanel();
     void hidePanel();
+
+    bool eventFilter(QObject *obj, QEvent *event) override;
     [[nodiscard]] bool isPanelVisible() const { return m_visible; }
 
     int panelWidth() const { return m_panelWidth; }

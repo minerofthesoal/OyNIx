@@ -274,11 +274,28 @@ QJsonArray Database::searchPages(const QString &query, int limit) const
     QSqlDatabase db = QSqlDatabase::database(QStringLiteral("oynix_main"));
     QSqlQuery q(db);
 
+    // Build FTS5-safe query: split words, quote each, join with AND
+    // This handles multi-word searches like "python tutorial" correctly
+    QStringList words = query.simplified().split(QLatin1Char(' '), Qt::SkipEmptyParts);
+    QStringList ftsTerms;
+    for (const QString &word : words) {
+        // Escape double quotes in the word and wrap in quotes for exact token matching
+        QString safe = word;
+        safe.replace(QLatin1Char('"'), QString());
+        if (!safe.isEmpty())
+            ftsTerms << (QLatin1Char('"') + safe + QLatin1Char('"'));
+    }
+
+    if (ftsTerms.isEmpty())
+        return results;
+
+    const QString ftsQuery = ftsTerms.join(QStringLiteral(" AND "));
+
     q.prepare(QStringLiteral(
         "SELECT url, title, snippet(pages_fts, 2, '<b>', '</b>', '...', 64), domain "
         "FROM pages_fts WHERE pages_fts MATCH ? ORDER BY rank LIMIT ?"
     ));
-    q.addBindValue(query);
+    q.addBindValue(ftsQuery);
     q.addBindValue(limit);
 
     if (q.exec()) {

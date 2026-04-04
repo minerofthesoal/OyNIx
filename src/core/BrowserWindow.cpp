@@ -30,6 +30,7 @@
 #include <QToolBar>
 #include <QToolButton>
 #include <QVBoxLayout>
+#include <QUrlQuery>
 #include <QWebEngineView>
 
 #include "TabWidget.h"
@@ -51,6 +52,8 @@
 #include "security/SecurityManager.h"
 #include "extensions/ExtensionManager.h"
 #include "extensions/ExtensionBridge.h"
+#include "data/Database.h"
+#include "search/NyxSearch.h"
 
 #include <QSplitter>
 #include <QWebEngineProfile>
@@ -143,6 +146,19 @@ BrowserWindow::BrowserWindow(QWidget *parent)
     m_extensionManager->setBrowserContext(m_tabWidget, m_bookmarkManager);
     m_tabWidget->setExtensionManager(m_extensionManager);
 
+    // Database + search: auto-update stats and index visited pages
+    connect(Database::instance(), &Database::databaseChanged,
+            this, &BrowserWindow::updateDbStats);
+    connect(m_tabWidget, &TabWidget::currentUrlChanged, this, [this](const QUrl &url) {
+        if (url.scheme() == QLatin1String("http") || url.scheme() == QLatin1String("https")) {
+            auto *view = m_tabWidget->currentWebView();
+            if (view) {
+                NyxSearch::instance()->indexPage(
+                    url.toString(), view->title(), QString());
+            }
+        }
+    });
+
     createMenuBar();
     createNavigationToolbar();
     createStatusBar();
@@ -150,6 +166,7 @@ BrowserWindow::BrowserWindow(QWidget *parent)
     registerCommands();
 
     applyTheme();
+    updateDbStats();
 
     // Start extension background scripts after UI is ready
     m_extensionManager->startBackgroundScripts();
@@ -466,7 +483,13 @@ void BrowserWindow::createStatusBar()
 {
     m_dbStatsLabel = new QLabel(tr("DB: ready"), this);
     statusBar()->addPermanentWidget(m_dbStatsLabel);
-    statusBar()->showMessage(tr("Welcome to OyNIx Browser v3.0"), 4000);
+
+    auto dbStats = Database::instance()->getStats();
+    const int siteCount = dbStats[QStringLiteral("site_count")].toInt();
+    statusBar()->showMessage(
+        tr("OyNIx Browser is ready! Features: Tree Tabs | Nyx Search | Local AI | %1 Sites")
+            .arg(siteCount > 0 ? QString::number(siteCount) : QStringLiteral("0")),
+        6000);
 }
 
 // ── Find bar ─────────────────────────────────────────────────────────
@@ -687,15 +710,20 @@ void BrowserWindow::performSearch(const QString &query)
     const QString engine = m_config.value(QStringLiteral("search_engine"))
                                    .toString(QStringLiteral("DuckDuckGo"));
 
-    QString tpl;
-    if (engine == QLatin1String("Google"))
-        tpl = QStringLiteral("https://www.google.com/search?q=%1");
-    else if (engine == QLatin1String("Bing"))
-        tpl = QStringLiteral("https://www.bing.com/search?q=%1");
-    else
-        tpl = QStringLiteral("https://duckduckgo.com/?q=%1");
+    QUrl searchUrl;
+    if (engine == QLatin1String("Google")) {
+        searchUrl = QUrl(QStringLiteral("https://www.google.com/search"));
+    } else if (engine == QLatin1String("Bing")) {
+        searchUrl = QUrl(QStringLiteral("https://www.bing.com/search"));
+    } else {
+        searchUrl = QUrl(QStringLiteral("https://duckduckgo.com/"));
+    }
 
-    navigateTo(QUrl(tpl.arg(QString::fromUtf8(QUrl::toPercentEncoding(query)))));
+    QUrlQuery urlQuery;
+    urlQuery.addQueryItem(QStringLiteral("q"), query);
+    searchUrl.setQuery(urlQuery);
+
+    navigateTo(searchUrl);
 }
 
 // ── About ────────────────────────────────────────────────────────────
@@ -731,8 +759,13 @@ void BrowserWindow::updateSecurityIndicator(const QUrl &url)
 
 void BrowserWindow::updateDbStats()
 {
-    if (m_dbStatsLabel)
-        m_dbStatsLabel->setText(tr("DB: ready"));
+    if (!m_dbStatsLabel) return;
+
+    auto *db = Database::instance();
+    auto stats = db->getStats();
+    const int sites = stats[QStringLiteral("site_count")].toInt();
+    const int pages = stats[QStringLiteral("page_count")].toInt();
+    m_dbStatsLabel->setText(tr("DB: %1 sites, %2 pages").arg(sites).arg(pages));
 }
 
 // ── Download handling ────────────────────────────────────────────
