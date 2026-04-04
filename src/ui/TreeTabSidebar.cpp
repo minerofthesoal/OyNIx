@@ -141,6 +141,9 @@ void TreeTabSidebar::refreshTabs()
     // Highlight current
     onTabChanged();
 
+    // Auto-expand all top-level items
+    m_treeWidget->expandAll();
+
     m_tabCountLabel->setText(QString::number(m_tabWidget->count()));
 }
 

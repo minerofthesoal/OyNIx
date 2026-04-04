@@ -1,13 +1,11 @@
 #include "WebResultsFetcher.h"
 
-#include <QEventLoop>
 #include <QJsonObject>
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
 #include <QNetworkRequest>
 #include <QRegularExpression>
 #include <QSet>
-#include <QTimer>
 #include <QUrl>
 #include <QUrlQuery>
 
@@ -16,35 +14,31 @@ const QString WebResultsFetcher::UserAgent =
                     "(KHTML, like Gecko) OyNIx/3.0 Chrome/120.0.0.0 Safari/537.36");
 
 WebResultsFetcher::WebResultsFetcher(const QString &query, QObject *parent)
-    : QThread(parent)
+    : QObject(parent)
+    , m_nam(new QNetworkAccessManager(this))
     , m_query(query)
 {
 }
 
-WebResultsFetcher::~WebResultsFetcher()
+WebResultsFetcher::~WebResultsFetcher() = default;
+
+void WebResultsFetcher::start()
 {
-    if (isRunning()) {
-        quit();
-        wait(2000);
-    }
+    // Launch both requests in parallel — no threads needed
+    fetchDDG();
+    fetchGoogle();
 }
 
-void WebResultsFetcher::run()
+void WebResultsFetcher::abort()
 {
-    QJsonArray ddgResults = _fetchDDG();
-    QJsonArray googleResults = _fetchGoogle();
-    QJsonArray merged = _deduplicateResults(ddgResults, googleResults);
-    emit resultsReady(merged);
+    m_aborted = true;
 }
 
 // ---------------------------------------------------------------------------
-// DuckDuckGo HTML scraper
+// DuckDuckGo request
 // ---------------------------------------------------------------------------
-QJsonArray WebResultsFetcher::_fetchDDG()
+void WebResultsFetcher::fetchDDG()
 {
-    QJsonArray results;
-    QNetworkAccessManager nam;
-
     QUrl url(QStringLiteral("https://html.duckduckgo.com/html/"));
     QUrlQuery params;
     params.addQueryItem(QStringLiteral("q"), m_query);
@@ -55,32 +49,73 @@ QJsonArray WebResultsFetcher::_fetchDDG()
     request.setRawHeader("User-Agent", UserAgent.toUtf8());
     request.setTransferTimeout(RequestTimeoutMs);
 
-    QEventLoop loop;
-    QTimer timeout;
-    timeout.setSingleShot(true);
+    QNetworkReply *reply = m_nam->post(request, params.toString(QUrl::FullyEncoded).toUtf8());
+    connect(reply, &QNetworkReply::finished, this, [this, reply]() {
+        onDDGFinished(reply);
+    });
+}
 
-    QNetworkReply *reply = nam.post(request, params.toString(QUrl::FullyEncoded).toUtf8());
-    QObject::connect(reply, &QNetworkReply::finished, &loop, &QEventLoop::quit);
-    QObject::connect(&timeout, &QTimer::timeout, &loop, &QEventLoop::quit);
-    timeout.start(RequestTimeoutMs);
-    loop.exec();
-
-    if (reply->error() != QNetworkReply::NoError || !timeout.isActive()) {
-        reply->deleteLater();
-        return results;
-    }
-    timeout.stop();
-
-    const QString html = QString::fromUtf8(reply->readAll());
+void WebResultsFetcher::onDDGFinished(QNetworkReply *reply)
+{
     reply->deleteLater();
+    if (!m_aborted && reply->error() == QNetworkReply::NoError) {
+        m_ddgResults = parseDDG(QString::fromUtf8(reply->readAll()));
+    }
+    m_ddgDone = true;
+    tryMergeAndEmit();
+}
 
-    // Parse .result class items — each contains an <a class="result__a"> and
-    // <a class="result__snippet">
-    static const QRegularExpression resultBlock(
-        QStringLiteral("<div[^>]*class=\"[^\"]*result[^\"]*\"[^>]*>(.*?)</div>\\s*</div>"),
-        QRegularExpression::DotMatchesEverythingOption);
+// ---------------------------------------------------------------------------
+// Google request
+// ---------------------------------------------------------------------------
+void WebResultsFetcher::fetchGoogle()
+{
+    QUrl url(QStringLiteral("https://www.google.com/search"));
+    QUrlQuery params;
+    params.addQueryItem(QStringLiteral("q"), m_query);
+    params.addQueryItem(QStringLiteral("num"), QStringLiteral("30"));
+    params.addQueryItem(QStringLiteral("hl"), QStringLiteral("en"));
+    url.setQuery(params);
 
-    // Simpler approach: find all result links and snippets directly
+    QNetworkRequest request(url);
+    request.setRawHeader("User-Agent", UserAgent.toUtf8());
+    request.setRawHeader("Accept-Language", "en-US,en;q=0.9");
+    request.setTransferTimeout(RequestTimeoutMs);
+
+    QNetworkReply *reply = m_nam->get(request);
+    connect(reply, &QNetworkReply::finished, this, [this, reply]() {
+        onGoogleFinished(reply);
+    });
+}
+
+void WebResultsFetcher::onGoogleFinished(QNetworkReply *reply)
+{
+    reply->deleteLater();
+    if (!m_aborted && reply->error() == QNetworkReply::NoError) {
+        m_googleResults = parseGoogle(QString::fromUtf8(reply->readAll()));
+    }
+    m_googleDone = true;
+    tryMergeAndEmit();
+}
+
+// ---------------------------------------------------------------------------
+// Merge when both done
+// ---------------------------------------------------------------------------
+void WebResultsFetcher::tryMergeAndEmit()
+{
+    if (!m_ddgDone || !m_googleDone || m_aborted)
+        return;
+
+    emit resultsReady(deduplicateResults(m_ddgResults, m_googleResults));
+}
+
+// ---------------------------------------------------------------------------
+// DuckDuckGo HTML parser
+// ---------------------------------------------------------------------------
+QJsonArray WebResultsFetcher::parseDDG(const QString &html)
+{
+    QJsonArray results;
+
     static const QRegularExpression linkRx(
         QStringLiteral("<a[^>]*class=\"result__a\"[^>]*href=\"([^\"]*)\"[^>]*>(.*?)</a>"),
         QRegularExpression::DotMatchesEverythingOption);
@@ -98,7 +133,9 @@ QJsonArray WebResultsFetcher::_fetchDDG()
     while (linkMatches.hasNext() && count < 30) {
         auto lm = linkMatches.next();
         QString href = lm.captured(1);
-        QString title = lm.captured(2).remove(tagStripper).trimmed();
+        QString title = lm.captured(2);
+        title.remove(tagStripper);
+        title = title.trimmed();
 
         // DDG wraps URLs through a redirect — extract actual URL
         if (href.contains(QStringLiteral("uddg="))) {
@@ -108,7 +145,9 @@ QJsonArray WebResultsFetcher::_fetchDDG()
 
         QString snippet;
         if (snippetMatches.hasNext()) {
-            snippet = snippetMatches.next().captured(1).remove(tagStripper).trimmed();
+            snippet = snippetMatches.next().captured(1);
+            snippet.remove(tagStripper);
+            snippet = snippet.trimmed();
         }
 
         if (href.isEmpty() || title.isEmpty())
@@ -127,45 +166,12 @@ QJsonArray WebResultsFetcher::_fetchDDG()
 }
 
 // ---------------------------------------------------------------------------
-// Google HTML scraper
+// Google HTML parser
 // ---------------------------------------------------------------------------
-QJsonArray WebResultsFetcher::_fetchGoogle()
+QJsonArray WebResultsFetcher::parseGoogle(const QString &html)
 {
     QJsonArray results;
-    QNetworkAccessManager nam;
 
-    QUrl url(QStringLiteral("https://www.google.com/search"));
-    QUrlQuery params;
-    params.addQueryItem(QStringLiteral("q"), m_query);
-    params.addQueryItem(QStringLiteral("num"), QStringLiteral("30"));
-    params.addQueryItem(QStringLiteral("hl"), QStringLiteral("en"));
-    url.setQuery(params);
-
-    QNetworkRequest request(url);
-    request.setRawHeader("User-Agent", UserAgent.toUtf8());
-    request.setRawHeader("Accept-Language", "en-US,en;q=0.9");
-    request.setTransferTimeout(RequestTimeoutMs);
-
-    QEventLoop loop;
-    QTimer timeout;
-    timeout.setSingleShot(true);
-
-    QNetworkReply *reply = nam.get(request);
-    QObject::connect(reply, &QNetworkReply::finished, &loop, &QEventLoop::quit);
-    QObject::connect(&timeout, &QTimer::timeout, &loop, &QEventLoop::quit);
-    timeout.start(RequestTimeoutMs);
-    loop.exec();
-
-    if (reply->error() != QNetworkReply::NoError || !timeout.isActive()) {
-        reply->deleteLater();
-        return results;
-    }
-    timeout.stop();
-
-    const QString html = QString::fromUtf8(reply->readAll());
-    reply->deleteLater();
-
-    // Google wraps each result in <div class="g">
     static const QRegularExpression divG(
         QStringLiteral("<div class=\"g\">(.*?)</div>\\s*</div>\\s*</div>"),
         QRegularExpression::DotMatchesEverythingOption);
@@ -177,7 +183,6 @@ QJsonArray WebResultsFetcher::_fetchGoogle()
         QStringLiteral("<h3[^>]*>(.*?)</h3>"),
         QRegularExpression::DotMatchesEverythingOption);
 
-    // Snippet often in a <div class="VwiC3b"> or similar; grab text after </h3>
     static const QRegularExpression spanSnippetRx(
         QStringLiteral("<span[^>]*>(.*?)</span>"),
         QRegularExpression::DotMatchesEverythingOption);
@@ -198,7 +203,9 @@ QJsonArray WebResultsFetcher::_fetchGoogle()
             continue;
 
         const QString href = hrefMatch.captured(1);
-        const QString title = h3Match.captured(1).remove(tagStripper).trimmed();
+        QString title = h3Match.captured(1);
+        title.remove(tagStripper);
+        title = title.trimmed();
 
         // Collect snippet: all span text after the h3
         QString snippet;
@@ -206,7 +213,9 @@ QJsonArray WebResultsFetcher::_fetchGoogle()
         QString afterH3 = block.mid(h3End);
         auto spanM = spanSnippetRx.match(afterH3);
         if (spanM.hasMatch()) {
-            snippet = spanM.captured(1).remove(tagStripper).trimmed();
+            snippet = spanM.captured(1);
+            snippet.remove(tagStripper);
+            snippet = snippet.trimmed();
         }
 
         QJsonObject item;
@@ -224,7 +233,7 @@ QJsonArray WebResultsFetcher::_fetchGoogle()
 // ---------------------------------------------------------------------------
 // Deduplication
 // ---------------------------------------------------------------------------
-QJsonArray WebResultsFetcher::_deduplicateResults(const QJsonArray &ddg, const QJsonArray &google)
+QJsonArray WebResultsFetcher::deduplicateResults(const QJsonArray &ddg, const QJsonArray &google)
 {
     QJsonArray merged;
     QSet<QString> seenUrls;

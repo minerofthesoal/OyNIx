@@ -24,6 +24,11 @@ AiManager::AiManager(QObject *parent)
     , m_nam(new QNetworkAccessManager(this))
 {
     loadConfig();
+
+    // Auto-probe the backend on startup
+    if (m_backend == Backend::Ollama || m_backend == Backend::OpenAI) {
+        refreshModels();
+    }
 }
 
 AiManager::~AiManager() { saveConfig(); }
@@ -220,10 +225,16 @@ void AiManager::handleOllamaResponse(QNetworkReply *reply)
     if (reply->error() != QNetworkReply::NoError) {
         m_status = Status::Fallback;
         emit statusChanged(m_status, QStringLiteral("Ollama unavailable, using fallback"));
-        // Fall back to rule-based
-        const QString lastMsg = m_conversationHistory.last().toObject()
-                                    [QStringLiteral("content")].toString();
-        const QString resp = fallbackResponse(lastMsg);
+        // Fall back to rule-based — guard against empty history
+        QString lastMsg;
+        if (!m_conversationHistory.isEmpty()) {
+            lastMsg = m_conversationHistory.last().toObject()
+                          [QStringLiteral("content")].toString();
+        }
+        const QString resp = lastMsg.isEmpty()
+            ? QStringLiteral("I'm Nyx, running in fallback mode. Ollama is not reachable. "
+                             "Check that Ollama is running on the configured endpoint.")
+            : fallbackResponse(lastMsg);
         addToHistory(QStringLiteral("assistant"), resp);
         emit responseReceived(resp);
         return;
@@ -231,6 +242,15 @@ void AiManager::handleOllamaResponse(QNetworkReply *reply)
 
     auto doc = QJsonDocument::fromJson(reply->readAll());
     const QString response = doc.object()[QStringLiteral("response")].toString();
+    if (response.isEmpty()) {
+        m_status = Status::Fallback;
+        emit statusChanged(m_status, QStringLiteral("Empty response from Ollama"));
+        const QString resp = QStringLiteral("Received empty response from Ollama. "
+            "The model may still be loading. Please try again in a moment.");
+        addToHistory(QStringLiteral("assistant"), resp);
+        emit responseReceived(resp);
+        return;
+    }
     m_status = Status::Ready;
     emit statusChanged(m_status, QStringLiteral("Ready"));
     addToHistory(QStringLiteral("assistant"), response);
@@ -277,16 +297,31 @@ void AiManager::handleOpenAiResponse(QNetworkReply *reply)
 {
     reply->deleteLater();
     if (reply->error() != QNetworkReply::NoError) {
-        m_status = Status::Error;
-        emit statusChanged(m_status, reply->errorString());
+        m_status = Status::Fallback;
+        emit statusChanged(m_status, QStringLiteral("API unavailable, using fallback"));
         emit errorOccurred(reply->errorString());
+        // Fall back to rule-based
+        QString lastMsg;
+        if (!m_conversationHistory.isEmpty()) {
+            lastMsg = m_conversationHistory.last().toObject()
+                          [QStringLiteral("content")].toString();
+        }
+        const QString resp = lastMsg.isEmpty()
+            ? QStringLiteral("I'm Nyx, running in fallback mode. The API endpoint is not reachable.")
+            : fallbackResponse(lastMsg);
+        addToHistory(QStringLiteral("assistant"), resp);
+        emit responseReceived(resp);
         return;
     }
 
     auto doc = QJsonDocument::fromJson(reply->readAll());
     auto choices = doc.object()[QStringLiteral("choices")].toArray();
     if (choices.isEmpty()) {
-        emit errorOccurred(QStringLiteral("Empty response from API"));
+        m_status = Status::Fallback;
+        emit statusChanged(m_status, QStringLiteral("Empty API response"));
+        const QString resp = QStringLiteral("Received empty response from the API. Please check your configuration.");
+        addToHistory(QStringLiteral("assistant"), resp);
+        emit responseReceived(resp);
         return;
     }
 

@@ -24,8 +24,7 @@ NyxSearch::NyxSearch(QObject *parent)
 NyxSearch::~NyxSearch()
 {
     if (m_fetcher) {
-        m_fetcher->quit();
-        m_fetcher->wait(3000);
+        m_fetcher->abort();
         delete m_fetcher;
     }
 }
@@ -89,19 +88,14 @@ void NyxSearch::launchWebSearch(const QString &query)
 {
     // Clean up any previous fetcher
     if (m_fetcher) {
-        if (m_fetcher->isRunning()) {
-            m_fetcher->quit();
-            m_fetcher->wait(1000);
-        }
+        m_fetcher->abort();
         m_fetcher->deleteLater();
         m_fetcher = nullptr;
     }
 
-    m_fetcher = new WebResultsFetcher(query);
+    m_fetcher = new WebResultsFetcher(query, this);
     connect(m_fetcher, &WebResultsFetcher::resultsReady,
             this, &NyxSearch::onWebResults);
-    connect(m_fetcher, &QThread::finished,
-            m_fetcher, &QObject::deleteLater);
     m_fetcher->start();
 }
 
