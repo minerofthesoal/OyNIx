@@ -309,7 +309,7 @@ class AudioPlayer(QWidget):
 
     # ── Web Media Detection ───────────────────────────────────────────
     def setup_web_media_detection(self, browser_window):
-        """Set up periodic scanning of open tabs for playing media."""
+        """Set up periodic ning of open tabs for playing media."""
         self._browser = browser_window
         self._web_media = []  # list of detected media items
         self._media_timer = QTimer(self)
@@ -325,16 +325,17 @@ class AudioPlayer(QWidget):
             return
         self._pending_scans = 0
         self._new_web_media = []
-        for i in range(tab_mgr.count()):
-            browser = tab_mgr.widget(i)
+        views = getattr(tab_mgr, '_views', [])
+        for browser in views:
             if browser and hasattr(browser, 'page'):
                 self._pending_scans += 1
                 page = browser.page()
                 tab_url = browser.url().toString()
                 tab_title = browser.page().title() or tab_url
-                page.runJavaScript(DETECT_MEDIA_JS,
-                    lambda result, url=tab_url, title=tab_title: self._on_media_scan(result, url, title))
-
+                page.runJavaScript(
+                    DETECT_MEDIA_JS,
+                    lambda result, url=tab_url, title=tab_title:
+                        self._on_media_scan(result, url, title))
     def _on_media_scan(self, result, tab_url, tab_title):
         """Handle JS callback from a tab's media scan."""
         self._pending_scans -= 1
@@ -347,7 +348,6 @@ class AudioPlayer(QWidget):
                     self._new_web_media.append(m)
             except (json.JSONDecodeError, TypeError):
                 pass
-        # When all scans done, update the UI
         if self._pending_scans <= 0:
             self._update_web_media_list(self._new_web_media)
 
