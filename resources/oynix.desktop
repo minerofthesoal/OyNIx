@@ -1,0 +1,10 @@
+[Desktop Entry]
+Name=OyNIx Browser
+Comment=The Nyx-Powered Chromium Browser
+Exec=oynix %u
+Icon=oynix
+Type=Application
+Categories=Network;WebBrowser;
+MimeType=text/html;text/xml;application/xhtml+xml;x-scheme-handler/http;x-scheme-handler/https;x-scheme-handler/oyn;
+StartupNotify=true
+StartupWMClass=oynix
