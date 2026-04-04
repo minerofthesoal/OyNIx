@@ -336,7 +336,7 @@ class AudioPlayer(QWidget):
                     DETECT_MEDIA_JS,
                     lambda result, url=tab_url, title=tab_title:
                         self._on_media_scan(result, url, title))
-def _on_media_scan(self, result, tab_url, tab_title):
+    def _on_media_scan(self, result, tab_url, tab_title):
         """Handle JS callback from a tab's media scan."""
         self._pending_scans -= 1
         if result:
