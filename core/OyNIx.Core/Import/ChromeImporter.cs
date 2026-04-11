@@ -1,4 +1,3 @@
-using System.Text.Json;
 using System.Text.Json.Nodes;
 
 namespace OyNIx.Core.Import;
@@ -55,21 +54,28 @@ public sealed class ChromeImporter
             // we read the file and parse it manually via shell or fallback
             var entries = ReadChromeDb(tmpPath, maxEntries);
 
-            return JsonSerializer.Serialize(new
+            var entriesArr = new JsonArray();
+            foreach (var e in entries)
+                entriesArr.Add(new JsonObject
+                {
+                    ["Url"] = e.Url, ["Title"] = e.Title,
+                    ["Time"] = e.Time, ["VisitCount"] = e.VisitCount
+                });
+            return new JsonObject
             {
-                ok = true,
-                entries,
-                message = $"Imported {entries.Count} entries from Chrome"
-            });
+                ["ok"] = true,
+                ["entries"] = entriesArr,
+                ["message"] = $"Imported {entries.Count} entries from Chrome"
+            }.ToJsonString();
         }
         catch (Exception ex)
         {
-            return JsonSerializer.Serialize(new
+            return new JsonObject
             {
-                ok = false,
-                entries = Array.Empty<object>(),
-                message = $"Error: {ex.Message}"
-            });
+                ["ok"] = false,
+                ["entries"] = new JsonArray(),
+                ["message"] = $"Error: {ex.Message}"
+            }.ToJsonString();
         }
         finally
         {
@@ -92,31 +98,34 @@ public sealed class ChromeImporter
             File.Copy(dbPath, tmpPath, true);
             var entries = ReadChromeDb(tmpPath, maxEntries);
 
-            var queries = new List<object>();
+            var queriesArr = new JsonArray();
             foreach (var entry in entries)
             {
                 var searchQuery = ExtractSearchQuery(entry.Url);
                 if (!string.IsNullOrEmpty(searchQuery))
                 {
-                    queries.Add(new { query = searchQuery, time = entry.Time, url = entry.Url });
+                    queriesArr.Add(new JsonObject
+                    {
+                        ["query"] = searchQuery, ["time"] = entry.Time, ["url"] = entry.Url
+                    });
                 }
             }
 
-            return JsonSerializer.Serialize(new
+            return new JsonObject
             {
-                ok = true,
-                queries,
-                message = $"Found {queries.Count} search queries"
-            });
+                ["ok"] = true,
+                ["queries"] = queriesArr,
+                ["message"] = $"Found {queriesArr.Count} search queries"
+            }.ToJsonString();
         }
         catch (Exception ex)
         {
-            return JsonSerializer.Serialize(new
+            return new JsonObject
             {
-                ok = false,
-                queries = Array.Empty<object>(),
-                message = $"Error: {ex.Message}"
-            });
+                ["ok"] = false,
+                ["queries"] = new JsonArray(),
+                ["message"] = $"Error: {ex.Message}"
+            }.ToJsonString();
         }
         finally
         {
@@ -134,7 +143,7 @@ public sealed class ChromeImporter
         {
             var json = File.ReadAllText(filePath);
             var root = JsonNode.Parse(json);
-            var entries = new List<object>();
+            var entriesArr = new JsonArray();
 
             // Handle BrowserHistory.json format (array of {url, title, time_usec})
             if (root is JsonArray arr)
@@ -143,33 +152,33 @@ public sealed class ChromeImporter
                 {
                     var obj = item?.AsObject();
                     if (obj == null) continue;
-                    entries.Add(new
+                    entriesArr.Add(new JsonObject
                     {
-                        url = obj["url"]?.GetValue<string>() ?? "",
-                        title = obj["title"]?.GetValue<string>() ?? "",
-                        time = obj["time_usec"]?.GetValue<long>() is long t
+                        ["url"] = obj["url"]?.GetValue<string>() ?? "",
+                        ["title"] = obj["title"]?.GetValue<string>() ?? "",
+                        ["time"] = obj["time_usec"]?.GetValue<long>() is long t
                             ? DateTimeOffset.FromUnixTimeMilliseconds(t / 1000).ToString("yyyy-MM-dd HH:mm")
                             : "",
-                        source = "takeout"
+                        ["source"] = "takeout"
                     });
                 }
             }
 
-            return JsonSerializer.Serialize(new
+            return new JsonObject
             {
-                ok = true,
-                entries,
-                message = $"Imported {entries.Count} entries from Takeout"
-            });
+                ["ok"] = true,
+                ["entries"] = entriesArr,
+                ["message"] = $"Imported {entriesArr.Count} entries from Takeout"
+            }.ToJsonString();
         }
         catch (Exception ex)
         {
-            return JsonSerializer.Serialize(new
+            return new JsonObject
             {
-                ok = false,
-                entries = Array.Empty<object>(),
-                message = $"Error: {ex.Message}"
-            });
+                ["ok"] = false,
+                ["entries"] = new JsonArray(),
+                ["message"] = $"Error: {ex.Message}"
+            }.ToJsonString();
         }
     }
 

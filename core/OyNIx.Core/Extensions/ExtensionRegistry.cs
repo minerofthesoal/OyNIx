@@ -1,5 +1,4 @@
 using System.IO.Compression;
-using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 
@@ -60,7 +59,7 @@ public sealed class ExtensionRegistry
         {
             try
             {
-                var regJson = JsonSerializer.Deserialize<JsonArray>(File.ReadAllText(registryPath));
+                var regJson = JsonNode.Parse(File.ReadAllText(registryPath)) as JsonArray;
                 if (regJson != null)
                 {
                     foreach (var entry in regJson)
@@ -148,13 +147,23 @@ public sealed class ExtensionRegistry
 
     public string ListExtensionsJson()
     {
-        return JsonSerializer.Serialize(_extensions.Select(e => new
+        var arr = new JsonArray();
+        foreach (var e in _extensions)
         {
-            e.Name, e.Version, e.Description, e.Enabled, e.Path,
-            e.PopupHtml, e.Permissions, HasBackground = e.BackgroundScript != null,
-            ContentScriptCount = e.ContentScripts.Count,
-            Icon = e.Icons.GetValueOrDefault("48", e.Icons.GetValueOrDefault("32", ""))
-        }));
+            var perms = new JsonArray();
+            foreach (var p in e.Permissions) perms.Add((JsonNode)p);
+            arr.Add(new JsonObject
+            {
+                ["Name"] = e.Name, ["Version"] = e.Version,
+                ["Description"] = e.Description, ["Enabled"] = e.Enabled,
+                ["Path"] = e.Path, ["PopupHtml"] = e.PopupHtml,
+                ["Permissions"] = perms,
+                ["HasBackground"] = e.BackgroundScript != null,
+                ["ContentScriptCount"] = e.ContentScripts.Count,
+                ["Icon"] = e.Icons.GetValueOrDefault("48", e.Icons.GetValueOrDefault("32", ""))
+            });
+        }
+        return arr.ToJsonString();
     }
 
     public bool Install(string filePath)
@@ -239,7 +248,11 @@ public sealed class ExtensionRegistry
             }
         }
 
-        return JsonSerializer.Serialize(new { css = cssContents, js = jsContents });
+        var cssArr = new JsonArray();
+        foreach (var c in cssContents) cssArr.Add((JsonNode)c);
+        var jsArr = new JsonArray();
+        foreach (var j in jsContents) jsArr.Add((JsonNode)j);
+        return new JsonObject { ["css"] = cssArr, ["js"] = jsArr }.ToJsonString();
     }
 
     public string? GetManifestJson(string name)

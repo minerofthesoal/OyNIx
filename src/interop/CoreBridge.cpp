@@ -57,6 +57,7 @@ bool CoreBridge::initialize(const QString &configDir)
         appDir + QStringLiteral("/OyNIxCore.so"),
         appDir + QStringLiteral("/dotnet/OyNIxCore.so"),
         appDir + QStringLiteral("/../lib/OyNIxCore.so"),
+        appDir + QStringLiteral("/../lib/oynix/OyNIxCore.so"),
     };
 
     for (const auto &path : searchPaths) {

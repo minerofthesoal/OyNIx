@@ -1,7 +1,7 @@
 using System.Net.Http.Headers;
 using System.Text;
-using System.Text.Json;
 using System.Text.Json.Nodes;
+using OyNIx.Core.Data;
 
 namespace OyNIx.Core.GitHub;
 
@@ -47,14 +47,14 @@ public sealed class GitHubSync
 
     public string GetConfigJson()
     {
-        return JsonSerializer.Serialize(new
+        return new JsonObject
         {
-            token = string.IsNullOrEmpty(_token) ? "" : "***configured***",
-            repo = _repo,
-            auto_sync = _autoSync,
-            interval_minutes = _syncIntervalMinutes,
-            configured = IsConfigured
-        });
+            ["token"] = string.IsNullOrEmpty(_token) ? "" : "***configured***",
+            ["repo"] = _repo,
+            ["auto_sync"] = _autoSync,
+            ["interval_minutes"] = _syncIntervalMinutes,
+            ["configured"] = IsConfigured
+        }.ToJsonString();
     }
 
     /// <summary>Upload a JSON file to the configured GitHub repo.</summary>

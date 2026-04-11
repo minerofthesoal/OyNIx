@@ -1,6 +1,5 @@
 using System.Security.Cryptography;
 using System.Text;
-using System.Text.Json;
 using System.Text.Json.Nodes;
 
 namespace OyNIx.Core.Data;
@@ -116,7 +115,9 @@ public sealed class CredentialStore
             var d = val?.AsObject()?["domain"]?.GetValue<string>();
             if (!string.IsNullOrEmpty(d)) domains.Add(d);
         }
-        return JsonSerializer.Serialize(domains);
+        var arr = new JsonArray();
+        foreach (var d2 in domains) arr.Add((JsonNode)d2);
+        return arr.ToJsonString();
     }
 
     public bool DeleteCredential(string domain, string username)
@@ -267,7 +268,7 @@ public sealed class CredentialStore
             var encrypted = Convert.FromBase64String(File.ReadAllText(_credFile));
             var decrypted = Xor256ppDecrypt(encrypted, _masterKey);
             var json = Encoding.UTF8.GetString(decrypted);
-            _credentials = JsonSerializer.Deserialize<JsonArray>(json) ?? new JsonArray();
+            _credentials = (JsonNode.Parse(json) as JsonArray) ?? new JsonArray();
         }
         catch { _credentials = new JsonArray(); }
     }
@@ -289,8 +290,8 @@ public sealed class CredentialStore
         if (!File.Exists(_passkeyFile)) return;
         try
         {
-            _passkeys = JsonSerializer.Deserialize<JsonArray>(
-                File.ReadAllText(_passkeyFile)) ?? new JsonArray();
+            _passkeys = (JsonNode.Parse(File.ReadAllText(_passkeyFile)) as JsonArray)
+                ?? new JsonArray();
         }
         catch { }
     }

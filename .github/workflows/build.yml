@@ -24,7 +24,6 @@ jobs:
         id: ver
         run: |
           if [ "${{ github.ref_type }}" = "tag" ]; then
-            # Strip trailing periods/spaces that make invalid tags
             RAW="${{ github.ref_name }}"
             CLEAN="$(echo "$RAW" | sed 's/[. ]*$//')"
             echo "version=$CLEAN" >> "$GITHUB_OUTPUT"
@@ -32,140 +31,110 @@ jobs:
             echo "version=v${{ github.event.inputs.version || '1.1.0' }}" >> "$GITHUB_OUTPUT"
           fi
 
-  # ── Debian .deb ──────────────────────────────────────────────────────
+  # ── Debian .deb (C++ / CMake) ───────────────────────────────────────
   build-deb:
     needs: prepare
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install build tools
+      - name: Install build dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y dpkg-dev fakeroot gcc g++
+          sudo apt-get install -y \
+            dpkg-dev fakeroot gcc g++ cmake ninja-build pkg-config \
+            libsqlite3-dev libnss3-dev libxcomposite-dev libxrandr-dev \
+            libgl1-mesa-dev libegl1-mesa-dev
+
+      - name: Install Qt6
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.8.3'
+          modules: 'qtwebengine qtwebchannel qtpositioning'
+
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      # global.json pins SDK 8.0 — verify it's active
+      - name: Verify .NET SDK
+        run: dotnet --version
 
       - name: Build .deb
+        env:
+          DOTNET_ROOT: ${{ env.DOTNET_ROOT }}
         run: |
           chmod +x scripts/build-deb.sh
-          ./scripts/build-deb.sh "${{ needs.prepare.outputs.version }}"
+          QT_PREFIX="${Qt6_DIR}" ./scripts/build-deb.sh "${{ needs.prepare.outputs.version }}"
 
       - uses: actions/upload-artifact@v4
         with:
           name: deb-package
           path: '*.deb'
 
-  # ── Windows .exe ─────────────────────────────────────────────────────
+  # ── Windows .exe (C++ / CMake + MSVC) ───────────────────────────────
   build-exe:
     needs: prepare
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-python@v5
+      - name: Install Qt6
+        uses: jurplel/install-qt-action@v4
         with:
-          python-version: '3.11'
+          version: '6.8.3'
+          modules: 'qtwebengine qtwebchannel qtpositioning'
 
-      - name: Install dependencies
-        run: pip install -r requirements.txt pyinstaller
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
 
-      - name: Create entry script
+      - name: Install SQLite3 via vcpkg
         shell: pwsh
         run: |
-          @"
-          import sys, os
+          vcpkg install sqlite3:x64-windows
+          echo "SQLITE3_DIR=$env:VCPKG_INSTALLATION_ROOT\installed\x64-windows" >> $env:GITHUB_ENV
 
-          # PyInstaller support
-          base = os.path.dirname(os.path.abspath(__file__))
-          if hasattr(sys, '_MEIPASS'):
-              base = sys._MEIPASS
-          if base not in sys.path:
-              sys.path.insert(0, base)
-
-          # Windows: add Qt6 DLL path
-          if sys.platform == 'win32':
-              try:
-                  import PyQt6
-                  qt_bin = os.path.join(os.path.dirname(PyQt6.__file__), 'Qt6', 'bin')
-                  if os.path.isdir(qt_bin):
-                      os.environ['PATH'] = qt_bin + ';' + os.environ.get('PATH', '')
-                      os.add_dll_directory(qt_bin)
-                  qt_lib = os.path.join(os.path.dirname(PyQt6.__file__), 'Qt6', 'lib')
-                  if os.path.isdir(qt_lib):
-                      os.add_dll_directory(qt_lib)
-              except Exception:
-                  pass
-
-          # CRITICAL: Set OpenGL context sharing before QApplication
-          from PyQt6.QtWidgets import QApplication
-          from PyQt6.QtCore import Qt
-          try:
-              QApplication.setAttribute(Qt.ApplicationAttribute.AA_ShareOpenGLContexts)
-          except AttributeError:
-              pass
-          import PyQt6.QtWebEngineWidgets  # must be before QApplication
-
-          from oynix.oynix import main
-          main()
-          "@ | Set-Content -Path "run_oynix.py" -Encoding UTF8
-
-      - name: Locate QtWebEngineProcess
+      - name: Build with CMake
         shell: pwsh
         run: |
-          $pyqt = python -c "import PyQt6; print(PyQt6.__path__[0])"
-          echo "PyQt6 path: $pyqt"
-          $proc = Get-ChildItem -Path $pyqt -Recurse -Filter "QtWebEngineProcess*" | Select-Object -First 1
-          if ($proc) { echo "Found: $($proc.FullName)" }
-          $res = Get-ChildItem -Path "$pyqt\Qt6\resources" -ErrorAction SilentlyContinue
-          if ($res) { echo "Resources: $($res.Count) files" }
+          cmake -S . -B build `
+            -DCMAKE_PREFIX_PATH="$env:Qt6_DIR" `
+            -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_INSTALLATION_ROOT\scripts\buildsystems\vcpkg.cmake"
+          cmake --build build --config Release -j $env:NUMBER_OF_PROCESSORS
 
-      - name: Build .exe
-        shell: pwsh
-        run: |
-          $pyqt = python -c "import PyQt6; print(PyQt6.__path__[0])"
-          $extraArgs = @()
-          # Bundle QtWebEngineProcess
-          $proc = Get-ChildItem -Path $pyqt -Recurse -Filter "QtWebEngineProcess.exe" | Select-Object -First 1
-          if ($proc) {
-            $extraArgs += "--add-binary"
-            $extraArgs += "$($proc.FullName);PyQt6/Qt6/libexec"
-          }
-          # Bundle Qt6 resources (icudtl.dat, qtwebengine_resources etc.)
-          $resDir = Join-Path $pyqt "Qt6\resources"
-          if (Test-Path $resDir) {
-            $extraArgs += "--add-data"
-            $extraArgs += "${resDir};PyQt6/Qt6/resources"
-          }
-          # Bundle Qt6 translations
-          $transDir = Join-Path $pyqt "Qt6\translations"
-          if (Test-Path $transDir) {
-            $extraArgs += "--add-data"
-            $extraArgs += "${transDir};PyQt6/Qt6/translations"
-          }
-          pyinstaller --onefile --name OyNIx `
-            --add-data "oynix;oynix" `
-            --hidden-import PyQt6.QtWebEngineWidgets `
-            --hidden-import PyQt6.QtWebEngineCore `
-            --hidden-import PyQt6.QtWebEngineQuick `
-            --hidden-import PyQt6.QtWebChannel `
-            --hidden-import PyQt6.QtNetwork `
-            --hidden-import PyQt6.QtPositioning `
-            --hidden-import PyQt6.sip `
-            --hidden-import PyQt6.QtSvg `
-            @extraArgs `
-            run_oynix.py
-
-      - name: Rename
+      - name: Package .exe
         shell: pwsh
         run: |
           $v = "${{ needs.prepare.outputs.version }}" -replace '^v',''
-          Move-Item dist/OyNIx.exe "OyNIx-${v}-windows.exe"
+          New-Item -ItemType Directory -Path "dist" -Force
+          # Find the binary (MSVC puts it under Release/)
+          $exe = Get-ChildItem -Path "build" -Recurse -Filter "oynix.exe" | Select-Object -First 1
+          if ($exe) {
+            Copy-Item $exe.FullName "dist/OyNIx.exe"
+          }
+          # Copy C# NativeAOT DLL
+          $dll = Get-ChildItem -Path "build/dotnet" -Filter "OyNIxCore.dll" -ErrorAction SilentlyContinue | Select-Object -First 1
+          if ($dll) { Copy-Item $dll.FullName "dist/" }
+          # Use windeployqt to gather Qt runtime
+          if (Get-Command windeployqt6 -ErrorAction SilentlyContinue) {
+            windeployqt6 --release --no-translations "dist/OyNIx.exe"
+          } elseif (Get-Command windeployqt -ErrorAction SilentlyContinue) {
+            windeployqt --release --no-translations "dist/OyNIx.exe"
+          }
+          Compress-Archive -Path "dist/*" -DestinationPath "OyNIx-${v}-windows.zip"
+          Copy-Item "dist/OyNIx.exe" "OyNIx-${v}-windows.exe"
 
       - uses: actions/upload-artifact@v4
         with:
           name: exe-package
-          path: '*.exe'
+          path: |
+            *.exe
+            *.zip
 
-  # ── Flatpak ───────────────────────────────────────────────────────────
+  # ── Flatpak (C++ / CMake) ──────────────────────────────────────────
   build-flatpak:
     needs: prepare
     runs-on: ubuntu-latest
@@ -181,8 +150,8 @@ jobs:
       - name: Install KDE runtime + SDK
         run: |
           flatpak install --user -y --noninteractive flathub \
-            org.kde.Platform//6.7 \
-            org.kde.Sdk//6.7
+            org.kde.Platform//6.8 \
+            org.kde.Sdk//6.8
 
       - name: Build Flatpak
         run: |
@@ -207,7 +176,7 @@ jobs:
           name: flatpak-package
           path: '*.flatpak'
 
-  # ── Arch Linux pacman ────────────────────────────────────────────────
+  # ── Arch Linux pacman (C++ / CMake) ─────────────────────────────────
   build-pacman:
     needs: prepare
     runs-on: ubuntu-22.04
@@ -217,7 +186,9 @@ jobs:
       - name: Install build tools
         run: |
           pacman -Syu --noconfirm
-          pacman -S --noconfirm --needed base-devel git python gcc
+          pacman -S --noconfirm --needed \
+            base-devel git cmake qt6-webengine qt6-webchannel \
+            sqlite dotnet-sdk-8.0 gcc
 
       - uses: actions/checkout@v4
 
@@ -262,7 +233,7 @@ jobs:
 
       - name: List built artifacts
         if: steps.check.outputs.has_artifacts == 'true'
-        run: ls -lh *.deb *.exe *.flatpak *.pkg.tar.* 2>/dev/null || echo "Some artifacts missing"
+        run: ls -lh *.deb *.exe *.zip *.flatpak *.pkg.tar.* 2>/dev/null || echo "Some artifacts missing"
 
       - name: Create or get tag
         if: steps.check.outputs.has_artifacts == 'true'
@@ -280,9 +251,11 @@ jobs:
           body: |
             ## OyNIx Browser ${{ steps.tag.outputs.version }}
 
+            Built with C++17, Qt6 WebEngine, and .NET 8 NativeAOT.
+
             ### Downloads
             - **Debian/Ubuntu**: `.deb` package — `sudo dpkg -i oynix-*.deb`
-            - **Windows**: `.exe` standalone binary
+            - **Windows**: `.exe` / `.zip` — extract and run OyNIx.exe
             - **Flatpak**: `.flatpak` bundle — `flatpak install --user OyNIx-*.flatpak`
             - **Arch Linux**: `.pkg.tar.zst` — `sudo pacman -U oynix-*.pkg.tar.zst`
 
@@ -291,6 +264,7 @@ jobs:
           files: |
             *.deb
             *.exe
+            *.zip
             *.flatpak
             *.pkg.tar.*
           fail_on_unmatched_files: false

@@ -1,4 +1,3 @@
-using System.Text.Json;
 using System.Text.Json.Nodes;
 
 namespace OyNIx.Core.Data;
@@ -223,7 +222,9 @@ public sealed class SiteDatabase
         lock (_lock)
         {
             var cats = _curated.Keys.Union(_discovered.Keys).OrderBy(c => c);
-            return JsonSerializer.Serialize(cats);
+            var arr = new JsonArray();
+            foreach (var c in cats) arr.Add((JsonNode)c);
+            return arr.ToJsonString();
         }
     }
 
@@ -231,13 +232,13 @@ public sealed class SiteDatabase
     {
         lock (_lock)
         {
-            return JsonSerializer.Serialize(new
+            return new JsonObject
             {
-                total_curated = TotalCurated,
-                total_discovered = _discovered.Values.Sum(v => v.Count),
-                total_sites = TotalSites,
-                total_categories = TotalCategories
-            });
+                ["total_curated"] = TotalCurated,
+                ["total_discovered"] = _discovered.Values.Sum(v => v.Count),
+                ["total_sites"] = TotalSites,
+                ["total_categories"] = TotalCategories
+            }.ToJsonString();
         }
     }
 
@@ -291,7 +292,7 @@ public sealed class SiteDatabase
         try
         {
             var json = File.ReadAllText(_dbPath);
-            var arr = JsonSerializer.Deserialize<JsonArray>(json);
+            var arr = JsonNode.Parse(json) as JsonArray;
             if (arr == null) return;
 
             foreach (var val in arr)

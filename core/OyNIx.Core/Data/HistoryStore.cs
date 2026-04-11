@@ -1,4 +1,3 @@
-using System.Text.Json;
 using System.Text.Json.Nodes;
 
 namespace OyNIx.Core.Data;
@@ -73,8 +72,8 @@ public sealed class HistoryStore
         if (!File.Exists(_filePath)) return;
         try
         {
-            _entries = JsonSerializer.Deserialize<JsonArray>(
-                File.ReadAllText(_filePath)) ?? new JsonArray();
+            _entries = (JsonNode.Parse(File.ReadAllText(_filePath)) as JsonArray)
+                ?? new JsonArray();
         }
         catch { _entries = new JsonArray(); }
     }

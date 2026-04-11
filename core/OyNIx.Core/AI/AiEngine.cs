@@ -1,5 +1,4 @@
 using System.Text;
-using System.Text.Json;
 using System.Text.Json.Nodes;
 
 namespace OyNIx.Core.AI;
@@ -34,15 +33,32 @@ public sealed class AiEngine
     {
         try
         {
-            var cfg = JsonSerializer.Deserialize<AiConfig>(jsonConfig);
-            if (cfg != null) _config = cfg;
+            var obj = JsonNode.Parse(jsonConfig)?.AsObject();
+            if (obj != null)
+            {
+                _config = new AiConfig
+                {
+                    Backend = obj["Backend"]?.GetValue<string>() ?? _config.Backend,
+                    Endpoint = obj["Endpoint"]?.GetValue<string>() ?? _config.Endpoint,
+                    ApiKey = obj["ApiKey"]?.GetValue<string>() ?? _config.ApiKey,
+                    Model = obj["Model"]?.GetValue<string>() ?? _config.Model,
+                    SystemPrompt = obj["SystemPrompt"]?.GetValue<string>() ?? _config.SystemPrompt,
+                };
+            }
         }
         catch { /* keep existing config */ }
     }
 
     public string GetConfigJson()
     {
-        return JsonSerializer.Serialize(_config);
+        return new JsonObject
+        {
+            ["Backend"] = _config.Backend,
+            ["Endpoint"] = _config.Endpoint,
+            ["ApiKey"] = _config.ApiKey,
+            ["Model"] = _config.Model,
+            ["SystemPrompt"] = _config.SystemPrompt,
+        }.ToJsonString();
     }
 
     public void AddHistory(string role, string content)

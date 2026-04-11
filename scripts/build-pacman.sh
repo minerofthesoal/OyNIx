@@ -1,9 +1,9 @@
 #!/bin/bash
 # ============================================================
-#  OyNIx Browser - Build Arch Linux pacman Package
+#  OyNIx Browser - Build Arch Linux pacman Package (C++ / NativeAOT)
 #  Usage: ./scripts/build-pacman.sh [version]
 #
-#  Requires: base-devel, python, gcc (install before running)
+#  Requires: base-devel, cmake, qt6-webengine, dotnet-sdk-8.0
 # ============================================================
 set -e
 
@@ -14,104 +14,69 @@ PKGVER=$(echo "$VERSION" | tr -c '[:alnum:].\n' '.')
 PKGVER="${PKGVER%.}"  # strip trailing dot
 PKGVER="${PKGVER:=1.1.0}"  # fallback if empty
 
-echo "Building pacman package v${PKGVER}..."
+echo "Building pacman package v${PKGVER} (C++ build)..."
 
 SRCDIR="$(cd "$(dirname "$0")/.." && pwd)"
 BUILDDIR="$(mktemp -d)"
 trap 'rm -rf "$BUILDDIR"' EXIT
 
 # Copy source to build dir
-cp -r "${SRCDIR}/oynix" "${BUILDDIR}/"
-cp "${SRCDIR}/requirements.txt" "${BUILDDIR}/"
-cp -r "${SRCDIR}/src" "${BUILDDIR}/" 2>/dev/null || true
+cp -r "${SRCDIR}/src" "${BUILDDIR}/"
+cp -r "${SRCDIR}/core" "${BUILDDIR}/"
+cp -r "${SRCDIR}/themes" "${BUILDDIR}/" 2>/dev/null || true
+cp -r "${SRCDIR}/resources" "${BUILDDIR}/" 2>/dev/null || true
+cp -r "${SRCDIR}/assets" "${BUILDDIR}/" 2>/dev/null || true
+cp "${SRCDIR}/CMakeLists.txt" "${BUILDDIR}/"
 
-# Create PKGBUILD — note: no depends that aren't on the build system
-# We use makedepends for build-time, and the actual package will
-# list runtime depends but we skip dep checks during build
 cat > "${BUILDDIR}/PKGBUILD" <<PKGEOF
 pkgname=oynix
 pkgver=${PKGVER}
 pkgrel=1
-pkgdesc="Nyx-themed desktop browser with local AI assistant"
+pkgdesc="Chromium-based desktop browser with local AI assistant"
 arch=('x86_64')
-depends=()
-makedepends=()
-optdepends=('python-pyqt6: Qt6 bindings from pacman')
+depends=('qt6-webengine' 'qt6-webchannel' 'nss' 'libxcomposite' 'libxrandr')
+makedepends=('cmake' 'gcc' 'sqlite')
+optdepends=('dotnet-sdk-8.0: rebuild C# NativeAOT core')
+
+build() {
+  cd "\${startdir}"
+  cmake -S . -B _build \\
+    -DCMAKE_BUILD_TYPE=Release \\
+    -DCMAKE_INSTALL_PREFIX=/usr
+  cmake --build _build -j\$(nproc)
+}
 
 package() {
-  # Install Python package
-  install -dm755 "\${pkgdir}/usr/lib/oynix"
-  cp -r "\${startdir}/oynix" "\${pkgdir}/usr/lib/oynix/"
-  cp "\${startdir}/requirements.txt" "\${pkgdir}/usr/lib/oynix/"
+  cd "\${startdir}"
 
-  # Build native lib if g++ available
-  if command -v g++ &>/dev/null && [ -f "\${startdir}/src/native/fast_index.cpp" ]; then
-    mkdir -p "\${pkgdir}/usr/lib/oynix/build"
-    g++ -O2 -shared -fPIC -std=c++17 \\
-      -o "\${pkgdir}/usr/lib/oynix/build/libnyx_index.so" \\
-      "\${startdir}/src/native/fast_index.cpp" 2>/dev/null || true
+  # Binary
+  install -Dm755 _build/oynix "\${pkgdir}/usr/bin/oynix"
+
+  # C# NativeAOT core
+  if [ -f "_build/dotnet/OyNIxCore.so" ]; then
+    install -Dm755 _build/dotnet/OyNIxCore.so "\${pkgdir}/usr/lib/oynix/OyNIxCore.so"
   fi
 
-  # Build native launcher if gcc available
-  install -dm755 "\${pkgdir}/usr/bin"
-  if command -v gcc &>/dev/null && [ -f "\${startdir}/src/launcher.c" ]; then
-    gcc -O2 -o "\${pkgdir}/usr/bin/oynix" "\${startdir}/src/launcher.c" 2>/dev/null || true
+  # Themes
+  if [ -d "themes" ]; then
+    install -dm755 "\${pkgdir}/usr/share/oynix/themes"
+    cp -r themes/* "\${pkgdir}/usr/share/oynix/themes/"
   fi
-
-  # Fallback shell launcher
-  if [ ! -f "\${pkgdir}/usr/bin/oynix" ]; then
-    cat > "\${pkgdir}/usr/bin/oynix" <<'SH'
-#!/bin/bash
-# OyNIx Browser launcher — works from terminal and desktop
-# Redirect to log when no terminal
-if ! [ -t 1 ]; then
-    mkdir -p "\$HOME/.config/oynix"
-    exec >>"\$HOME/.config/oynix/launch.log" 2>&1
-fi
-
-export PYTHONPATH="/usr/lib/oynix\${PYTHONPATH:+:\$PYTHONPATH}"
-
-# Try multiple paths for Qt6 libraries
-for qt6_candidate in \
-    "\$(python3 -c 'import PyQt6,os; print(os.path.join(os.path.dirname(PyQt6.__file__),"Qt6","lib"))' 2>/dev/null)" \
-    "/usr/lib/python3/dist-packages/PyQt6/Qt6/lib" \
-    "/usr/lib64/python3.*/site-packages/PyQt6/Qt6/lib"; do
-    for qt6_dir in \$qt6_candidate; do
-        if [ -d "\$qt6_dir" ]; then
-            export LD_LIBRARY_PATH="\${qt6_dir}\${LD_LIBRARY_PATH:+:\$LD_LIBRARY_PATH}"
-            break 2
-        fi
-    done
-done
-
-cd /usr/lib/oynix
-exec python3 -m oynix "\$@"
-SH
-  fi
-  chmod +x "\${pkgdir}/usr/bin/oynix"
 
   # Icons
   for size in 256 128 64 48; do
-    icon="\${startdir}/assets/icon-\${size}.png"
+    icon="assets/icon-\${size}.png"
     if [ -f "\$icon" ]; then
       install -Dm644 "\$icon" "\${pkgdir}/usr/share/icons/hicolor/\${size}x\${size}/apps/oynix.png"
     fi
   done
-
-  # Build turbo indexer if g++ available
-  if command -v g++ &>/dev/null && [ -f "\${startdir}/src/native/turbo_index.cpp" ]; then
-    mkdir -p "\${pkgdir}/usr/lib/oynix/build"
-    g++ -O3 -shared -fPIC -std=c++17 -pthread \\
-      -o "\${pkgdir}/usr/lib/oynix/build/libturbo_index.so" \\
-      "\${startdir}/src/native/turbo_index.cpp" 2>/dev/null || true
-  fi
 
   # Desktop entry
   install -dm755 "\${pkgdir}/usr/share/applications"
   cat > "\${pkgdir}/usr/share/applications/oynix.desktop" <<'DESKTOP'
 [Desktop Entry]
 Name=OyNIx Browser
-Comment=Nyx-Powered Local AI Browser
+Comment=Chromium-based desktop browser with local AI
 Exec=oynix %u
 Icon=oynix
 Terminal=false
@@ -122,24 +87,12 @@ Keywords=browser;web;internet;ai;nyx;
 StartupNotify=true
 StartupWMClass=OyNIx Browser
 DESKTOP
-
-  # Install script — runs pip install on user's machine
-  install -dm755 "\${pkgdir}/usr/lib/oynix/scripts"
-  cat > "\${pkgdir}/usr/lib/oynix/scripts/post-install.sh" <<'POST'
-#!/bin/bash
-echo "Installing OyNIx Python dependencies..."
-pip install --break-system-packages -r /usr/lib/oynix/requirements.txt 2>/dev/null || \
-pip install -r /usr/lib/oynix/requirements.txt 2>/dev/null || \
-echo "Run: pip install -r /usr/lib/oynix/requirements.txt"
-POST
-  chmod +x "\${pkgdir}/usr/lib/oynix/scripts/post-install.sh"
 }
 PKGEOF
 
-# Build — use --nodeps to skip dependency resolution in CI
+# Build
 cd "${BUILDDIR}"
 if [ "$(id -u)" = "0" ]; then
-    # makepkg refuses to run as root, create a builder user
     useradd -m _builder 2>/dev/null || true
     chown -R _builder:_builder .
     su _builder -c "makepkg -sf --noconfirm --skipinteg --nodeps"
