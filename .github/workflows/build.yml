@@ -24,7 +24,10 @@ jobs:
         id: ver
         run: |
           if [ "${{ github.ref_type }}" = "tag" ]; then
-            echo "version=${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
+            # Strip trailing periods/spaces that make invalid tags
+            RAW="${{ github.ref_name }}"
+            CLEAN="$(echo "$RAW" | sed 's/[. ]*$//')"
+            echo "version=$CLEAN" >> "$GITHUB_OUTPUT"
           else
             echo "version=v${{ github.event.inputs.version || '1.1.0' }}" >> "$GITHUB_OUTPUT"
           fi

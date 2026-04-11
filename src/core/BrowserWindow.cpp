@@ -210,20 +210,14 @@ BrowserWindow::BrowserWindow(QWidget *parent)
         newTab(QUrl(QStringLiteral("oyn://home")));
     }
 
-    // Shortcuts
-    new QShortcut(QKeySequence(QStringLiteral("Ctrl+T")), this, [this]{ newTab(); });
-    new QShortcut(QKeySequence(QStringLiteral("Ctrl+W")), this, [this]{ closeTab(); });
+    // Shortcuts — only register keys that have NO menu-action equivalent.
+    // (Duplicating a shortcut on both a QAction and a QShortcut causes Qt to
+    //  treat them as ambiguous and silently ignore both.)
     new QShortcut(QKeySequence(QStringLiteral("Ctrl+L")), this, [this]{
         if (m_urlBar) { m_urlBar->setFocus(); m_urlBar->selectAll(); }
     });
-    new QShortcut(QKeySequence(QStringLiteral("Ctrl+F")), this, [this]{
-        if (m_findBar) m_findBar->showBar();
-    });
     new QShortcut(QKeySequence(QStringLiteral("Ctrl+K")), this, [this]{
         if (m_commandPalette) m_commandPalette->toggle();
-    });
-    new QShortcut(QKeySequence(QStringLiteral("Ctrl+Shift+A")), this, [this]{
-        if (m_aiPanel) m_aiPanel->togglePanel();
     });
     new QShortcut(QKeySequence(QStringLiteral("Ctrl+D")), this, [this]{
         auto *v = m_tabWidget ? m_tabWidget->currentWebView() : nullptr;
@@ -233,13 +227,6 @@ BrowserWindow::BrowserWindow(QWidget *parent)
     new QShortcut(QKeySequence(QStringLiteral("Ctrl+B")), this, [this]{
         if (m_bookmarkPanel) m_bookmarkPanel->setVisible(!m_bookmarkPanel->isVisible());
     });
-    new QShortcut(QKeySequence(QStringLiteral("Ctrl+Shift+W")), this, [this]{
-        if (m_crawlerPanel) m_crawlerPanel->setVisible(!m_crawlerPanel->isVisible());
-    });
-    new QShortcut(QKeySequence(QStringLiteral("F11")), this, [this]{ toggleFullscreen(); });
-    new QShortcut(QKeySequence(QStringLiteral("Ctrl++")), this, [this]{ zoomIn(); });
-    new QShortcut(QKeySequence(QStringLiteral("Ctrl+-")), this, [this]{ zoomOut(); });
-    new QShortcut(QKeySequence(QStringLiteral("Ctrl+0")), this, [this]{ resetZoom(); });
 }
 
 BrowserWindow::~BrowserWindow()
@@ -395,9 +382,12 @@ void BrowserWindow::createMenuBar()
     m_toolsMenu->addAction(tr("Extensions"),      this, [this]{
         if (m_extensionPanel) m_extensionPanel->setVisible(!m_extensionPanel->isVisible());
     });
-    m_toolsMenu->addAction(tr("Web Crawler"),     this, [this]{
-        if (m_crawlerPanel) m_crawlerPanel->setVisible(!m_crawlerPanel->isVisible());
-    });
+    {
+        auto *a = m_toolsMenu->addAction(tr("Web Crawler"), this, [this]{
+            if (m_crawlerPanel) m_crawlerPanel->setVisible(!m_crawlerPanel->isVisible());
+        });
+        a->setShortcut(QKeySequence(QStringLiteral("Ctrl+Shift+W")));
+    }
     m_toolsMenu->addAction(tr("Profiles"),        this, [this]{
         navigateTo(QUrl(QStringLiteral("oyn://profiles")));
     });
@@ -488,6 +478,14 @@ void BrowserWindow::createNavigationToolbar()
         tr("Bookmark"), this, [this]{
             // placeholder: toggle bookmark for current page
         });
+
+    // Crawler button
+    auto *crawlerAction = m_navToolbar->addAction(
+        style()->standardIcon(QStyle::SP_DriveNetIcon),
+        tr("Web Crawler"), this, [this]{
+            if (m_crawlerPanel) m_crawlerPanel->setVisible(!m_crawlerPanel->isVisible());
+        });
+    crawlerAction->setToolTip(tr("Toggle Web Crawler (Ctrl+Shift+W)"));
 
     // Extensions area (spacer + placeholder)
     auto *spacer = new QWidget(this);
