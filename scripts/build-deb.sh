@@ -1,6 +1,6 @@
 #!/bin/bash
 # ============================================================
-#  OyNIx Browser - Build .deb Package
+#  OyNIx Browser - Build .deb Package (C++ / NativeAOT)
 #  Usage: ./scripts/build-deb.sh [version]
 # ============================================================
 set -e
@@ -10,66 +10,48 @@ VERSION="${VERSION#v}"  # Strip leading v
 ARCH="amd64"
 PKG="oynix_${VERSION}_${ARCH}"
 
-echo "Building .deb package v${VERSION}..."
+echo "Building .deb package v${VERSION} (C++ build)..."
 
-# Clean
+# ── Prerequisites ──────────────────────────────────────────────
+QT_PREFIX="${QT_PREFIX:-/opt/qt6/6.8.3/gcc_64}"
+DOTNET="${DOTNET_ROOT:-/opt/dotnet}/dotnet"
+if ! command -v cmake &>/dev/null; then
+    echo "ERROR: cmake not found" >&2; exit 1
+fi
+
+# ── Build with CMake ───────────────────────────────────────────
+BUILD="_build_deb"
+rm -rf "${BUILD}"
+mkdir -p "${BUILD}"
+
+cmake -S . -B "${BUILD}" \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DCMAKE_PREFIX_PATH="${QT_PREFIX}" \
+    -DCMAKE_INSTALL_PREFIX=/usr
+
+cmake --build "${BUILD}" -j"$(nproc)"
+
+# ── Assemble .deb tree ─────────────────────────────────────────
 rm -rf "${PKG}" "${PKG}.deb"
-
-# Create directory structure
 mkdir -p "${PKG}/DEBIAN"
-mkdir -p "${PKG}/usr/lib/oynix/oynix"
-mkdir -p "${PKG}/usr/lib/oynix/build"
 mkdir -p "${PKG}/usr/bin"
+mkdir -p "${PKG}/usr/lib/oynix"
 mkdir -p "${PKG}/usr/share/applications"
+mkdir -p "${PKG}/usr/share/oynix/themes"
 
-# Copy Python source
-cp -r oynix/* "${PKG}/usr/lib/oynix/oynix/"
-cp requirements.txt "${PKG}/usr/lib/oynix/"
-
-# Build and copy native library if possible
-if command -v g++ &>/dev/null; then
-    echo "  Building native C++ library..."
-    g++ -O2 -shared -fPIC -std=c++17 \
-        -o "${PKG}/usr/lib/oynix/build/libnyx_index.so" \
-        src/native/fast_index.cpp 2>/dev/null || echo "  (native lib build skipped)"
-fi
-
-# Build and copy C launcher if possible
-if command -v gcc &>/dev/null; then
-    echo "  Building native C launcher..."
-    gcc -O2 -o "${PKG}/usr/bin/oynix" src/launcher.c 2>/dev/null
-fi
-
-# Fallback shell launcher (in case C launcher failed)
-if [ ! -f "${PKG}/usr/bin/oynix" ]; then
-    cat > "${PKG}/usr/bin/oynix" <<'LAUNCHER'
-#!/bin/bash
-# OyNIx Browser launcher — works from terminal and desktop
-if ! [ -t 1 ]; then
-    mkdir -p "$HOME/.config/oynix"
-    exec >>"$HOME/.config/oynix/launch.log" 2>&1
-fi
-
-export PYTHONPATH="/usr/lib/oynix${PYTHONPATH:+:$PYTHONPATH}"
-
-# Try multiple paths for Qt6 libraries
-for qt6_candidate in \
-    "$(python3 -c 'import PyQt6,os; print(os.path.join(os.path.dirname(PyQt6.__file__),"Qt6","lib"))' 2>/dev/null)" \
-    "/usr/lib/python3/dist-packages/PyQt6/Qt6/lib" \
-    "/usr/lib64/python3.*/site-packages/PyQt6/Qt6/lib"; do
-    for qt6_dir in $qt6_candidate; do
-        if [ -d "$qt6_dir" ]; then
-            export LD_LIBRARY_PATH="${qt6_dir}${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
-            break 2
-        fi
-    done
-done
-
-cd /usr/lib/oynix
-exec python3 -m oynix "$@"
-LAUNCHER
-fi
+# Binary
+cp "${BUILD}/oynix" "${PKG}/usr/bin/oynix"
 chmod +x "${PKG}/usr/bin/oynix"
+
+# C# NativeAOT core library
+if [ -f "${BUILD}/dotnet/OyNIxCore.so" ]; then
+    cp "${BUILD}/dotnet/OyNIxCore.so" "${PKG}/usr/lib/oynix/"
+fi
+
+# Themes
+if [ -d "themes" ]; then
+    cp -r themes/* "${PKG}/usr/share/oynix/themes/" 2>/dev/null || true
+fi
 
 # Icons
 if [ -d "assets" ]; then
@@ -82,19 +64,11 @@ if [ -d "assets" ]; then
     done
 fi
 
-# Build turbo indexer if g++ available
-if command -v g++ &>/dev/null && [ -f "src/native/turbo_index.cpp" ]; then
-    echo "  Building turbo indexer..."
-    g++ -O3 -shared -fPIC -std=c++17 -pthread \
-        -o "${PKG}/usr/lib/oynix/build/libturbo_index.so" \
-        src/native/turbo_index.cpp 2>/dev/null || echo "  (turbo indexer build skipped)"
-fi
-
 # Desktop entry
 cat > "${PKG}/usr/share/applications/oynix.desktop" <<'DESKTOP'
 [Desktop Entry]
 Name=OyNIx Browser
-Comment=Nyx-Powered Local AI Browser
+Comment=Chromium-based desktop browser with local AI
 Exec=oynix %u
 Icon=oynix
 Terminal=false
@@ -112,43 +86,17 @@ Package: oynix
 Version: ${VERSION}
 Architecture: ${ARCH}
 Maintainer: OyNIx Project
-Description: Nyx-themed desktop browser with local AI assistant
- Custom Firefox-inspired browser with tree tabs, local LLM,
- auto-indexing Nyx search engine, and purple/black theme.
- Coded by Claude (Anthropic).
-Depends: python3 (>= 3.10), python3-pip, python3-venv, libegl1, libgl1, libxkbcommon0, libnss3, libxcomposite1, libxdamage1, libxrandr2, libxtst6, libasound2
-Recommends: libqt6webchannel6, libqt6webenginecore6, libqt6webenginewidgets6, g++, gcc
+Description: Chromium-based desktop browser with local AI assistant
+ Custom browser built with Qt6 WebEngine, C++17, and .NET 8
+ NativeAOT core. Features tree tabs, local LLM, web crawler,
+ auto-indexing search engine, and obsidian theme.
+Depends: libegl1, libgl1, libxkbcommon0, libnss3, libxcomposite1, libxdamage1, libxrandr2, libxtst6, libasound2
+Recommends: libqt6webchannel6, libqt6webenginecore6, libqt6webenginewidgets6
 CTRL
-
-# Post-install: install Python deps
-cat > "${PKG}/DEBIAN/postinst" <<'POSTINST'
-#!/bin/bash
-echo "Installing OyNIx Python dependencies..."
-
-# Try venv first, then --break-system-packages, then plain pip
-if python3 -m pip install --break-system-packages -r /usr/lib/oynix/requirements.txt 2>/dev/null; then
-    echo "  Dependencies installed (pip --break-system-packages)"
-elif python3 -m pip install -r /usr/lib/oynix/requirements.txt 2>/dev/null; then
-    echo "  Dependencies installed (pip)"
-else
-    echo ""
-    echo "WARNING: Could not auto-install Python deps."
-    echo "Run manually: pip install --break-system-packages -r /usr/lib/oynix/requirements.txt"
-    echo "Or use a venv: python3 -m venv /tmp/oynix-venv && source /tmp/oynix-venv/bin/activate && pip install -r /usr/lib/oynix/requirements.txt"
-fi
-
-# Verify critical deps
-if python3 -c "from PyQt6.QtWidgets import QApplication" 2>/dev/null; then
-    echo "  PyQt6: OK"
-else
-    echo "  WARNING: PyQt6 not working. Run: pip install --break-system-packages PyQt6 PyQt6-WebEngine"
-fi
-POSTINST
-chmod +x "${PKG}/DEBIAN/postinst"
 
 # Build .deb
 dpkg-deb --root-owner-group --build "${PKG}"
 mv "${PKG}.deb" "oynix-${VERSION}-${ARCH}.deb"
-rm -rf "${PKG}"
+rm -rf "${PKG}" "${BUILD}"
 
 echo "Done: oynix-${VERSION}-${ARCH}.deb"

@@ -1,9 +1,7 @@
 #!/bin/bash
-# OyNIx Browser Flatpak launcher
-export PYTHONPATH="/app/lib/oynix${PYTHONPATH:+:$PYTHONPATH}"
-# Log errors when no terminal (desktop launch)
+# OyNIx Browser Flatpak launcher (C++ native build)
 if ! [ -t 1 ]; then
     mkdir -p "$HOME/.config/oynix"
     exec >>"$HOME/.config/oynix/launch.log" 2>&1
 fi
-exec python3 -m oynix "$@"
+exec /app/bin/oynix "$@"
