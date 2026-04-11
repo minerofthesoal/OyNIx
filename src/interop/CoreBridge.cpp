@@ -1,6 +1,6 @@
 /*
  * OyNIx Browser v3.1 — CoreBridge implementation
- * Loads OyNIxCore.so (C# NativeAOT) via dlopen and resolves all exports.
+ * Loads OyNIxCore native library via dlopen (UNIX) or LoadLibrary (Windows).
  */
 
 #include "CoreBridge.h"
@@ -10,7 +10,41 @@
 #include <QJsonDocument>
 #include <QDebug>
 
-#include <dlfcn.h>
+#ifdef _WIN32
+#  define WIN32_LEAN_AND_MEAN
+#  include <windows.h>
+#else
+#  include <dlfcn.h>
+#endif
+
+// ── Platform abstraction for dynamic library loading ─────────────────
+
+static void *oynix_dlopen(const char *path)
+{
+#ifdef _WIN32
+    return reinterpret_cast<void*>(LoadLibraryA(path));
+#else
+    return dlopen(path, RTLD_NOW);
+#endif
+}
+
+static void oynix_dlclose(void *lib)
+{
+#ifdef _WIN32
+    FreeLibrary(reinterpret_cast<HMODULE>(lib));
+#else
+    dlclose(lib);
+#endif
+}
+
+static void *oynix_dlsym(void *lib, const char *name)
+{
+#ifdef _WIN32
+    return reinterpret_cast<void*>(GetProcAddress(reinterpret_cast<HMODULE>(lib), name));
+#else
+    return dlsym(lib, name);
+#endif
+}
 
 CoreBridge &CoreBridge::instance()
 {
@@ -28,7 +62,7 @@ CoreBridge::~CoreBridge()
 template<typename T>
 static T resolveSym(void *lib, const char *name)
 {
-    auto *sym = dlsym(lib, name);
+    auto *sym = oynix_dlsym(lib, name);
     if (!sym)
         qWarning() << "CoreBridge: failed to resolve" << name;
     return reinterpret_cast<T>(sym);
@@ -51,25 +85,33 @@ bool CoreBridge::initialize(const QString &configDir)
 {
     if (m_loaded) return true;
 
-    // Find the .so alongside the executable, or in a dotnet/ subdirectory
+    // Find the native library alongside the executable
     const QString appDir = QCoreApplication::applicationDirPath();
+#ifdef _WIN32
+    const auto libName = QStringLiteral("/OyNIxCore.dll");
+#elif defined(__APPLE__)
+    const auto libName = QStringLiteral("/OyNIxCore.dylib");
+#else
+    const auto libName = QStringLiteral("/OyNIxCore.so");
+#endif
+
     QStringList searchPaths = {
-        appDir + QStringLiteral("/OyNIxCore.so"),
-        appDir + QStringLiteral("/dotnet/OyNIxCore.so"),
-        appDir + QStringLiteral("/../lib/OyNIxCore.so"),
-        appDir + QStringLiteral("/../lib/oynix/OyNIxCore.so"),
+        appDir + libName,
+        appDir + QStringLiteral("/dotnet") + libName,
+        appDir + QStringLiteral("/../lib") + libName,
+        appDir + QStringLiteral("/../lib/oynix") + libName,
     };
 
     for (const auto &path : searchPaths) {
         if (QFile::exists(path)) {
-            m_lib = dlopen(path.toUtf8().constData(), RTLD_NOW);
+            m_lib = oynix_dlopen(path.toUtf8().constData());
             if (m_lib) break;
-            qWarning() << "CoreBridge: dlopen failed:" << dlerror();
+            qWarning() << "CoreBridge: failed to load library:" << path;
         }
     }
 
     if (!m_lib) {
-        qWarning() << "CoreBridge: OyNIxCore.so not found. C# core disabled.";
+        qWarning() << "CoreBridge: native core library not found. C# core disabled.";
         return false;
     }
 
@@ -144,7 +186,7 @@ void CoreBridge::shutdown()
     if (m_shutdown && m_loaded)
         m_shutdown();
     if (m_lib) {
-        dlclose(m_lib);
+        oynix_dlclose(m_lib);
         m_lib = nullptr;
     }
     m_loaded = false;

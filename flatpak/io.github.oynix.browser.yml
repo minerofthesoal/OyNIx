@@ -28,6 +28,8 @@ modules:
       append-path: /usr/lib/sdk/dotnet8/bin
       env:
         DOTNET_ROOT: /usr/lib/sdk/dotnet8
+      build-args:
+        - --share=network
     post-install:
       - install -Dm755 flatpak/oynix-launch /app/bin/oynix-launch
 
