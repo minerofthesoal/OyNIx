@@ -1,41 +1,16 @@
 #!/usr/bin/env python3
 """
-OyNIx Browser v1.1.0 - The Nyx-Powered Local AI Browser
+OyNIx Browser v2.3 - The Nyx-Powered Local AI Browser
 Main Launcher and Entry Point
-
-Features:
-- Firefox-inspired browser with local LLM
-- Tree-style tabs + normal tabs
-- Medium purple + black Nyx theme
-- Nyx search engine with auto-indexing
-- DuckDuckGo / Google / Brave search
-- GitHub database sync
-- 1400+ curated site database
-- Security prompts for login pages
-
-Architecture:
-- oynix.py (this file)       - Main launcher
-- core/browser.py            - Browser core engine
-- core/tree_tabs.py          - Tree-style tab manager
-- core/theme_engine.py       - Nyx purple/black theme
-- core/nyx_search.py         - Nyx search engine + auto-indexing
-- core/ai_manager.py         - Local LLM (auto-download + inference)
-- core/database.py           - 1400+ curated site database
-- core/security.py           - Security prompts
-- core/github_sync.py        - GitHub database sync
-- UI/menus.py                - Menu system
-- UI/settings.py             - Settings dialog
-- UI/ai_chat.py              - AI chat panel
-- utils/helpers.py           - Utility functions
-- utils/logger.py            - Logging
 
 Author: OyNIx Team
 License: MIT
-Version: 1.1.0
+Version: 2.2
 """
 
 import sys
 import os
+import logging
 
 # Ensure the package root is on the path
 OYNIX_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -43,157 +18,240 @@ PACKAGE_ROOT = os.path.dirname(OYNIX_DIR)
 if PACKAGE_ROOT not in sys.path:
     sys.path.insert(0, PACKAGE_ROOT)
 
-# Fix LD_LIBRARY_PATH for pip-installed Qt6 libraries
-# pip's PyQt6-WebEngine-Qt6 bundles .so files that the system linker
-# can't find without this (e.g. libQt6WebChannel.so.6)
-try:
-    import PyQt6
-    _qt6_lib = os.path.join(os.path.dirname(PyQt6.__file__), 'Qt6', 'lib')
-    if os.path.isdir(_qt6_lib):
-        _ld_path = os.environ.get('LD_LIBRARY_PATH', '')
-        if _qt6_lib not in _ld_path:
-            os.environ['LD_LIBRARY_PATH'] = _qt6_lib + (':' + _ld_path if _ld_path else '')
-            # Re-exec to pick up new LD_LIBRARY_PATH (must happen before .so loading)
-            if not os.environ.get('_OYNIX_REEXEC'):
-                os.environ['_OYNIX_REEXEC'] = '1'
-                os.execv(sys.executable, [sys.executable] + sys.argv)
-except ImportError:
-    pass  # PyQt6 not installed, will be caught later
+# Also check /usr/lib/oynix (for .deb installs)
+_deb_path = '/usr/lib/oynix'
+if os.path.isdir(os.path.join(_deb_path, 'oynix')) and _deb_path not in sys.path:
+    sys.path.insert(0, _deb_path)
 
-PURPLE = "\033[95m"
-BOLD = "\033[1m"
-RESET = "\033[0m"
-DIM = "\033[2m"
+# Set up file logging so errors are captured even without a terminal
+_log_dir = os.path.expanduser("~/.config/oynix")
+os.makedirs(_log_dir, exist_ok=True)
+logging.basicConfig(
+    filename=os.path.join(_log_dir, "oynix.log"),
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+)
+_logger = logging.getLogger("oynix")
 
-print()
-print(f"{PURPLE}{BOLD}  ╔═══════════════════════════════════════════════╗{RESET}")
-print(f"{PURPLE}{BOLD}  ║         OyNIx Browser v1.1.0                 ║{RESET}")
-print(f"{PURPLE}{BOLD}  ║    The Nyx-Powered Local AI Browser          ║{RESET}")
-print(f"{PURPLE}{BOLD}  ╚═══════════════════════════════════════════════╝{RESET}")
-print()
-print(f"{DIM}  Loading modules...{RESET}")
 
-# Check Python version
-if sys.version_info < (3, 8):
-    print("ERROR: Python 3.8+ required")
-    sys.exit(1)
+def _safe_print(*args, **kwargs):
+    """Print that silently fails when there is no terminal (e.g. desktop launch)."""
+    try:
+        print(*args, **kwargs)
+    except (OSError, ValueError):
+        pass
 
-# Import PyQt6
-try:
-    from PyQt6.QtWidgets import QApplication
-    from PyQt6.QtCore import Qt
-    print(f"  {PURPLE}+{RESET} PyQt6 loaded")
-except ImportError as e:
-    err = str(e)
-    if 'libEGL' in err or 'libGL' in err or '.so' in err:
-        print(f"ERROR: Missing system library: {err}")
-        print("Fix:  sudo apt install libegl1 libgl1 libxkbcommon0")
-        print("      (or equivalent for your distro)")
-    else:
-        print("ERROR: PyQt6 not installed")
-        print("Run: pip install --break-system-packages PyQt6 PyQt6-WebEngine")
-    sys.exit(1)
 
-# CRITICAL: QtWebEngineWidgets must be imported BEFORE QApplication is created.
-# Qt6 WebEngine requires AA_ShareOpenGLContexts set before the app starts.
-try:
-    Qt.ApplicationAttribute.AA_ShareOpenGLContexts
-    QApplication.setAttribute(Qt.ApplicationAttribute.AA_ShareOpenGLContexts)
-except AttributeError:
-    pass  # Older PyQt6 versions may not have this
+def _fix_ld_library_path():
+    """Set LD_LIBRARY_PATH for pip-installed Qt6 libraries and re-exec if needed."""
+    if sys.platform == 'win32':
+        return  # Not needed on Windows — Qt DLLs are found via PATH
+    try:
+        import PyQt6
+        _qt6_lib = os.path.join(os.path.dirname(PyQt6.__file__), 'Qt6', 'lib')
+        if os.path.isdir(_qt6_lib):
+            _ld_path = os.environ.get('LD_LIBRARY_PATH', '')
+            if _qt6_lib not in _ld_path:
+                os.environ['LD_LIBRARY_PATH'] = _qt6_lib + (':' + _ld_path if _ld_path else '')
+                if not os.environ.get('_OYNIX_REEXEC'):
+                    os.environ['_OYNIX_REEXEC'] = '1'
+                    os.execv(sys.executable, [sys.executable] + sys.argv)
+    except ImportError:
+        pass
 
-try:
-    import PyQt6.QtWebEngineWidgets  # noqa: F401 — must be imported before QApplication
-    print(f"  {PURPLE}+{RESET} QtWebEngine loaded")
-except ImportError as e:
-    print(f"  {BOLD}!{RESET} QtWebEngine not available: {e}")
-    print("    Fix: pip install --break-system-packages PyQt6-WebEngine PyQt6-WebEngine-Qt6")
+
+def _diagnose():
+    """Run diagnostics and exit."""
+    P = "\033[95m"
+    B = "\033[1m"
+    R = "\033[0m"
+    _safe_print(f"\n{P}{B}  OyNIx Diagnostics{R}\n")
+    _safe_print(f"  Python: {sys.version}")
+    _safe_print(f"  Executable: {sys.executable}")
+    _safe_print(f"  sys.path: {sys.path[:5]}")
+    _safe_print(f"  LD_LIBRARY_PATH: {os.environ.get('LD_LIBRARY_PATH', '(not set)')}")
+    for mod in ['PyQt6', 'PyQt6.QtWidgets', 'PyQt6.QtWebEngineWidgets',
+                'PyQt6.QtWebEngineCore', 'llama_cpp', 'whoosh', 'bs4', 'PIL']:
+        try:
+            __import__(mod)
+            loc = getattr(sys.modules.get(mod), '__file__', '?')
+            _safe_print(f"  {P}+{R} {mod}: OK ({loc})")
+        except ImportError as e:
+            _safe_print(f"  {B}x{R} {mod}: MISSING ({e})")
+    try:
+        import PyQt6
+        qt6_lib = os.path.join(os.path.dirname(PyQt6.__file__), 'Qt6', 'lib')
+        if os.path.isdir(qt6_lib):
+            import glob
+            sos = glob.glob(os.path.join(qt6_lib, 'libQt6*.so*'))
+            _safe_print(f"\n  Qt6 lib dir: {qt6_lib}")
+            _safe_print(f"  Qt6 .so files: {len(sos)}")
+            for s in sorted(sos)[:10]:
+                _safe_print(f"    {os.path.basename(s)}")
+        else:
+            _safe_print(f"\n  Qt6 lib dir NOT found at: {qt6_lib}")
+    except ImportError:
+        pass
+    _safe_print()
+
 
 def main():
-    """Main entry point."""
+    """Main entry point — safe to call from desktop launchers (no terminal required)."""
+    _logger.info("OyNIx starting (Python %s, pid %d)", sys.version.split()[0], os.getpid())
+    _logger.info("sys.path: %s", sys.path[:5])
+    _logger.info("LD_LIBRARY_PATH: %s", os.environ.get('LD_LIBRARY_PATH', '(not set)'))
+
+    # Fix LD_LIBRARY_PATH before anything loads Qt .so files
+    _fix_ld_library_path()
+
+    P = "\033[95m"
+    B = "\033[1m"
+    R = "\033[0m"
+    D = "\033[2m"
+
+    _safe_print()
+    _safe_print(f"{P}{B}  ╔═══════════════════════════════════════════════╗{R}")
+    _safe_print(f"{P}{B}  ║         OyNIx Browser v2.3                 ║{R}")
+    _safe_print(f"{P}{B}  ║    The Nyx-Powered Local AI Browser          ║{R}")
+    _safe_print(f"{P}{B}  ╚═══════════════════════════════════════════════╝{R}")
+    _safe_print()
+    _safe_print(f"{D}  Loading modules...{R}")
+
+    # Check Python version
+    if sys.version_info < (3, 8):
+        _safe_print("ERROR: Python 3.8+ required")
+        sys.exit(1)
+
     # Diagnostic mode
     if '--diagnose' in sys.argv:
-        print(f"\n{PURPLE}{BOLD}  OyNIx Diagnostics{RESET}\n")
-        print(f"  Python: {sys.version}")
-        print(f"  Executable: {sys.executable}")
-        print(f"  sys.path: {sys.path[:5]}")
-        print(f"  LD_LIBRARY_PATH: {os.environ.get('LD_LIBRARY_PATH', '(not set)')}")
-        for mod in ['PyQt6', 'PyQt6.QtWidgets', 'PyQt6.QtWebEngineWidgets',
-                     'PyQt6.QtWebEngineCore', 'llama_cpp', 'whoosh', 'bs4', 'PIL']:
-            try:
-                __import__(mod)
-                loc = getattr(sys.modules.get(mod), '__file__', '?')
-                print(f"  {PURPLE}+{RESET} {mod}: OK ({loc})")
-            except ImportError as e:
-                print(f"  {BOLD}x{RESET} {mod}: MISSING ({e})")
-        try:
-            import PyQt6
-            qt6_lib = os.path.join(os.path.dirname(PyQt6.__file__), 'Qt6', 'lib')
-            if os.path.isdir(qt6_lib):
-                import glob
-                sos = glob.glob(os.path.join(qt6_lib, 'libQt6*.so*'))
-                print(f"\n  Qt6 lib dir: {qt6_lib}")
-                print(f"  Qt6 .so files: {len(sos)}")
-                for s in sorted(sos)[:10]:
-                    print(f"    {os.path.basename(s)}")
-            else:
-                print(f"\n  Qt6 lib dir NOT found at: {qt6_lib}")
-        except ImportError:
-            pass
-        print()
+        _diagnose()
         return
 
-    print()
-    print(f"{DIM}  Initializing...{RESET}")
+    # Import PyQt6
+    try:
+        from PyQt6.QtWidgets import QApplication
+        from PyQt6.QtCore import Qt
+        _safe_print(f"  {P}+{R} PyQt6 loaded")
+    except ImportError as e:
+        err = str(e)
+        _logger.error("PyQt6 import failed: %s", err)
+        _safe_print(f"ERROR: {err}")
+        _safe_print("Run: pip install --break-system-packages PyQt6 PyQt6-WebEngine")
+        try:
+            import tkinter as tk
+            from tkinter import messagebox
+            root = tk.Tk()
+            root.withdraw()
+            messagebox.showerror("OyNIx Browser", f"Cannot start: {err}\n\nInstall PyQt6:\npip install PyQt6 PyQt6-WebEngine")
+            root.destroy()
+        except Exception:
+            # Last resort: desktop notification
+            try:
+                import subprocess
+                subprocess.run(['notify-send', 'OyNIx Browser',
+                                f'Failed to start: {err}', '--icon=dialog-error'],
+                               timeout=5)
+            except Exception:
+                pass
+        sys.exit(1)
+
+    # Set OpenGL sharing before QApplication
+    try:
+        QApplication.setAttribute(Qt.ApplicationAttribute.AA_ShareOpenGLContexts)
+    except AttributeError:
+        pass
+
+    try:
+        import PyQt6.QtWebEngineWidgets  # noqa: F401 — must be imported before QApplication
+        _safe_print(f"  {P}+{R} QtWebEngine loaded")
+    except ImportError as e:
+        _safe_print(f"  {B}!{R} QtWebEngine not available: {e}")
+        _safe_print("    Fix: pip install --break-system-packages PyQt6-WebEngine PyQt6-WebEngine-Qt6")
+
+    _safe_print()
+    _safe_print(f"{D}  Initializing...{R}")
 
     # Create QApplication FIRST - required before any QObject/QWidget
     app = QApplication(sys.argv)
     app.setApplicationName("OyNIx Browser")
-    app.setApplicationVersion("2.1.2")
+    app.setApplicationVersion("2.2")
     app.setOrganizationName("OyNIx")
+    app.setDesktopFileName("oynix")
 
-    # Create data directories
-    config_dir = os.path.expanduser("~/.config/oynix")
+    # Create data directories (Windows: %APPDATA%\oynix, Unix: ~/.config/oynix)
+    if sys.platform == 'win32':
+        config_dir = os.path.join(os.environ.get('APPDATA', os.path.expanduser('~')), 'oynix')
+    else:
+        config_dir = os.path.expanduser("~/.config/oynix")
     for subdir in ['models', 'search_index', 'database', 'cache', 'sync']:
         os.makedirs(os.path.join(config_dir, subdir), exist_ok=True)
 
     # Import browser core AFTER QApplication exists
-    # (modules contain QObject singletons that need it)
+    # Suppress broken native library imports (e.g. llama_cpp on Windows)
+    # by pre-patching the import system
+    import importlib
+    _orig_import = __builtins__.__import__ if hasattr(__builtins__, '__import__') else __import__
+
+    _SKIP_MODULES = {'llama_cpp', 'transformers', 'torch', 'huggingface_hub'}
+
+    def _safe_import(name, *args, **kwargs):
+        top = name.split('.')[0]
+        if top in _SKIP_MODULES:
+            try:
+                return _orig_import(name, *args, **kwargs)
+            except (ImportError, OSError, RuntimeError, Exception) as exc:
+                _logger.warning("Optional module %s failed to import: %s", name, exc)
+                raise ImportError(f"{name} not available: {exc}") from exc
+        return _orig_import(name, *args, **kwargs)
+
+    try:
+        import builtins
+        builtins.__import__ = _safe_import
+    except Exception:
+        pass
+
     try:
         from oynix.core.browser import OynixBrowser
-        print(f"  {PURPLE}+{RESET} Browser core loaded (Chromium WebEngine)")
-    except ImportError as e:
+        _safe_print(f"  {P}+{R} Browser core loaded (Chromium WebEngine)")
+    except Exception as e:
         err = str(e)
-        print(f"ERROR: Failed to load browser core: {err}")
-        if 'WebChannel' in err or 'WebEngine' in err or '.so' in err:
-            print()
-            print("  Missing Qt6 WebEngine system libraries.")
-            print("  Fix with:")
-            print("    sudo apt install libqt6webchannel6 libqt6webenginecore6 libqt6webenginewidgets6")
-            print("  Or reinstall PyQt6-WebEngine:")
-            print("    pip install --break-system-packages --force-reinstall PyQt6-WebEngine PyQt6-WebEngine-Qt6")
-        else:
-            import traceback
-            traceback.print_exc()
+        _logger.error("Browser core import failed: %s", err, exc_info=True)
+        _safe_print(f"ERROR: Failed to load browser core: {err}")
+        try:
+            from PyQt6.QtWidgets import QMessageBox
+            QMessageBox.critical(None, "OyNIx Browser",
+                                 f"Failed to load browser:\n{err}\n\nRun: python3 -m oynix --diagnose")
+        except Exception:
+            pass
         sys.exit(1)
+    finally:
+        # Restore original import
+        try:
+            builtins.__import__ = _orig_import
+        except Exception:
+            pass
 
     # Create and show browser
-    print(f"  {PURPLE}+{RESET} Creating browser window...")
+    _safe_print(f"  {P}+{R} Creating browser window...")
     try:
         browser = OynixBrowser()
         browser.show()
     except Exception as e:
-        print(f"ERROR: Failed to create browser window: {e}")
-        import traceback
-        traceback.print_exc()
-        print()
-        print("  Try running: python3 -m oynix --diagnose")
+        _logger.error("Browser window creation failed: %s", e, exc_info=True)
+        _safe_print(f"ERROR: Failed to create browser window: {e}")
+        try:
+            from PyQt6.QtWidgets import QMessageBox
+            QMessageBox.critical(None, "OyNIx Browser",
+                                 f"Failed to create browser window:\n{e}")
+        except Exception:
+            pass
         sys.exit(1)
 
-    print()
-    print(f"{PURPLE}{BOLD}  OyNIx Browser is ready!{RESET}")
-    print(f"{DIM}  Features: Tree Tabs | Nyx Search | Local AI | 1400+ Sites{RESET}")
-    print()
+    _safe_print()
+    _safe_print(f"{P}{B}  OyNIx Browser is ready!{R}")
+    _safe_print(f"{D}  Features: Tree Tabs | Nyx Search | Local AI | 1400+ Sites{R}")
+    _safe_print()
 
     sys.exit(app.exec())
 

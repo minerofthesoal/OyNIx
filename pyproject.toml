@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "oynix"
-version = "2.1.2"
+version = "2.3.0"
 description = "Nyx-themed desktop browser with local AI assistant"
 readme = "README.md"
 license = {text = "MIT"}

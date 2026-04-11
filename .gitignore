@@ -5,3 +5,8 @@ __pycache__/
 *.pyc
 .venv/
 *.spec
+aqtinstall.log
+
+# .NET build artifacts
+core/**/bin/
+core/**/obj/

@@ -1,5 +1,5 @@
 """
-OyNIx Browser - Nyx Theme Engine v2.1.2
+OyNIx Browser - Nyx Theme Engine v2.3
 Modern glassmorphism UI with dynamic mouse-tracking refractions,
 GPU-accelerated glass effects, enhanced animations, custom SVG icons,
 and multiple theme variants. Deep blacks + medium purple accents.
@@ -853,5 +853,109 @@ h1{{font-size:1.6em;color:{c['purple_light']};margin-bottom:24px;
 <div class="glass-orb" style="width:300px;height:300px;background:{c['purple_mid']};top:5%;right:-3%"></div>
 <h1>Downloads</h1>
 {items if items else '<div class="empty">No downloads yet.</div>'}
+<script>{rjs}</script>
+</body></html>'''
+
+
+def get_profiles_html(profile_manager, colors=None):
+    """Generate profiles management page with dynamic refractions."""
+    c = colors or NYX_COLORS
+    rcss = _refraction_css(c)
+    rjs = _refraction_js()
+    import html as html_mod
+
+    profiles = profile_manager.list_profiles()
+    active_name = profile_manager.active_name
+
+    cards = ""
+    for i, p in enumerate(profiles):
+        is_active = p.name == active_name
+        active_badge = f'<span class="badge active-badge">Active</span>' if is_active else ''
+        switch_btn = '' if is_active else (
+            f'<a class="btn switch-btn" href="oyn://switch-profile?name={p.name}">Switch</a>')
+
+        # Auto-login count
+        al_count = len(p.credentials.get_all_autologins())
+        pw_count = len(p.credentials.get_all_domains()) if p.credentials.is_unlocked else 0
+        cred_info = ""
+        if al_count or pw_count:
+            parts = []
+            if pw_count:
+                parts.append(f"{pw_count} passwords")
+            if al_count:
+                parts.append(f"{al_count} auto-logins")
+            cred_info = f'<div class="cred-info">{" &middot; ".join(parts)}</div>'
+
+        cards += f'''<div class="profile-card refract-target refract-glow {'active-card' if is_active else ''}"
+                      style="animation-delay:{min(i*0.06, 1.5)}s">
+            <div class="profile-header">
+                <div class="avatar">{'&#9733;' if is_active else p.display_name[0].upper()}</div>
+                <div class="profile-info">
+                    <div class="profile-name">{html_mod.escape(p.display_name)} {active_badge}</div>
+                    <div class="profile-meta">@{html_mod.escape(p.name)} &middot; Created {html_mod.escape(p.created_at)}</div>
+                    <div class="profile-meta">Last used: {html_mod.escape(p.last_used)}</div>
+                    {cred_info}
+                </div>
+            </div>
+            <div class="profile-actions">
+                {switch_btn}
+            </div>
+        </div>'''
+
+    return f'''<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>Profiles</title>
+<style>
+*{{margin:0;padding:0;box-sizing:border-box}}
+body{{background:{c['bg_darkest']};color:{c['text_primary']};
+  font-family:'Segoe UI','Ubuntu',sans-serif;padding:30px 40px;overflow-x:hidden}}
+{rcss}
+h1{{font-size:1.6em;color:{c['purple_light']};margin-bottom:8px;
+  animation:shimmerIn .5s ease forwards}}
+.subtitle{{color:{c['text_muted']};font-size:.9em;margin-bottom:28px;animation:shimmerIn .6s ease forwards}}
+.profile-card{{background:rgba(22,22,31,.55);border:1px solid rgba(58,58,74,.4);border-radius:14px;
+  padding:18px 22px;margin-bottom:12px;animation:shimmerIn .4s ease-out both;
+  transition:all .4s cubic-bezier(.4,0,.2,1);will-change:transform}}
+.profile-card:hover{{border-color:{c['purple_mid']};transform:translateY(-2px) translateZ(0);
+  box-shadow:0 8px 32px rgba(123,79,191,.15)}}
+.active-card{{border-color:{c['purple_mid']};background:rgba(123,79,191,.08)}}
+.profile-header{{display:flex;align-items:center;gap:16px}}
+.avatar{{width:50px;height:50px;border-radius:50%;background:linear-gradient(135deg,{c['purple_dark']},{c['purple_mid']});
+  display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:700;
+  color:{c['purple_pale']};flex-shrink:0;
+  box-shadow:0 4px 16px rgba(123,79,191,.2);transition:transform .3s ease}}
+.profile-card:hover .avatar{{transform:scale(1.08)}}
+.profile-info{{flex:1;min-width:0}}
+.profile-name{{font-size:1.1em;font-weight:600;color:{c['text_primary']}}}
+.profile-meta{{color:{c['text_muted']};font-size:.78em;margin-top:2px}}
+.cred-info{{color:{c['purple_light']};font-size:.78em;margin-top:4px}}
+.badge{{display:inline-block;padding:2px 10px;border-radius:10px;font-size:.7em;font-weight:600;
+  margin-left:8px;vertical-align:middle}}
+.active-badge{{background:{c['purple_mid']};color:{c['purple_pale']}}}
+.profile-actions{{display:flex;gap:8px;margin-top:12px;justify-content:flex-end}}
+.btn{{display:inline-block;padding:6px 18px;border-radius:20px;font-size:.82em;
+  text-decoration:none;cursor:pointer;transition:all .3s ease;font-weight:500}}
+.switch-btn{{background:{c['purple_dark']};color:{c['purple_pale']};border:1px solid {c['purple_mid']}}}
+.switch-btn:hover{{background:{c['purple_mid']};box-shadow:0 4px 16px rgba(123,79,191,.25)}}
+.section-title{{color:{c['purple_light']};font-size:1.1em;margin:28px 0 14px;font-weight:600;
+  animation:shimmerIn .6s ease forwards}}
+.help-text{{color:{c['text_muted']};font-size:.82em;margin-top:20px;padding:14px 18px;
+  background:rgba(22,22,31,.4);border-radius:10px;border:1px solid rgba(58,58,74,.3);
+  animation:shimmerIn .7s ease forwards}}
+.help-text b{{color:{c['purple_light']}}}
+</style></head><body>
+<div class="glass-orb" style="width:350px;height:350px;background:{c['purple_mid']};top:5%;right:-5%"></div>
+<div class="glass-orb" style="width:200px;height:200px;background:{c['purple_dark']};bottom:10%;left:-3%"></div>
+<h1 class="refract-target refract-glow">Profiles</h1>
+<div class="subtitle">Active: {html_mod.escape(profile_manager.active.display_name)}</div>
+
+{cards}
+
+<div class="help-text refract-target refract-glow">
+  <b>Profile Features:</b><br>
+  Each profile has its own history, bookmarks, settings, passwords, and auto-login rules.<br>
+  Use <b>Tools &gt; Profiles</b> or the <b>Command Palette</b> (Ctrl+K) to create, switch, and manage profiles.<br>
+  <b>Auto-Login:</b> Save credentials via <b>Save Credential</b> and enable auto-fill/submit per site.<br>
+  <b>Export:</b> Profiles are fully included in .nydta exports (passwords stay encrypted).
+</div>
 <script>{rjs}</script>
 </body></html>'''

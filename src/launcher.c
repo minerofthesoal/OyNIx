@@ -133,10 +133,33 @@ static int install_deps(const char *python, const char *exe_dir) {
     return system(cmd);
 }
 
+/* Redirect stdout/stderr to log file when no terminal (desktop launch) */
+static void setup_logging(void) {
+    if (!isatty(fileno(stdout))) {
+        const char *home = getenv("HOME");
+        if (home) {
+            char log_path[MAX_PATH];
+            snprintf(log_path, sizeof(log_path), "%s/.config/oynix/launch.log", home);
+            /* Ensure directory exists */
+            char dir_path[MAX_PATH];
+            snprintf(dir_path, sizeof(dir_path), "%s/.config/oynix", home);
+            mkdir(dir_path, 0755);
+            FILE *log = fopen(log_path, "a");
+            if (log) {
+                dup2(fileno(log), fileno(stdout));
+                dup2(fileno(log), fileno(stderr));
+                fclose(log);
+            }
+        }
+    }
+}
+
 int main(int argc, char *argv[]) {
+    setup_logging();
+
     printf("\n");
     printf(PURPLE BOLD "  ╔═══════════════════════════════════════════════╗\n");
-    printf("  ║         OyNIx Browser v1.1.0                 ║\n");
+    printf("  ║         OyNIx Browser v2.3                   ║\n");
     printf("  ║    The Nyx-Powered Local AI Browser          ║\n");
     printf("  ╚═══════════════════════════════════════════════╝" RESET "\n\n");
 

@@ -157,23 +157,35 @@ if [ -f "build/oynix" ]; then
     chmod +x "$SCRIPT_DIR/oynix-browser"
     echo "  Using native C launcher"
 else
-    # Build shell launcher with venv activation if needed
-    # Find Qt6 lib path for LD_LIBRARY_PATH
+    # Build shell launcher that works from both terminal and desktop
     QT6_LIB=$($PYTHON_CMD -c "import PyQt6,os; print(os.path.join(os.path.dirname(PyQt6.__file__),'Qt6','lib'))" 2>/dev/null || echo "")
 
+    VENV_LINE=""
     if [ -f "$SCRIPT_DIR/.venv/bin/activate" ]; then
-        cat > "$SCRIPT_DIR/oynix-browser" <<LAUNCHER
+        VENV_LINE="source \"$SCRIPT_DIR/.venv/bin/activate\""
+    fi
+
+    cat > "$SCRIPT_DIR/oynix-browser" <<LAUNCHER
 #!/bin/bash
+# OyNIx Browser launcher — works from terminal and desktop
+if ! [ -t 1 ]; then
+    mkdir -p "\$HOME/.config/oynix"
+    exec >>"\$HOME/.config/oynix/launch.log" 2>&1
+fi
 cd "$SCRIPT_DIR"
-source "$SCRIPT_DIR/.venv/bin/activate"
-export LD_LIBRARY_PATH="${QT6_LIB}\${LD_LIBRARY_PATH:+:\$LD_LIBRARY_PATH}"
-exec $PYTHON_CMD -m oynix "\$@"
-LAUNCHER
-    else
-        cat > "$SCRIPT_DIR/oynix-browser" <<LAUNCHER
-#!/bin/bash
-cd "$SCRIPT_DIR"
-export LD_LIBRARY_PATH="${QT6_LIB}\${LD_LIBRARY_PATH:+:\$LD_LIBRARY_PATH}"
+$VENV_LINE
+export PYTHONPATH="${SCRIPT_DIR}\${PYTHONPATH:+:\$PYTHONPATH}"
+
+# Qt6 library path
+for qt6_candidate in \\
+    "${QT6_LIB}" \\
+    "\$($PYTHON_CMD -c 'import PyQt6,os; print(os.path.join(os.path.dirname(PyQt6.__file__),"Qt6","lib"))' 2>/dev/null)"; do
+    if [ -n "\$qt6_candidate" ] && [ -d "\$qt6_candidate" ]; then
+        export LD_LIBRARY_PATH="\${qt6_candidate}\${LD_LIBRARY_PATH:+:\$LD_LIBRARY_PATH}"
+        break
+    fi
+done
+
 exec $PYTHON_CMD -m oynix "\$@"
 LAUNCHER
     fi

@@ -64,20 +64,21 @@ FALLBACK_PATH = os.path.join(MODEL_DIR, FALLBACK_FILE)
 try:
     from transformers import AutoModelForCausalLM, AutoTokenizer, pipeline
     HAS_TRANSFORMERS = True
-except ImportError:
+except (ImportError, OSError, Exception):
     HAS_TRANSFORMERS = False
 
-# Try imports
+# Try imports — catch OSError too: on Windows/PyInstaller, llama_cpp may
+# partially exist but fail with WinError 3 (missing native .dll path)
 try:
     from llama_cpp import Llama
     HAS_LLAMA = True
-except ImportError:
+except (ImportError, OSError, Exception):
     HAS_LLAMA = False
 
 try:
     from huggingface_hub import hf_hub_download
     HAS_HF = True
-except ImportError:
+except (ImportError, OSError, Exception):
     HAS_HF = False
 
 
