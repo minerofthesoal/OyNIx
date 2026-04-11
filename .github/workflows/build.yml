@@ -43,8 +43,12 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y \
             dpkg-dev fakeroot gcc g++ cmake ninja-build pkg-config \
-            libsqlite3-dev libnss3-dev libxcomposite-dev libxrandr-dev \
-            libgl1-mesa-dev libegl1-mesa-dev
+            libsqlite3-dev libnss3-dev libnspr4-dev \
+            libxcomposite-dev libxdamage-dev libxrandr-dev libxtst-dev \
+            libxkbcommon-dev libx11-xcb-dev libxcb1-dev libxext-dev libxfixes-dev \
+            libgl1-mesa-dev libegl1-mesa-dev libdrm-dev libgbm-dev \
+            libfontconfig1-dev libfreetype6-dev libglib2.0-dev \
+            libdbus-1-dev libasound2-dev libpulse-dev libexpat1-dev
 
       - name: Install Qt6
         uses: jurplel/install-qt-action@v4
