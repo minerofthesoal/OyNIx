@@ -102,5 +102,91 @@ public sealed class BookmarkStore
         return true;
     }
 
-    public string GetFoldersJson() => _folders.ToJsonString();
+    public bool RenameFolder(string oldName, string newName)
+    {
+        foreach (var f in _folders)
+        {
+            if (f?["name"]?.GetValue<string>() == oldName)
+            {
+                f!.AsObject()["name"] = newName;
+                // Update bookmarks in the old folder
+                foreach (var bm in _bookmarks)
+                {
+                    if (bm?["folder"]?.GetValue<string>() == oldName)
+                        bm!.AsObject()["folder"] = newName;
+                }
+                Save();
+                return true;
+            }
+        }
+        return false;
+    }
+
+    public string GetFoldersJson()
+    {
+        // Include default folders + custom ones
+        var all = new JsonArray();
+        all.Add(new JsonObject { ["name"] = "Quick Access" });
+        all.Add(new JsonObject { ["name"] = "Reading List" });
+        foreach (var f in _folders)
+            all.Add(JsonNode.Parse(f!.ToJsonString()));
+        return all.ToJsonString();
+    }
+
+    public string GetByFolderJson(string folder)
+    {
+        var results = new JsonArray();
+        foreach (var bm in _bookmarks)
+        {
+            if (bm?["folder"]?.GetValue<string>() == folder)
+                results.Add(JsonNode.Parse(bm!.ToJsonString()));
+        }
+        return results.ToJsonString();
+    }
+
+    public bool IsBookmarked(string url)
+    {
+        return _bookmarks.Any(bm => bm?["url"]?.GetValue<string>() == url);
+    }
+
+    public string ExportJson()
+    {
+        var root = new JsonObject
+        {
+            ["version"] = "3.1",
+            ["exported_at"] = DateTime.UtcNow.ToString("O"),
+            ["bookmarks"] = JsonNode.Parse(_bookmarks.ToJsonString()),
+            ["folders"] = JsonNode.Parse(_folders.ToJsonString())
+        };
+        return root.ToJsonString(new JsonSerializerOptions { WriteIndented = true });
+    }
+
+    public bool ImportJson(string json)
+    {
+        try
+        {
+            var doc = JsonNode.Parse(json);
+            if (doc is JsonObject obj)
+            {
+                var imported = obj["bookmarks"]?.AsArray();
+                if (imported == null) return false;
+
+                int added = 0;
+                foreach (var bm in imported)
+                {
+                    var url = bm?["url"]?.GetValue<string>() ?? "";
+                    if (string.IsNullOrEmpty(url)) continue;
+                    if (_bookmarks.Any(b => b?["url"]?.GetValue<string>() == url))
+                        continue;
+                    _bookmarks.Add(JsonNode.Parse(bm!.ToJsonString()));
+                    added++;
+                }
+
+                if (added > 0) Save();
+                return true;
+            }
+        }
+        catch { }
+        return false;
+    }
 }

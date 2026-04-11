@@ -117,6 +117,16 @@ bool CoreBridge::initialize(const QString &configDir)
     m_secIsLogin = resolveSym<decltype(m_secIsLogin)>(m_lib, "oynix_sec_is_login");
     m_secInfo    = resolveSym<decltype(m_secInfo)>(m_lib, "oynix_sec_info");
 
+    // Crawler
+    m_crawlerConfigure  = resolveSym<decltype(m_crawlerConfigure)>(m_lib, "oynix_crawler_configure");
+    m_crawlerStartList  = resolveSym<decltype(m_crawlerStartList)>(m_lib, "oynix_crawler_start_list");
+    m_crawlerStartBroad = resolveSym<decltype(m_crawlerStartBroad)>(m_lib, "oynix_crawler_start_broad");
+    m_crawlerStop       = resolveSym<decltype(m_crawlerStop)>(m_lib, "oynix_crawler_stop");
+    m_crawlerStatus     = resolveSym<decltype(m_crawlerStatus)>(m_lib, "oynix_crawler_status");
+    m_crawlerResults    = resolveSym<decltype(m_crawlerResults)>(m_lib, "oynix_crawler_results");
+    m_crawlerCount      = resolveSym<decltype(m_crawlerCount)>(m_lib, "oynix_crawler_count");
+    m_crawlerIsRunning  = resolveSym<decltype(m_crawlerIsRunning)>(m_lib, "oynix_crawler_is_running");
+
     // Initialize the C# core
     if (m_init) {
         const QByteArray cfgBytes = configDir.toUtf8();
@@ -348,4 +358,60 @@ QJsonObject CoreBridge::secInfo(const QString &url)
     auto doc = QJsonDocument::fromJson(QByteArray(json));
     m_free(json);
     return doc.object();
+}
+
+// ── Crawler ─────────────────────────────────────────────────────────
+
+void CoreBridge::crawlerConfigure(int maxDepth, int maxPages, int concurrency, bool followExternal)
+{
+    if (m_crawlerConfigure)
+        m_crawlerConfigure(maxDepth, maxPages, concurrency, followExternal ? 1 : 0);
+}
+
+void CoreBridge::crawlerStartList(const QJsonArray &urls)
+{
+    if (!m_crawlerStartList) return;
+    const QByteArray json = QJsonDocument(urls).toJson(QJsonDocument::Compact);
+    m_crawlerStartList(json.constData());
+}
+
+void CoreBridge::crawlerStartBroad(const QString &seedUrl)
+{
+    if (m_crawlerStartBroad)
+        m_crawlerStartBroad(seedUrl.toUtf8().constData());
+}
+
+void CoreBridge::crawlerStop()
+{
+    if (m_crawlerStop) m_crawlerStop();
+}
+
+QJsonObject CoreBridge::crawlerStatus()
+{
+    if (!m_crawlerStatus || !m_free) return {};
+    char *json = m_crawlerStatus();
+    if (!json) return {};
+    auto doc = QJsonDocument::fromJson(QByteArray(json));
+    m_free(json);
+    return doc.object();
+}
+
+QJsonArray CoreBridge::crawlerResults(int offset, int limit)
+{
+    if (!m_crawlerResults || !m_free) return {};
+    char *json = m_crawlerResults(offset, limit);
+    if (!json) return {};
+    auto doc = QJsonDocument::fromJson(QByteArray(json));
+    m_free(json);
+    return doc.array();
+}
+
+int CoreBridge::crawlerCount()
+{
+    return m_crawlerCount ? m_crawlerCount() : 0;
+}
+
+bool CoreBridge::crawlerIsRunning()
+{
+    return m_crawlerIsRunning && m_crawlerIsRunning();
 }
