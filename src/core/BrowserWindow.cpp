@@ -56,6 +56,7 @@
 #include "search/NyxSearch.h"
 #include "interop/CoreBridge.h"
 #include "ui/ExtensionPanel.h"
+#include "ui/CrawlerPanel.h"
 #include "theme/ThemeEngine.h"
 
 #include <QSplitter>
@@ -97,17 +98,23 @@ BrowserWindow::BrowserWindow(QWidget *parent)
     m_extensionPanel = new ExtensionPanel(this);
     m_extensionPanel->hide();
 
+    // Crawler panel (inline, hidden by default)
+    m_crawlerPanel = new CrawlerPanel(this);
+    m_crawlerPanel->hide();
+
     // AI chat panel (right)
     m_aiPanel = new AiChatPanel(this);
 
     m_splitter->addWidget(m_treeTabSidebar);
     m_splitter->addWidget(m_tabWidget);
     m_splitter->addWidget(m_extensionPanel);
+    m_splitter->addWidget(m_crawlerPanel);
     m_splitter->addWidget(m_aiPanel);
     m_splitter->setStretchFactor(0, 0);
     m_splitter->setStretchFactor(1, 1);
     m_splitter->setStretchFactor(2, 0);
     m_splitter->setStretchFactor(3, 0);
+    m_splitter->setStretchFactor(4, 0);
     m_splitter->setHandleWidth(1);
     setCentralWidget(m_splitter);
 
@@ -143,6 +150,11 @@ BrowserWindow::BrowserWindow(QWidget *parent)
 
     // Bookmark panel connections
     connect(m_bookmarkPanel, &BookmarkPanel::bookmarkActivated, this, &BrowserWindow::navigateTo);
+
+    // Crawler panel connections
+    connect(m_crawlerPanel, &CrawlerPanel::openUrl, this, [this](const QString &url) {
+        navigateTo(QUrl(url));
+    });
 
     // AI panel connections
     connect(m_aiPanel, &AiChatPanel::summarizePageRequested, this, [this]() {
@@ -220,6 +232,9 @@ BrowserWindow::BrowserWindow(QWidget *parent)
     });
     new QShortcut(QKeySequence(QStringLiteral("Ctrl+B")), this, [this]{
         if (m_bookmarkPanel) m_bookmarkPanel->setVisible(!m_bookmarkPanel->isVisible());
+    });
+    new QShortcut(QKeySequence(QStringLiteral("Ctrl+Shift+W")), this, [this]{
+        if (m_crawlerPanel) m_crawlerPanel->setVisible(!m_crawlerPanel->isVisible());
     });
     new QShortcut(QKeySequence(QStringLiteral("F11")), this, [this]{ toggleFullscreen(); });
     new QShortcut(QKeySequence(QStringLiteral("Ctrl++")), this, [this]{ zoomIn(); });
@@ -379,6 +394,9 @@ void BrowserWindow::createMenuBar()
     m_toolsMenu->addAction(tr("Reading List"),    this, []{ /* placeholder */ });
     m_toolsMenu->addAction(tr("Extensions"),      this, [this]{
         if (m_extensionPanel) m_extensionPanel->setVisible(!m_extensionPanel->isVisible());
+    });
+    m_toolsMenu->addAction(tr("Web Crawler"),     this, [this]{
+        if (m_crawlerPanel) m_crawlerPanel->setVisible(!m_crawlerPanel->isVisible());
     });
     m_toolsMenu->addAction(tr("Profiles"),        this, [this]{
         navigateTo(QUrl(QStringLiteral("oyn://profiles")));

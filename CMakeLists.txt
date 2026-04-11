@@ -63,6 +63,8 @@ set(OYNIX_SOURCES
     src/ui/BookmarkPanel.h
     src/ui/ExtensionPanel.cpp
     src/ui/ExtensionPanel.h
+    src/ui/CrawlerPanel.cpp
+    src/ui/CrawlerPanel.h
     # Media
     src/media/AudioPlayer.cpp
     src/media/AudioPlayer.h

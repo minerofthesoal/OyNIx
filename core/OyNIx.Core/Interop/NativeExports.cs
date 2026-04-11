@@ -4,6 +4,7 @@ using OyNIx.Core.AI;
 using OyNIx.Core.Data;
 using OyNIx.Core.Extensions;
 using OyNIx.Core.Search;
+using OyNIx.Core.Crawler;
 using OyNIx.Core.Security;
 
 namespace OyNIx.Core.Interop;
@@ -252,5 +253,92 @@ public static unsafe class NativeExports
     {
         var url = Marshal.PtrToStringUTF8((IntPtr)urlPtr) ?? "";
         return AllocString(SecurityChecker.Instance.GetSecurityInfo(url));
+    }
+
+    // ── Web Crawler ─────────────────────────────────────────────────────
+
+    [UnmanagedCallersOnly(EntryPoint = "oynix_crawler_configure")]
+    public static void CrawlerConfigure(int maxDepth, int maxPages, int concurrency, int followExternal)
+    {
+        WebCrawler.Instance.Configure(maxDepth, maxPages, concurrency, followExternal != 0);
+    }
+
+    [UnmanagedCallersOnly(EntryPoint = "oynix_crawler_start_list")]
+    public static void CrawlerStartList(byte* urlsJsonPtr)
+    {
+        var json = Marshal.PtrToStringUTF8((IntPtr)urlsJsonPtr) ?? "[]";
+        // Parse JSON array of URL strings
+        var urls = ParseStringArray(json);
+        WebCrawler.Instance.StartFromList(urls);
+    }
+
+    [UnmanagedCallersOnly(EntryPoint = "oynix_crawler_start_broad")]
+    public static void CrawlerStartBroad(byte* seedUrlPtr)
+    {
+        var seedUrl = Marshal.PtrToStringUTF8((IntPtr)seedUrlPtr) ?? "";
+        WebCrawler.Instance.StartBroadCrawl(seedUrl);
+    }
+
+    [UnmanagedCallersOnly(EntryPoint = "oynix_crawler_stop")]
+    public static void CrawlerStop()
+    {
+        WebCrawler.Instance.Stop();
+    }
+
+    [UnmanagedCallersOnly(EntryPoint = "oynix_crawler_status")]
+    public static IntPtr CrawlerStatus()
+    {
+        return AllocString(WebCrawler.Instance.GetStatusJson());
+    }
+
+    [UnmanagedCallersOnly(EntryPoint = "oynix_crawler_results")]
+    public static IntPtr CrawlerResults(int offset, int limit)
+    {
+        return AllocString(WebCrawler.Instance.GetResultsJson(offset, limit));
+    }
+
+    [UnmanagedCallersOnly(EntryPoint = "oynix_crawler_count")]
+    public static int CrawlerCount()
+    {
+        return WebCrawler.Instance.GetCrawledCount();
+    }
+
+    [UnmanagedCallersOnly(EntryPoint = "oynix_crawler_is_running")]
+    public static int CrawlerIsRunning()
+    {
+        return WebCrawler.Instance.IsRunning ? 1 : 0;
+    }
+
+    // Helper to parse a JSON array of strings without System.Text.Json reflection
+    private static string[] ParseStringArray(string json)
+    {
+        var results = new List<string>();
+        json = json.Trim();
+        if (!json.StartsWith("[") || !json.EndsWith("]"))
+            return results.ToArray();
+
+        json = json[1..^1]; // strip [ ]
+        bool inString = false;
+        bool escaped = false;
+        int start = -1;
+        for (int i = 0; i < json.Length; i++)
+        {
+            char c = json[i];
+            if (escaped) { escaped = false; continue; }
+            if (c == '\\') { escaped = true; continue; }
+
+            if (c == '"')
+            {
+                if (!inString) { inString = true; start = i + 1; }
+                else
+                {
+                    results.Add(json[start..i]
+                        .Replace("\\\"", "\"")
+                        .Replace("\\\\", "\\"));
+                    inString = false;
+                }
+            }
+        }
+        return results.ToArray();
     }
 }

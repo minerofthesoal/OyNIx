@@ -59,6 +59,16 @@ public:
     bool secIsLogin(const QString &url);
     QJsonObject secInfo(const QString &url);
 
+    // ── Crawler ──────────────────────────────────────────────────────────
+    void crawlerConfigure(int maxDepth, int maxPages, int concurrency, bool followExternal);
+    void crawlerStartList(const QJsonArray &urls);
+    void crawlerStartBroad(const QString &seedUrl);
+    void crawlerStop();
+    QJsonObject crawlerStatus();
+    QJsonArray crawlerResults(int offset, int limit);
+    int crawlerCount();
+    bool crawlerIsRunning();
+
     [[nodiscard]] bool isLoaded() const { return m_loaded; }
 
 private:
@@ -115,4 +125,14 @@ private:
     // Security
     int   (*m_secIsLogin)(const char*) = nullptr;
     char* (*m_secInfo)(const char*) = nullptr;
+
+    // Crawler
+    void  (*m_crawlerConfigure)(int, int, int, int) = nullptr;
+    void  (*m_crawlerStartList)(const char*) = nullptr;
+    void  (*m_crawlerStartBroad)(const char*) = nullptr;
+    void  (*m_crawlerStop)() = nullptr;
+    char* (*m_crawlerStatus)() = nullptr;
+    char* (*m_crawlerResults)(int, int) = nullptr;
+    int   (*m_crawlerCount)() = nullptr;
+    int   (*m_crawlerIsRunning)() = nullptr;
 };
