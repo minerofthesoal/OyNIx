@@ -127,12 +127,18 @@ public sealed class ProfileManager
 
     public string ListProfilesJson()
     {
-        return JsonSerializer.Serialize(_profiles.Select(p => new
+        var arr = new JsonArray();
+        foreach (var p in _profiles)
         {
-            p.Name, p.DisplayName, p.AvatarPath, p.CreatedAt,
-            IsActive = p.Name == _activeProfileName,
-            HasPassword = File.Exists(Path.Combine(_profilesDir, p.Name, ".password_hash"))
-        }));
+            arr.Add(new JsonObject
+            {
+                ["Name"] = p.Name, ["DisplayName"] = p.DisplayName,
+                ["AvatarPath"] = p.AvatarPath, ["CreatedAt"] = p.CreatedAt,
+                ["IsActive"] = p.Name == _activeProfileName,
+                ["HasPassword"] = File.Exists(Path.Combine(_profilesDir, p.Name, ".password_hash"))
+            });
+        }
+        return arr.ToJsonString();
     }
 
     public static string HashPassword(string password)
@@ -149,7 +155,7 @@ public sealed class ProfileManager
         if (!File.Exists(_indexPath)) return;
         try
         {
-            var arr = JsonSerializer.Deserialize<JsonArray>(File.ReadAllText(_indexPath));
+            var arr = JsonNode.Parse(File.ReadAllText(_indexPath)) as JsonArray;
             if (arr == null) return;
             foreach (var val in arr)
             {

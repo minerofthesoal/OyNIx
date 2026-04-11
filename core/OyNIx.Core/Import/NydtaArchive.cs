@@ -40,7 +40,7 @@ public sealed class NydtaArchive
                 manifest.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
 
             // History as JSONL
-            var historyArr = JsonSerializer.Deserialize<JsonArray>(historyJson);
+            var historyArr = JsonNode.Parse(historyJson) as JsonArray;
             if (historyArr != null)
             {
                 var sb = new StringBuilder();
@@ -50,7 +50,7 @@ public sealed class NydtaArchive
             }
 
             // Database as JSONL
-            var dbArr = JsonSerializer.Deserialize<JsonArray>(databaseJson);
+            var dbArr = JsonNode.Parse(databaseJson) as JsonArray;
             if (dbArr != null)
             {
                 var sb = new StringBuilder();

@@ -1,4 +1,4 @@
-using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 
 namespace OyNIx.Core.Security;
@@ -100,17 +100,17 @@ public sealed class SecurityChecker
         {
             if (Regex.IsMatch(url, pattern, RegexOptions.IgnoreCase))
             {
-                return JsonSerializer.Serialize(new
+                return new JsonObject
                 {
-                    isLogin = true,
-                    service,
-                    level = "high",
-                    isHttps,
-                    isTrusted = _trustedDomains.Contains(domain),
-                    isBlocked = _blockedDomains.Contains(domain),
-                    message = $"This appears to be a {service} login page. " +
-                              "Verify the URL before entering credentials."
-                });
+                    ["isLogin"] = true,
+                    ["service"] = service,
+                    ["level"] = "high",
+                    ["isHttps"] = isHttps,
+                    ["isTrusted"] = _trustedDomains.Contains(domain),
+                    ["isBlocked"] = _blockedDomains.Contains(domain),
+                    ["message"] = $"This appears to be a {service} login page. " +
+                                  "Verify the URL before entering credentials."
+                }.ToJsonString();
             }
         }
 
@@ -119,17 +119,17 @@ public sealed class SecurityChecker
         var isGenericLogin = lower.Contains("/login") || lower.Contains("/signin") ||
                             lower.Contains("/auth") || lower.Contains("/password");
 
-        return JsonSerializer.Serialize(new
+        return new JsonObject
         {
-            isLogin = isGenericLogin,
-            service = isGenericLogin ? "Unknown" : "",
-            level = isGenericLogin ? "medium" : (isHttps ? "low" : "medium"),
-            isHttps,
-            isTrusted = _trustedDomains.Contains(domain),
-            isBlocked = _blockedDomains.Contains(domain),
-            message = isGenericLogin
+            ["isLogin"] = isGenericLogin,
+            ["service"] = isGenericLogin ? "Unknown" : "",
+            ["level"] = isGenericLogin ? "medium" : (isHttps ? "low" : "medium"),
+            ["isHttps"] = isHttps,
+            ["isTrusted"] = _trustedDomains.Contains(domain),
+            ["isBlocked"] = _blockedDomains.Contains(domain),
+            ["message"] = isGenericLogin
                 ? "This page may contain a login form. Verify the URL."
                 : ""
-        });
+        }.ToJsonString();
     }
 }
