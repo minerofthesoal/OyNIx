@@ -24,7 +24,6 @@ jobs:
         id: ver
         run: |
           if [ "${{ github.ref_type }}" = "tag" ]; then
-            # Strip trailing periods/spaces that make invalid tags
             RAW="${{ github.ref_name }}"
             CLEAN="$(echo "$RAW" | sed 's/[. ]*$//')"
             echo "version=$CLEAN" >> "$GITHUB_OUTPUT"
@@ -56,9 +55,15 @@ jobs:
       - name: Setup .NET 8
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: '8.0'
+          dotnet-version: '8.0.x'
+
+      # global.json pins SDK 8.0 — verify it's active
+      - name: Verify .NET SDK
+        run: dotnet --version
 
       - name: Build .deb
+        env:
+          DOTNET_ROOT: ${{ env.DOTNET_ROOT }}
         run: |
           chmod +x scripts/build-deb.sh
           QT_PREFIX="${Qt6_DIR}" ./scripts/build-deb.sh "${{ needs.prepare.outputs.version }}"
@@ -84,35 +89,42 @@ jobs:
       - name: Setup .NET 8
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: '8.0'
+          dotnet-version: '8.0.x'
+
+      - name: Install SQLite3 via vcpkg
+        shell: pwsh
+        run: |
+          vcpkg install sqlite3:x64-windows
+          echo "SQLITE3_DIR=$env:VCPKG_INSTALLATION_ROOT\installed\x64-windows" >> $env:GITHUB_ENV
 
       - name: Build with CMake
         shell: pwsh
         run: |
           cmake -S . -B build `
-            -DCMAKE_BUILD_TYPE=Release `
-            -DCMAKE_PREFIX_PATH="$env:Qt6_DIR"
+            -DCMAKE_PREFIX_PATH="$env:Qt6_DIR" `
+            -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_INSTALLATION_ROOT\scripts\buildsystems\vcpkg.cmake"
           cmake --build build --config Release -j $env:NUMBER_OF_PROCESSORS
 
       - name: Package .exe
         shell: pwsh
         run: |
           $v = "${{ needs.prepare.outputs.version }}" -replace '^v',''
-          # Copy binary + runtime
           New-Item -ItemType Directory -Path "dist" -Force
-          Copy-Item "build/Release/oynix.exe" "dist/OyNIx.exe" -ErrorAction SilentlyContinue
-          if (!(Test-Path "dist/OyNIx.exe")) {
-            Copy-Item "build/oynix.exe" "dist/OyNIx.exe"
+          # Find the binary (MSVC puts it under Release/)
+          $exe = Get-ChildItem -Path "build" -Recurse -Filter "oynix.exe" | Select-Object -First 1
+          if ($exe) {
+            Copy-Item $exe.FullName "dist/OyNIx.exe"
           }
           # Copy C# NativeAOT DLL
-          Copy-Item "build/dotnet/OyNIxCore.dll" "dist/" -ErrorAction SilentlyContinue
+          $dll = Get-ChildItem -Path "build/dotnet" -Filter "OyNIxCore.dll" -ErrorAction SilentlyContinue | Select-Object -First 1
+          if ($dll) { Copy-Item $dll.FullName "dist/" }
           # Use windeployqt to gather Qt runtime
-          if (Get-Command windeployqt -ErrorAction SilentlyContinue) {
+          if (Get-Command windeployqt6 -ErrorAction SilentlyContinue) {
+            windeployqt6 --release --no-translations "dist/OyNIx.exe"
+          } elseif (Get-Command windeployqt -ErrorAction SilentlyContinue) {
             windeployqt --release --no-translations "dist/OyNIx.exe"
           }
-          # Create zip
           Compress-Archive -Path "dist/*" -DestinationPath "OyNIx-${v}-windows.zip"
-          # Also copy bare exe for direct download
           Copy-Item "dist/OyNIx.exe" "OyNIx-${v}-windows.exe"
 
       - uses: actions/upload-artifact@v4
@@ -138,8 +150,8 @@ jobs:
       - name: Install KDE runtime + SDK
         run: |
           flatpak install --user -y --noninteractive flathub \
-            org.kde.Platform//6.7 \
-            org.kde.Sdk//6.7
+            org.kde.Platform//6.8 \
+            org.kde.Sdk//6.8
 
       - name: Build Flatpak
         run: |
