@@ -1,7 +1,0 @@
-#!/bin/bash
-# OyNIx Browser Flatpak launcher (C++ native build)
-if ! [ -t 1 ]; then
-    mkdir -p "$HOME/.config/oynix"
-    exec >>"$HOME/.config/oynix/launch.log" 2>&1
-fi
-exec /app/bin/oynix "$@"
