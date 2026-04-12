@@ -7,8 +7,11 @@
 
 namespace InternalPages {
 
-/// Generate homepage HTML with theme colors
-QString homePage(const QMap<QString, QString> &colors);
+/// Generate homepage HTML with theme colors, search stats, recent history, bookmarks
+QString homePage(const QMap<QString, QString> &colors,
+                 const QJsonObject &stats = QJsonObject(),
+                 const QJsonArray &recentHistory = QJsonArray(),
+                 const QJsonArray &bookmarks = QJsonArray());
 
 /// Generate search results page
 QString searchPage(const QString &query,

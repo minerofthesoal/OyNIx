@@ -34,6 +34,7 @@ signals:
     void currentUrlChanged(const QUrl &url);
     void currentTitleChanged(const QString &title);
     void tabCountChanged(int count);
+    void internalUrlRequested(const QUrl &url);
 
 protected:
     bool eventFilter(QObject *watched, QEvent *event) override;
