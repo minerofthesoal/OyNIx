@@ -12,7 +12,7 @@ public:
     ~WebPage() override;
 
 signals:
-    void oynUrlRequested(const QString &path);
+    void oynUrlRequested(const QUrl &url);
 
 protected:
     bool acceptNavigationRequest(const QUrl &url,

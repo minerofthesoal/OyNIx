@@ -129,10 +129,9 @@ WebView *TabWidget::addNewTab(const QUrl &url)
         addNewTab(u);
     });
 
-    // Forward oyn:// interception
-    connect(view->webPage(), &WebPage::oynUrlRequested, this, [this](const QString &path) {
-        // Re-emit as a URL so BrowserWindow can handle it
-        emit currentUrlChanged(QUrl(QStringLiteral("oyn://") + path));
+    // Forward oyn:// interception — pass full URL so query params are preserved
+    connect(view->webPage(), &WebPage::oynUrlRequested, this, [this](const QUrl &url) {
+        emit internalUrlRequested(url);
     });
 
     // Audio state — update tab icon/text hint

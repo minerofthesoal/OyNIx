@@ -1,4 +1,6 @@
 build/
+_build/
+_build_deb/
 dist/
 *.egg-info/
 __pycache__/

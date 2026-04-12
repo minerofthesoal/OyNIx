@@ -14,6 +14,7 @@
 #include <QFile>
 #include <QFileDialog>
 #include <QInputDialog>
+#include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QLabel>
@@ -58,10 +59,12 @@
 #include "ui/ExtensionPanel.h"
 #include "ui/CrawlerPanel.h"
 #include "theme/ThemeEngine.h"
+#include "pages/InternalPages.h"
 
 #include <QSplitter>
 #include <QWebEngineProfile>
 #include <QWebEngineDownloadRequest>
+#include <memory>
 
 // ── Helpers ──────────────────────────────────────────────────────────
 
@@ -83,6 +86,7 @@ BrowserWindow::BrowserWindow(QWidget *parent)
 
     // Initialize data subsystems
     m_bookmarkManager  = new BookmarkManager(configPath(), this);
+    m_historyManager   = new HistoryManager(configPath(), this);
     m_sessionManager   = new SessionManager(this);
     m_extensionManager = new ExtensionManager(this);
 
@@ -140,6 +144,9 @@ BrowserWindow::BrowserWindow(QWidget *parent)
         handleSecurityCheck(url);
     });
 
+    // Handle oyn:// internal URLs from WebPage navigation interception
+    connect(m_tabWidget, &TabWidget::internalUrlRequested, this, &BrowserWindow::handleInternalUrl);
+
     // Download handling
     connect(QWebEngineProfile::defaultProfile(), &QWebEngineProfile::downloadRequested,
             this, &BrowserWindow::handleDownload);
@@ -179,6 +186,8 @@ BrowserWindow::BrowserWindow(QWidget *parent)
             if (view) {
                 NyxSearch::instance()->indexPage(
                     url.toString(), view->title(), QString());
+                if (m_historyManager)
+                    m_historyManager->addEntry(url.toString(), view->title());
             }
         }
     });
@@ -589,15 +598,111 @@ void BrowserWindow::setTheme(const QString &themeName)
 
 void BrowserWindow::handleInternalUrl(const QUrl &url)
 {
+    auto *view = m_tabWidget ? m_tabWidget->currentWebView() : nullptr;
+    if (!view) return;
+
+    const auto &colors = ThemeEngine::instance().colors();
     const QString host = url.host();
 
-    if (host == QLatin1String("home"))          { /* load home page */      return; }
-    if (host == QLatin1String("bookmarks"))     { showBookmarks();          return; }
-    if (host == QLatin1String("history"))       { showHistory();            return; }
-    if (host == QLatin1String("downloads"))     { showDownloads();          return; }
-    if (host == QLatin1String("settings"))      { showSettings();           return; }
-    if (host == QLatin1String("search"))        { /* open search page */    return; }
-    if (host == QLatin1String("profiles"))      { /* open profiles page */  return; }
+    if (host == QLatin1String("home")) {
+        const auto stats = NyxSearch::instance()->getStats();
+        const QJsonArray recent = m_historyManager ? m_historyManager->getRecent(6) : QJsonArray();
+        const QJsonArray bookmarks = m_bookmarkManager ? m_bookmarkManager->getAll() : QJsonArray();
+        const QString html = InternalPages::homePage(colors, stats, recent, bookmarks);
+        view->setHtml(html, QUrl(QStringLiteral("oyn://home")));
+        if (m_urlBar) m_urlBar->setDisplayUrl(QUrl(QStringLiteral("oyn://home")));
+        return;
+    }
+
+    if (host == QLatin1String("search")) {
+        QUrlQuery query(url);
+        const QString q = query.queryItemValue(QStringLiteral("q"));
+        if (q.isEmpty()) {
+            // Empty search — show homepage instead
+            handleInternalUrl(QUrl(QStringLiteral("oyn://home")));
+            return;
+        }
+        // Get local + database results synchronously
+        auto searchResult = NyxSearch::instance()->search(q);
+        QJsonArray localResults = searchResult[QStringLiteral("local")].toArray();
+        QJsonArray dbResults = searchResult[QStringLiteral("database")].toArray();
+        // Merge local + database results
+        for (const auto &v : dbResults)
+            localResults.append(v);
+
+        const QString html = InternalPages::searchPage(q, localResults, QJsonArray(), colors);
+        view->setHtml(html, QUrl(QStringLiteral("oyn://search?q=") + QUrl::toPercentEncoding(q)));
+        if (m_urlBar) m_urlBar->setDisplayUrl(url);
+
+        // Connect async web results — when they arrive, refresh the page
+        auto *nyx = NyxSearch::instance();
+        auto conn = std::make_shared<QMetaObject::Connection>();
+        *conn = connect(nyx, &NyxSearch::webResultsReady, this,
+                        [this, q, localResults, colors, conn](const QJsonArray &webResults) {
+            disconnect(*conn);
+            auto *v = m_tabWidget ? m_tabWidget->currentWebView() : nullptr;
+            if (!v) return;
+            const QString updatedHtml = InternalPages::searchPage(q, localResults, webResults, colors);
+            v->setHtml(updatedHtml, QUrl(QStringLiteral("oyn://search?q=") + QUrl::toPercentEncoding(q)));
+        });
+        return;
+    }
+
+    if (host == QLatin1String("bookmarks")) {
+        const QJsonArray bookmarks = m_bookmarkManager ? m_bookmarkManager->getAll() : QJsonArray();
+        const QString html = InternalPages::bookmarksPage(bookmarks, colors);
+        view->setHtml(html, QUrl(QStringLiteral("oyn://bookmarks")));
+        if (m_urlBar) m_urlBar->setDisplayUrl(QUrl(QStringLiteral("oyn://bookmarks")));
+        return;
+    }
+
+    if (host == QLatin1String("history")) {
+        const QJsonArray history = m_historyManager ? m_historyManager->getAll() : QJsonArray();
+        const QString html = InternalPages::historyPage(history, colors);
+        view->setHtml(html, QUrl(QStringLiteral("oyn://history")));
+        if (m_urlBar) m_urlBar->setDisplayUrl(QUrl(QStringLiteral("oyn://history")));
+        return;
+    }
+
+    if (host == QLatin1String("downloads")) {
+        const QString html = InternalPages::downloadsPage(QJsonArray(), colors);
+        view->setHtml(html, QUrl(QStringLiteral("oyn://downloads")));
+        if (m_urlBar) m_urlBar->setDisplayUrl(QUrl(QStringLiteral("oyn://downloads")));
+        return;
+    }
+
+    if (host == QLatin1String("settings")) {
+        const QString html = InternalPages::settingsPage(m_config, colors);
+        view->setHtml(html, QUrl(QStringLiteral("oyn://settings")));
+        if (m_urlBar) m_urlBar->setDisplayUrl(QUrl(QStringLiteral("oyn://settings")));
+        return;
+    }
+
+    if (host == QLatin1String("profiles")) {
+        QJsonArray profiles;
+        QString activeProfile = QStringLiteral("Default");
+        // Build profile list — at minimum show default profile
+        QJsonObject def;
+        def[QStringLiteral("name")] = QStringLiteral("Default");
+        profiles.append(def);
+        const QString html = InternalPages::profilesPage(profiles, activeProfile, colors);
+        view->setHtml(html, QUrl(QStringLiteral("oyn://profiles")));
+        if (m_urlBar) m_urlBar->setDisplayUrl(QUrl(QStringLiteral("oyn://profiles")));
+        return;
+    }
+
+    if (host == QLatin1String("setting")) {
+        // Handle settings toggle: oyn://setting?key=value
+        QUrlQuery query(url);
+        const auto items = query.queryItems();
+        for (const auto &item : items) {
+            m_config[item.first] = (item.second == QLatin1String("true"));
+        }
+        saveConfig();
+        // Reload settings page
+        handleInternalUrl(QUrl(QStringLiteral("oyn://settings")));
+        return;
+    }
 }
 
 // ── Tab management ───────────────────────────────────────────────────
@@ -669,11 +774,13 @@ void BrowserWindow::reload()
 
 void BrowserWindow::showBookmarks()
 {
-    if (m_bookmarkPanel)
-        m_bookmarkPanel->setVisible(!m_bookmarkPanel->isVisible());
+    handleInternalUrl(QUrl(QStringLiteral("oyn://bookmarks")));
 }
 
-void BrowserWindow::showHistory()    { navigateTo(QUrl(QStringLiteral("oyn://history")));   }
+void BrowserWindow::showHistory()
+{
+    handleInternalUrl(QUrl(QStringLiteral("oyn://history")));
+}
 
 void BrowserWindow::showDownloads()
 {
@@ -726,23 +833,12 @@ void BrowserWindow::toggleFullscreen()
 
 void BrowserWindow::performSearch(const QString &query)
 {
-    const QString engine = m_config.value(QStringLiteral("search_engine"))
-                                   .toString(QStringLiteral("DuckDuckGo"));
-
-    QUrl searchUrl;
-    if (engine == QLatin1String("Google")) {
-        searchUrl = QUrl(QStringLiteral("https://www.google.com/search"));
-    } else if (engine == QLatin1String("Bing")) {
-        searchUrl = QUrl(QStringLiteral("https://www.bing.com/search"));
-    } else {
-        searchUrl = QUrl(QStringLiteral("https://duckduckgo.com/"));
-    }
-
+    // Route all searches through the built-in Nyx search engine
+    QUrl searchUrl(QStringLiteral("oyn://search"));
     QUrlQuery urlQuery;
     urlQuery.addQueryItem(QStringLiteral("q"), query);
     searchUrl.setQuery(urlQuery);
-
-    navigateTo(searchUrl);
+    handleInternalUrl(searchUrl);
 }
 
 // ── About ────────────────────────────────────────────────────────────

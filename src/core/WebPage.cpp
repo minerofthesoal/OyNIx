@@ -18,10 +18,7 @@ bool WebPage::acceptNavigationRequest(const QUrl &url,
                                        bool isMainFrame)
 {
     if (isMainFrame && url.scheme() == QLatin1String("oyn")) {
-        const QString path = url.host().isEmpty()
-                                 ? url.path().mid(1)
-                                 : url.host();
-        emit oynUrlRequested(path);
+        emit oynUrlRequested(url);
         return false;
     }
 
