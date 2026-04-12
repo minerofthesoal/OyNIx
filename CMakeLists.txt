@@ -204,13 +204,25 @@ if(EXISTS "${CMAKE_SOURCE_DIR}/themes")
     install(DIRECTORY themes/ DESTINATION share/oynix/themes)
 endif()
 
-# Platform-specific
+# Platform-specific (Linux)
 if(UNIX AND NOT APPLE)
     if(EXISTS "${CMAKE_SOURCE_DIR}/resources/oynix.desktop")
         install(FILES resources/oynix.desktop DESTINATION share/applications)
     endif()
-    if(EXISTS "${CMAKE_SOURCE_DIR}/resources/oynix.png")
-        install(FILES resources/oynix.png DESTINATION share/icons/hicolor/256x256/apps)
+
+    # Icons — install all available sizes from assets/
+    foreach(SIZE 256 128 64 48)
+        set(_icon "${CMAKE_SOURCE_DIR}/assets/icon-${SIZE}.png")
+        if(EXISTS "${_icon}")
+            install(FILES "${_icon}"
+                DESTINATION "share/icons/hicolor/${SIZE}x${SIZE}/apps"
+                RENAME oynix.png)
+        endif()
+    endforeach()
+    if(EXISTS "${CMAKE_SOURCE_DIR}/assets/icon.svg")
+        install(FILES "${CMAKE_SOURCE_DIR}/assets/icon.svg"
+            DESTINATION share/icons/hicolor/scalable/apps
+            RENAME oynix.svg)
     endif()
 endif()
 

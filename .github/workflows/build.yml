@@ -31,7 +31,7 @@ jobs:
             echo "version=v${{ github.event.inputs.version || '1.1.0' }}" >> "$GITHUB_OUTPUT"
           fi
 
-  # ── Debian/Ubuntu .deb (C++ / CMake) ────────────────────────────────
+  # ── Debian/Ubuntu .deb ──────────────────────────────────────────────
   build-deb:
     needs: prepare
     runs-on: ubuntu-22.04
@@ -61,23 +61,26 @@ jobs:
         with:
           dotnet-version: '8.0.x'
 
-      # global.json pins SDK 8.0 — verify it's active
-      - name: Verify .NET SDK
-        run: dotnet --version
+      - name: Verify toolchain
+        run: |
+          echo "CMake:  $(cmake --version | head -1)"
+          echo "Ninja:  $(ninja --version)"
+          echo ".NET:   $(dotnet --version)"
+          echo "Qt dir: ${Qt6_DIR}"
 
       - name: Build .deb
-        env:
-          DOTNET_ROOT: ${{ env.DOTNET_ROOT }}
         run: |
           chmod +x scripts/build-deb.sh
-          QT_PREFIX="${Qt6_DIR}" ./scripts/build-deb.sh "${{ needs.prepare.outputs.version }}"
+          QT_PREFIX="${Qt6_DIR}" \
+          DOTNET_ROOT="${DOTNET_ROOT}" \
+            ./scripts/build-deb.sh "${{ needs.prepare.outputs.version }}"
 
       - uses: actions/upload-artifact@v4
         with:
           name: deb-package
           path: '*.deb'
 
-  # ── Windows .exe (C++ / CMake + MSVC) ───────────────────────────────
+  # ── Windows .exe (C++ / MSVC) ──────────────────────────────────────
   build-exe:
     needs: prepare
     runs-on: windows-latest
@@ -114,22 +117,41 @@ jobs:
         run: |
           $v = "${{ needs.prepare.outputs.version }}" -replace '^v',''
           New-Item -ItemType Directory -Path "dist" -Force
-          # Find the binary (MSVC puts it under Release/)
-          $exe = Get-ChildItem -Path "build" -Recurse -Filter "oynix.exe" | Select-Object -First 1
-          if ($exe) {
-            Copy-Item $exe.FullName "dist/OyNIx.exe"
+
+          # Find the built binary
+          $exe = Get-ChildItem -Path "build" -Recurse -Filter "oynix.exe" |
+            Select-Object -First 1
+          if (-not $exe) {
+            Write-Error "oynix.exe not found in build output"
+            exit 1
           }
-          # Copy C# NativeAOT DLL
-          $dll = Get-ChildItem -Path "build/dotnet" -Filter "OyNIxCore.dll" -ErrorAction SilentlyContinue | Select-Object -First 1
+          Copy-Item $exe.FullName "dist/OyNIx.exe"
+
+          # Copy C# NativeAOT DLL if present
+          $dll = Get-ChildItem -Path "build/dotnet" -Filter "OyNIxCore.dll" `
+            -ErrorAction SilentlyContinue | Select-Object -First 1
           if ($dll) { Copy-Item $dll.FullName "dist/" }
+
           # Use windeployqt to gather Qt runtime
+          $wdq = $null
           if (Get-Command windeployqt6 -ErrorAction SilentlyContinue) {
-            windeployqt6 --release --no-translations "dist/OyNIx.exe"
+            $wdq = "windeployqt6"
           } elseif (Get-Command windeployqt -ErrorAction SilentlyContinue) {
-            windeployqt --release --no-translations "dist/OyNIx.exe"
+            $wdq = "windeployqt"
           }
+          if ($wdq) {
+            & $wdq --release --no-translations "dist/OyNIx.exe"
+          } else {
+            Write-Warning "windeployqt not found — Qt DLLs may be missing"
+          }
+
           Compress-Archive -Path "dist/*" -DestinationPath "OyNIx-${v}-windows.zip"
           Copy-Item "dist/OyNIx.exe" "OyNIx-${v}-windows.exe"
+
+          # Summary
+          Get-ChildItem "OyNIx-*" | ForEach-Object {
+            Write-Host "  $($_.Name) ($([math]::Round($_.Length / 1MB, 1)) MB)"
+          }
 
       - uses: actions/upload-artifact@v4
         with:
@@ -138,7 +160,7 @@ jobs:
             *.exe
             *.zip
 
-  # ── Arch Linux pacman (C++ / CMake) ─────────────────────────────────
+  # ── Arch Linux pacman ───────────────────────────────────────────────
   build-pacman:
     needs: prepare
     runs-on: ubuntu-22.04
@@ -149,8 +171,12 @@ jobs:
         run: |
           pacman -Syu --noconfirm
           pacman -S --noconfirm --needed \
-            base-devel git cmake qt6-webengine qt6-webchannel \
-            sqlite dotnet-sdk-8.0 gcc
+            base-devel git cmake ninja qt6-webengine qt6-webchannel sqlite gcc
+
+          # Install .NET SDK — package name varies by Arch mirror timing
+          pacman -S --noconfirm dotnet-sdk-8.0 2>/dev/null \
+            || pacman -S --noconfirm dotnet-sdk 2>/dev/null \
+            || echo "WARNING: .NET SDK not available — C# core will be skipped"
 
       - uses: actions/checkout@v4
 
@@ -177,12 +203,12 @@ jobs:
           deb="${{ needs.build-deb.result }}"
           exe="${{ needs.build-exe.result }}"
           pac="${{ needs.build-pacman.result }}"
-          echo "deb=$deb exe=$exe pac=$pac"
+          echo "Results: deb=$deb exe=$exe pac=$pac"
           if [ "$deb" = "success" ] || [ "$exe" = "success" ] || [ "$pac" = "success" ]; then
             echo "has_artifacts=true" >> "$GITHUB_OUTPUT"
           else
             echo "has_artifacts=false" >> "$GITHUB_OUTPUT"
-            echo "All builds failed, skipping release."
+            echo "::warning::All builds failed — no release will be created"
           fi
 
       - name: Download artifacts
@@ -192,16 +218,16 @@ jobs:
           merge-multiple: true
         continue-on-error: true
 
-      - name: List built artifacts
+      - name: List artifacts
         if: steps.check.outputs.has_artifacts == 'true'
-        run: ls -lh *.deb *.exe *.zip *.pkg.tar.* 2>/dev/null || echo "Some artifacts missing"
+        run: |
+          echo "=== Built artifacts ==="
+          ls -lh *.deb *.exe *.zip *.pkg.tar.* 2>/dev/null || echo "Some artifacts missing"
 
-      - name: Create or get tag
+      - name: Resolve tag
         if: steps.check.outputs.has_artifacts == 'true'
         id: tag
-        run: |
-          VERSION="${{ needs.prepare.outputs.version }}"
-          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+        run: echo "version=${{ needs.prepare.outputs.version }}" >> "$GITHUB_OUTPUT"
 
       - name: Create GitHub Release
         if: steps.check.outputs.has_artifacts == 'true'
@@ -214,10 +240,13 @@ jobs:
 
             Built with C++17, Qt6 WebEngine, and .NET 8 NativeAOT.
 
-            ### Downloads
-            - **Debian/Ubuntu**: `.deb` package — `sudo apt install ./oynix-*.deb`
-            - **Windows**: `.exe` / `.zip` — extract and run OyNIx.exe
-            - **Arch Linux**: `.pkg.tar.zst` — `sudo pacman -U oynix-*.pkg.tar.zst`
+            ### Install
+
+            | Platform | Command |
+            |----------|---------|
+            | **Debian/Ubuntu** | `sudo apt install ./oynix-*.deb` |
+            | **Arch Linux** | `sudo pacman -U oynix-*.pkg.tar.zst` |
+            | **Windows** | Extract `.zip` or run `.exe` directly |
 
             ---
             *Coded by Claude (Anthropic)*
@@ -232,11 +261,10 @@ jobs:
       - name: Fail summary
         if: steps.check.outputs.has_artifacts != 'true'
         run: |
-          echo "## Build Failed" >> "$GITHUB_STEP_SUMMARY"
-          echo "All platform builds failed. Check individual job logs." >> "$GITHUB_STEP_SUMMARY"
+          echo "## Build Results" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "| Job | Result |" >> "$GITHUB_STEP_SUMMARY"
-          echo "|-----|--------|" >> "$GITHUB_STEP_SUMMARY"
-          echo "| Debian | ${{ needs.build-deb.result }} |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| Windows | ${{ needs.build-exe.result }} |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| Arch | ${{ needs.build-pacman.result }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Platform | Result |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|----------|--------|" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Debian   | ${{ needs.build-deb.result }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Windows  | ${{ needs.build-exe.result }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Arch     | ${{ needs.build-pacman.result }} |" >> "$GITHUB_STEP_SUMMARY"
