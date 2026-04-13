@@ -45,9 +45,12 @@ private:
     void applyStyles();
     void loadFromConfig();
     void saveToConfig();
+    void onApplyClicked();
 
     QTabWidget *m_tabs = nullptr;
+    QPushButton *m_applyBtn = nullptr;
     QJsonObject m_config;
+    QJsonObject m_savedConfig;  // snapshot of last-saved config for change detection
 
     // General
     QLineEdit *m_homepageEdit = nullptr;

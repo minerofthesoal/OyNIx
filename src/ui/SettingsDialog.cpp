@@ -17,6 +17,8 @@
 #include <QDialogButtonBox>
 #include <QMessageBox>
 #include <QScrollArea>
+#include <QJsonDocument>
+#include <QTimer>
 
 // ── Constructor / Destructor ─────────────────────────────────────────
 SettingsDialog::SettingsDialog(const QJsonObject &config, QWidget *parent)
@@ -28,6 +30,7 @@ SettingsDialog::SettingsDialog(const QJsonObject &config, QWidget *parent)
     setupUi();
     applyStyles();
     loadFromConfig();
+    m_savedConfig = m_config;
 }
 
 SettingsDialog::~SettingsDialog() = default;
@@ -50,14 +53,13 @@ void SettingsDialog::setupUi()
 
     auto *buttonBox = new QDialogButtonBox(
         QDialogButtonBox::Ok | QDialogButtonBox::Cancel | QDialogButtonBox::Apply, this);
+    m_applyBtn = buttonBox->button(QDialogButtonBox::Apply);
     connect(buttonBox, &QDialogButtonBox::accepted, this, [this]() {
         saveToConfig();
         accept();
     });
     connect(buttonBox, &QDialogButtonBox::rejected, this, &QDialog::reject);
-    connect(buttonBox->button(QDialogButtonBox::Apply), &QPushButton::clicked, this, [this]() {
-        saveToConfig();
-    });
+    connect(m_applyBtn, &QPushButton::clicked, this, &SettingsDialog::onApplyClicked);
     mainLayout->addWidget(buttonBox);
 }
 
@@ -536,6 +538,42 @@ void SettingsDialog::saveToConfig()
         m_config[QStringLiteral("auto_sync")] = m_autoSyncCheck->isChecked();
     if (m_syncIntervalSpin)
         m_config[QStringLiteral("sync_interval")] = m_syncIntervalSpin->value();
+}
+
+void SettingsDialog::onApplyClicked()
+{
+    // Snapshot current config before saving
+    const QJsonObject before = m_savedConfig;
+
+    saveToConfig();
+
+    // Compare serialized JSON to detect actual changes
+    const QByteArray beforeJson = QJsonDocument(before).toJson(QJsonDocument::Compact);
+    const QByteArray afterJson  = QJsonDocument(m_config).toJson(QJsonDocument::Compact);
+
+    const auto &c = ThemeEngine::instance().colors();
+
+    if (beforeJson == afterJson) {
+        m_applyBtn->setText(QStringLiteral("Nothing changed"));
+        m_applyBtn->setStyleSheet(
+            QStringLiteral("QPushButton { background: ") + c["bg-mid"]
+            + QStringLiteral("; color: ") + c["text-secondary"]
+            + QStringLiteral("; border: none; border-radius: 6px; padding: 6px 14px; }"));
+    } else {
+        m_savedConfig = m_config;
+        m_applyBtn->setText(QStringLiteral("Applied"));
+        m_applyBtn->setStyleSheet(
+            QStringLiteral("QPushButton { background: ") + c["success"]
+            + QStringLiteral("; color: white; border: none; border-radius: 6px; padding: 6px 14px; }"));
+    }
+
+    // Reset button text after 2 seconds
+    QTimer::singleShot(2000, this, [this]() {
+        if (m_applyBtn) {
+            m_applyBtn->setText(QStringLiteral("Apply"));
+            m_applyBtn->setStyleSheet(QString());
+        }
+    });
 }
 
 QJsonObject SettingsDialog::updatedConfig() const
