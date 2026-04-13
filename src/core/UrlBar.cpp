@@ -7,6 +7,7 @@
 #include "UrlBar.h"
 
 #include <QAction>
+#include <QAbstractItemView>
 #include <QCompleter>
 #include <QFocusEvent>
 #include <QKeyEvent>

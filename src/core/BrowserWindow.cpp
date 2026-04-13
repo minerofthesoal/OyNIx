@@ -563,6 +563,12 @@ void BrowserWindow::loadConfig()
         m_config[QStringLiteral("theme")] = QStringLiteral("obsidian");
     if (!m_config.contains(QStringLiteral("search_engine")))
         m_config[QStringLiteral("search_engine")] = QStringLiteral("DuckDuckGo");
+    if (!m_config.contains(QStringLiteral("search_mode")))
+        m_config[QStringLiteral("search_mode")] = QStringLiteral("hybrid");
+
+    // Apply search mode
+    const bool useWeb = m_config[QStringLiteral("search_mode")].toString() != QLatin1String("internal");
+    NyxSearch::instance()->setUseWebSearch(useWeb);
 }
 
 void BrowserWindow::saveConfig()
@@ -794,6 +800,9 @@ void BrowserWindow::showSettings()
         applyTheme();
         if (m_treeTabSidebar)
             m_treeTabSidebar->setVisible(m_config[QStringLiteral("tree_tabs")].toBool());
+        // Apply search mode
+        const bool useWeb = m_config[QStringLiteral("search_mode")].toString() != QLatin1String("internal");
+        NyxSearch::instance()->setUseWebSearch(useWeb);
     }
 }
 

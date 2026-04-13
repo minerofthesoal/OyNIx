@@ -8,6 +8,7 @@
  */
 
 #include "CrawlerPanel.h"
+#include "data/Database.h"
 #include "search/WebCrawler.h"
 #include "search/NyxSearch.h"
 #include "theme/ThemeEngine.h"
@@ -21,8 +22,11 @@
 #include <QLabel>
 #include <QSpinBox>
 #include <QCheckBox>
+#include <QComboBox>
 #include <QProgressBar>
 #include <QTimer>
+#include <QDir>
+#include <QFileDialog>
 #include <QMessageBox>
 #include <QJsonArray>
 #include <QJsonObject>
@@ -73,7 +77,7 @@ void CrawlerPanel::setupUi()
     auto *depthRow = new QHBoxLayout;
     depthRow->addWidget(new QLabel(QStringLiteral("Max depth:"), this));
     m_depthSpin = new QSpinBox(this);
-    m_depthSpin->setRange(1, 10);
+    m_depthSpin->setRange(1, 42);
     m_depthSpin->setValue(2);
     m_depthSpin->setToolTip(QStringLiteral("How many link levels deep to crawl"));
     depthRow->addWidget(m_depthSpin);
@@ -98,6 +102,35 @@ void CrawlerPanel::setupUi()
     m_followExternal->setToolTip(
         QStringLiteral("When unchecked, only crawls links within the same domain"));
     root->addWidget(m_followExternal);
+
+    // Language filter
+    auto *langRow = new QHBoxLayout;
+    langRow->addWidget(new QLabel(QStringLiteral("Language:"), this));
+    m_langFilter = new QComboBox(this);
+    m_langFilter->setToolTip(QStringLiteral("Only index pages in this language (based on html lang attribute)"));
+    m_langFilter->addItem(QStringLiteral("Any language"), QString());
+    m_langFilter->addItem(QStringLiteral("English"),    QStringLiteral("en"));
+    m_langFilter->addItem(QStringLiteral("Spanish"),    QStringLiteral("es"));
+    m_langFilter->addItem(QStringLiteral("French"),     QStringLiteral("fr"));
+    m_langFilter->addItem(QStringLiteral("German"),     QStringLiteral("de"));
+    m_langFilter->addItem(QStringLiteral("Portuguese"), QStringLiteral("pt"));
+    m_langFilter->addItem(QStringLiteral("Italian"),    QStringLiteral("it"));
+    m_langFilter->addItem(QStringLiteral("Dutch"),      QStringLiteral("nl"));
+    m_langFilter->addItem(QStringLiteral("Russian"),    QStringLiteral("ru"));
+    m_langFilter->addItem(QStringLiteral("Chinese"),    QStringLiteral("zh"));
+    m_langFilter->addItem(QStringLiteral("Japanese"),   QStringLiteral("ja"));
+    m_langFilter->addItem(QStringLiteral("Korean"),     QStringLiteral("ko"));
+    m_langFilter->addItem(QStringLiteral("Arabic"),     QStringLiteral("ar"));
+    m_langFilter->addItem(QStringLiteral("Hindi"),      QStringLiteral("hi"));
+    m_langFilter->addItem(QStringLiteral("Turkish"),    QStringLiteral("tr"));
+    m_langFilter->addItem(QStringLiteral("Polish"),     QStringLiteral("pl"));
+    m_langFilter->addItem(QStringLiteral("Swedish"),    QStringLiteral("sv"));
+    m_langFilter->addItem(QStringLiteral("Norwegian"),  QStringLiteral("no"));
+    m_langFilter->addItem(QStringLiteral("Danish"),     QStringLiteral("da"));
+    m_langFilter->addItem(QStringLiteral("Finnish"),    QStringLiteral("fi"));
+    m_langFilter->addItem(QStringLiteral("Czech"),      QStringLiteral("cs"));
+    langRow->addWidget(m_langFilter, 1);
+    root->addLayout(langRow);
 
     // ── Action Buttons ──────────────────────────────────────────────────
     auto *btnRow = new QHBoxLayout;
@@ -162,6 +195,29 @@ void CrawlerPanel::setupUi()
     connect(m_resultsList, &QListWidget::itemDoubleClicked,
             this, &CrawlerPanel::onResultDoubleClicked);
     root->addWidget(m_resultsList, 1);
+
+    // ── Community DB export ────────────────────────────────────────────
+    auto *exportBtn = new QPushButton(QStringLiteral("Export JSONL for Community DB"), this);
+    exportBtn->setObjectName(QStringLiteral("exportBtn"));
+    exportBtn->setToolTip(QStringLiteral("Export your crawled data as JSONL to upload to the community extras database on GitHub"));
+    connect(exportBtn, &QPushButton::clicked, this, [this]() {
+        const QString path = QFileDialog::getSaveFileName(
+            this, QStringLiteral("Export Community DB"),
+            QDir::homePath() + QStringLiteral("/oynix_community_export.jsonl"),
+            QStringLiteral("JSONL Files (*.jsonl)"));
+        if (path.isEmpty()) return;
+
+        if (Database::instance()->exportToJsonl(path)) {
+            QMessageBox::information(this, QStringLiteral("Export Complete"),
+                QStringLiteral("Data exported to:\n%1\n\n"
+                    "You can upload this file to the OyNIx community extras "
+                    "database on GitHub.").arg(path));
+        } else {
+            QMessageBox::warning(this, QStringLiteral("Export Failed"),
+                QStringLiteral("Could not write to:\n%1").arg(path));
+        }
+    });
+    root->addWidget(exportBtn);
 
     // ── Poll timer ──────────────────────────────────────────────────────
     m_pollTimer = new QTimer(this);
@@ -288,6 +344,7 @@ void CrawlerPanel::onStartListCrawl()
         4, // concurrency
         m_followExternal->isChecked()
     );
+    crawler.setLanguageFilter(m_langFilter->currentData().toString());
 
     crawler.startList(urlArray);
     setRunningState(true);
@@ -337,6 +394,7 @@ void CrawlerPanel::onStartBroadCrawl()
         4,
         m_followExternal->isChecked()
     );
+    crawler.setLanguageFilter(m_langFilter->currentData().toString());
 
     crawler.startBroad(seedUrl.trimmed());
     setRunningState(true);

@@ -54,6 +54,18 @@ void WebCrawler::setPolitenessDelay(int milliseconds)
     m_politenessMs = qMax(0, milliseconds);
 }
 
+void WebCrawler::setLanguageFilter(const QString &langCode)
+{
+    QMutexLocker lock(&m_mutex);
+    m_languageFilter = langCode.trimmed().toLower();
+}
+
+QString WebCrawler::languageFilter() const
+{
+    QMutexLocker lock(&m_mutex);
+    return m_languageFilter;
+}
+
 // ── Crawl Actions ───────────────────────────────────────────────────────
 
 void WebCrawler::startList(const QJsonArray &urls)
@@ -64,6 +76,7 @@ void WebCrawler::startList(const QJsonArray &urls)
             return;
 
         reset();
+        m_isBroadMode = false;
         setState(State::Crawling);
 
         for (const auto &val : urls) {
@@ -85,9 +98,23 @@ void WebCrawler::startList(const QJsonArray &urls)
 
 void WebCrawler::startBroad(const QString &seedUrl)
 {
-    QJsonArray urls;
-    urls.append(seedUrl);
-    startList(urls);
+    {
+        QMutexLocker lock(&m_mutex);
+        if (m_state == State::Crawling || m_state == State::Stopping)
+            return;
+
+        reset();
+        m_isBroadMode = true;
+        setState(State::Crawling);
+
+        const QUrl url(seedUrl.trimmed());
+        if (url.isValid() && !url.scheme().isEmpty()) {
+            m_seedDomains.insert(url.host());
+            m_queue.enqueue(CrawlTask{url, 0, QString()});
+        }
+    }
+
+    scheduleNext();
 }
 
 void WebCrawler::stop()
@@ -275,6 +302,7 @@ void WebCrawler::onPageFinished(QNetworkReply *reply, const CrawlTask &task)
     pageObj[QStringLiteral("url")]         = canon;
     pageObj[QStringLiteral("crawl_depth")] = task.depth;
     pageObj[QStringLiteral("status_code")] = statusCode;
+    pageObj[QStringLiteral("source")]      = m_isBroadMode ? QStringLiteral("nyx+") : QStringLiteral("nyx");
 
     bool success = false;
 
@@ -289,15 +317,39 @@ void WebCrawler::onPageFinished(QNetworkReply *reply, const CrawlTask &task)
             const QByteArray body = reply->readAll();
             const QString html = QString::fromUtf8(body);
 
-            const QString title   = extractTitle(html);
-            const QString snippet = extractTextContent(html);
+            // Language filter: check <html lang="..."> attribute
+            bool langOk = true;
+            {
+                QMutexLocker lock(&m_mutex);
+                if (!m_languageFilter.isEmpty()) {
+                    static const QRegularExpression langRx(
+                        QStringLiteral("<html[^>]*\\slang=[\"']?([a-zA-Z-]+)"),
+                        QRegularExpression::CaseInsensitiveOption);
+                    auto m = langRx.match(html.left(2000)); // only scan head
+                    if (m.hasMatch()) {
+                        const QString pageLang = m.captured(1).toLower();
+                        // Match "en" to "en", "en-US", etc.
+                        if (!pageLang.startsWith(m_languageFilter))
+                            langOk = false;
+                    }
+                }
+            }
 
-            pageObj[QStringLiteral("title")]           = title;
-            pageObj[QStringLiteral("content_snippet")] = snippet;
-            pageObj[QStringLiteral("status")]          = QStringLiteral("ok");
-            success = true;
+            if (!langOk) {
+                pageObj[QStringLiteral("title")]           = QString();
+                pageObj[QStringLiteral("content_snippet")] = QString();
+                pageObj[QStringLiteral("status")]          = QStringLiteral("skipped-language");
+            } else {
+                const QString title   = extractTitle(html);
+                const QString snippet = extractTextContent(html);
 
-            // Extract and enqueue links for BFS
+                pageObj[QStringLiteral("title")]           = title;
+                pageObj[QStringLiteral("content_snippet")] = snippet;
+                pageObj[QStringLiteral("status")]          = QStringLiteral("ok");
+                success = true;
+            }
+
+            // Extract and enqueue links for BFS (even for skipped-language pages)
             if (task.depth < m_maxDepth) {
                 const QStringList links = extractLinks(html, finalUrl);
                 QMutexLocker lock(&m_mutex);

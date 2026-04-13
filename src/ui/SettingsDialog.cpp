@@ -152,6 +152,15 @@ QWidget *SettingsDialog::createSearchTab()
             this, &SettingsDialog::searchEngineChanged);
     form->addRow(QStringLiteral("Default search engine:"), m_searchEngineCombo);
 
+    m_searchModeCombo = new QComboBox(this);
+    m_searchModeCombo->addItem(QStringLiteral("OYN + Nyx only (internal)"), QStringLiteral("internal"));
+    m_searchModeCombo->addItem(QStringLiteral("OYN + Nyx + Web (hybrid)"),  QStringLiteral("hybrid"));
+    m_searchModeCombo->setCurrentIndex(1); // default: hybrid
+    m_searchModeCombo->setToolTip(
+        QStringLiteral("Internal-only uses your local database and crawled pages.\n"
+                       "Hybrid also fetches results from the selected search engine."));
+    form->addRow(QStringLiteral("Search mode:"), m_searchModeCombo);
+
     m_searchSuggestionsCheck = new QCheckBox(QStringLiteral("Show search suggestions"), this);
     m_searchSuggestionsCheck->setChecked(true);
     form->addRow(QString(), m_searchSuggestionsCheck);
@@ -459,6 +468,11 @@ void SettingsDialog::loadFromConfig()
             m_config[QStringLiteral("search_engine")].toString());
         if (idx >= 0) m_searchEngineCombo->setCurrentIndex(idx);
     }
+    if (m_searchModeCombo) {
+        const QString mode = m_config[QStringLiteral("search_mode")].toString(QStringLiteral("hybrid"));
+        const int idx = m_searchModeCombo->findData(mode);
+        if (idx >= 0) m_searchModeCombo->setCurrentIndex(idx);
+    }
     if (m_treeTabsCheck)
         m_treeTabsCheck->setChecked(m_config[QStringLiteral("tree_tabs")].toBool());
     if (m_restoreSessionCheck)
@@ -482,6 +496,8 @@ void SettingsDialog::saveToConfig()
         m_config[QStringLiteral("theme")] = m_themeCombo->currentText();
     if (m_searchEngineCombo)
         m_config[QStringLiteral("search_engine")] = m_searchEngineCombo->currentText();
+    if (m_searchModeCombo)
+        m_config[QStringLiteral("search_mode")] = m_searchModeCombo->currentData().toString();
     if (m_treeTabsCheck)
         m_config[QStringLiteral("tree_tabs")] = m_treeTabsCheck->isChecked();
     if (m_restoreSessionCheck)

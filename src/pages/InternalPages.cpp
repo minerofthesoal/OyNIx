@@ -143,6 +143,7 @@ QString homePage(const QMap<QString, QString> &c,
     const int indexedPages = stats[QStringLiteral("indexed_pages")].toInt();
     const int dbSites = stats[QStringLiteral("database_sites")].toInt();
     const int totalVisits = stats[QStringLiteral("total_visits")].toInt();
+    const int uniqueWebsites = stats[QStringLiteral("unique_websites")].toInt();
 
     // Build recent history items (max 8)
     QString historyItems;
@@ -375,6 +376,9 @@ QString homePage(const QMap<QString, QString> &c,
         + QString::number(dbSites)
         + QStringLiteral("</div><div class='stat-label'>Sites in DB</div></div>\n")
         + QStringLiteral("    <div class='stat-item'><div class='stat-value'>")
+        + QString::number(uniqueWebsites)
+        + QStringLiteral("</div><div class='stat-label'>Unique Websites</div></div>\n")
+        + QStringLiteral("    <div class='stat-item'><div class='stat-value'>")
         + QString::number(totalVisits)
         + QStringLiteral("</div><div class='stat-label'>Total Visits</div></div>\n")
         + QStringLiteral("  </div>\n");
@@ -452,8 +456,17 @@ QString searchPage(const QString &query,
                    const QJsonArray &webResults,
                    const QMap<QString, QString> &c) {
 
-    auto buildCards = [&](const QJsonArray &results, const QString &badgeClass,
-                          const QString &badgeLabel) -> QString {
+    // Map source values to badge class + label
+    auto sourceBadge = [](const QString &src) -> QPair<QString, QString> {
+        if (src == QLatin1String("oyn"))   return {QStringLiteral("oyn"),   QStringLiteral("OYN")};
+        if (src == QLatin1String("oyn+"))  return {QStringLiteral("oynp"),  QStringLiteral("OYN+")};
+        if (src == QLatin1String("nyx+"))  return {QStringLiteral("nyxp"),  QStringLiteral("Nyx+")};
+        if (src == QLatin1String("nyx"))   return {QStringLiteral("nyx"),   QStringLiteral("Nyx")};
+        return {QStringLiteral("nyx"), QStringLiteral("Nyx")};
+    };
+
+    auto buildCards = [&](const QJsonArray &results, const QString &fallbackBadgeClass,
+                          const QString &fallbackBadgeLabel) -> QString {
         QString cards;
         int i = 0;
         for (const auto &val : results) {
@@ -464,6 +477,16 @@ QString searchPage(const QString &query,
             QString desc = r[QStringLiteral("description")].toString().toHtmlEscaped();
             QString domain = QUrl(r[QStringLiteral("url")].toString()).host().toHtmlEscaped();
             if (title.isEmpty()) title = url;
+
+            // Use per-result source if available, else fallback
+            QString badgeClass = fallbackBadgeClass;
+            QString badgeLabel = fallbackBadgeLabel;
+            const QString src = r[QStringLiteral("source")].toString();
+            if (!src.isEmpty()) {
+                auto badge = sourceBadge(src);
+                badgeClass = badge.first;
+                badgeLabel = badge.second;
+            }
 
             cards += QStringLiteral(
                 "<div class='result' style='animation:slideUp .35s %1s ease both'>"
@@ -547,9 +570,20 @@ QString searchPage(const QString &query,
     html += QStringLiteral(".r-desc { color: ") + c["text-secondary"]
         + QStringLiteral("; line-height: 1.55; font-size: .88em; }\n");
 
-    // Badges
+    // Badges — source labels
+    html += QStringLiteral(".badge { font-size: .65em; font-weight: 700; padding: 2px 8px;"
+                           " border-radius: 6px; text-transform: uppercase; letter-spacing: 0.04em; }\n");
+    html += QStringLiteral(
+        ".badge.oyn { background: rgba(139,92,246,0.22); color: ") + c["purple-light"]
+        + QStringLiteral("; }\n");
+    html += QStringLiteral(
+        ".badge.oynp { background: rgba(139,92,246,0.35); color: ") + c["purple-pale"]
+        + QStringLiteral("; }\n");
     html += QStringLiteral(
         ".badge.nyx { background: rgba(110,106,179,0.18); color: ") + c["purple-light"]
+        + QStringLiteral("; }\n");
+    html += QStringLiteral(
+        ".badge.nyxp { background: rgba(110,106,179,0.30); color: ") + c["purple-pale"]
         + QStringLiteral("; }\n");
     html += QStringLiteral(
         ".badge.web { background: rgba(80,80,100,0.25); color: ") + c["text-secondary"]

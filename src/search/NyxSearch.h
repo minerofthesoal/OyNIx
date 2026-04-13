@@ -14,9 +14,14 @@ class NyxSearch : public QObject
 public:
     static NyxSearch *instance();
 
-    void indexPage(const QString &url, const QString &title, const QString &contentSnippet);
+    void indexPage(const QString &url, const QString &title, const QString &contentSnippet,
+                   const QString &source = QStringLiteral("nyx"));
     void indexCrawledPage(const QJsonObject &page);
     [[nodiscard]] QJsonObject search(const QString &query);
+
+    // Search mode: true = also fetch web results, false = internal only (OYN+Nyx)
+    void setUseWebSearch(bool enabled);
+    [[nodiscard]] bool useWebSearch() const;
 
     [[nodiscard]] QJsonObject getStats() const;
     bool exportIndex(const QString &path) const;
@@ -33,5 +38,6 @@ private:
 
     Database *m_db = nullptr;
     WebResultsFetcher *m_fetcher = nullptr;
+    bool m_useWebSearch = true;
     static NyxSearch *s_instance;
 };

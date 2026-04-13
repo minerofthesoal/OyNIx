@@ -38,6 +38,8 @@ public:
     // ── Configuration ───────────────────────────────────────────────────
     void configure(int maxDepth, int maxPages, int concurrency, bool followExternal);
     void setPolitenessDelay(int milliseconds);
+    void setLanguageFilter(const QString &langCode);
+    [[nodiscard]] QString languageFilter() const;
 
     // ── Crawl actions ───────────────────────────────────────────────────
     void startList(const QJsonArray &urls);
@@ -120,6 +122,12 @@ private:
 
     // Seed domains for same-domain filtering
     QSet<QString>        m_seedDomains;
+
+    // Whether current crawl is broad/random mode (nyx+) vs list mode (nyx)
+    bool                 m_isBroadMode = false;
+
+    // Language filter: empty = accept all, e.g. "en", "de", "fr"
+    QString              m_languageFilter;
 
     // ── Robots.txt cache ────────────────────────────────────────────────
     QHash<QString, RobotsRules> m_robotsCache;

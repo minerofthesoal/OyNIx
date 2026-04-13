@@ -95,12 +95,17 @@ void Database::createTables()
         "title TEXT, "
         "content TEXT, "
         "domain TEXT, "
+        "source TEXT DEFAULT 'nyx', "
         "visited_at TEXT, "
         "visit_count INTEGER DEFAULT 1)"
     ));
     q.exec(QStringLiteral("CREATE INDEX IF NOT EXISTS idx_pages_domain ON pages(domain)"));
     q.exec(QStringLiteral("CREATE INDEX IF NOT EXISTS idx_pages_visited ON pages(visited_at DESC)"));
     q.exec(QStringLiteral("CREATE INDEX IF NOT EXISTS idx_pages_visits ON pages(visit_count DESC)"));
+
+    // Migrate: add source column if missing (existing DBs)
+    q.exec(QStringLiteral("ALTER TABLE pages ADD COLUMN source TEXT DEFAULT 'nyx'"));
+    // (ALTER TABLE ... ADD COLUMN silently fails if column already exists in SQLite 3.35+)
 
     // ── FTS5 with porter tokenizer and prefix indexes for fast autocomplete ──
     q.exec(QStringLiteral(
@@ -296,7 +301,8 @@ bool Database::compare_site(const QString &url1, const QString &url2) const
     return r1 >= r2;
 }
 
-bool Database::addPage(const QString &url, const QString &title, const QString &content, const QString &domain)
+bool Database::addPage(const QString &url, const QString &title, const QString &content,
+                       const QString &domain, const QString &source)
 {
     QMutexLocker locker(&m_mutex);
     QSqlDatabase db = QSqlDatabase::database(QStringLiteral("oynix_main"));
@@ -305,16 +311,17 @@ bool Database::addPage(const QString &url, const QString &title, const QString &
     // Upsert into pages
     QSqlQuery q(db);
     q.prepare(QStringLiteral(
-        "INSERT INTO pages(url, title, content, domain, visited_at, visit_count) "
-        "VALUES(?, ?, ?, ?, ?, 1) "
+        "INSERT INTO pages(url, title, content, domain, source, visited_at, visit_count) "
+        "VALUES(?, ?, ?, ?, ?, ?, 1) "
         "ON CONFLICT(url) DO UPDATE SET "
-        "title=excluded.title, content=excluded.content, "
+        "title=excluded.title, content=excluded.content, source=excluded.source, "
         "visited_at=excluded.visited_at, visit_count=visit_count+1"
     ));
     q.addBindValue(url);
     q.addBindValue(title);
     q.addBindValue(content);
     q.addBindValue(domain);
+    q.addBindValue(source);
     q.addBindValue(now);
 
     if (!q.exec())
@@ -362,8 +369,10 @@ QJsonArray Database::searchPages(const QString &query, int limit) const
     const QString ftsQuery = ftsTerms.join(QStringLiteral(" AND "));
 
     q.prepare(QStringLiteral(
-        "SELECT url, title, snippet(pages_fts, 2, '<b>', '</b>', '...', 64), domain "
-        "FROM pages_fts WHERE pages_fts MATCH ? ORDER BY rank LIMIT ?"
+        "SELECT f.url, f.title, snippet(pages_fts, 2, '<b>', '</b>', '...', 64), f.domain, "
+        "COALESCE(p.source, 'nyx') "
+        "FROM pages_fts f LEFT JOIN pages p ON f.url = p.url "
+        "WHERE pages_fts MATCH ? ORDER BY rank LIMIT ?"
     ));
     q.addBindValue(ftsQuery);
     q.addBindValue(limit);
@@ -375,6 +384,7 @@ QJsonArray Database::searchPages(const QString &query, int limit) const
             obj[QStringLiteral("title")] = q.value(1).toString();
             obj[QStringLiteral("snippet")] = q.value(2).toString();
             obj[QStringLiteral("domain")] = q.value(3).toString();
+            obj[QStringLiteral("source")] = q.value(4).toString();
             results.append(obj);
         }
     }
@@ -416,6 +426,50 @@ bool Database::exportToJson(const QString &path) const
     return true;
 }
 
+bool Database::exportToJsonl(const QString &path) const
+{
+    QMutexLocker locker(&m_mutex);
+    QSqlDatabase db = QSqlDatabase::database(QStringLiteral("oynix_main"));
+
+    QFile file(path);
+    if (!file.open(QIODevice::WriteOnly | QIODevice::Text))
+        return false;
+
+    // Export crawled pages (from pages table) as JSONL — one JSON object per line
+    QSqlQuery q(db);
+    if (q.exec(QStringLiteral("SELECT url, title, content, domain, source, visited_at FROM pages"))) {
+        while (q.next()) {
+            QJsonObject obj;
+            obj[QStringLiteral("url")]        = q.value(0).toString();
+            obj[QStringLiteral("title")]      = q.value(1).toString();
+            obj[QStringLiteral("content")]    = q.value(2).toString();
+            obj[QStringLiteral("domain")]     = q.value(3).toString();
+            obj[QStringLiteral("source")]     = q.value(4).toString();
+            obj[QStringLiteral("indexed_at")] = q.value(5).toString();
+            file.write(QJsonDocument(obj).toJson(QJsonDocument::Compact));
+            file.write("\n");
+        }
+    }
+
+    // Also export sites
+    if (q.exec(QStringLiteral("SELECT url, title, description, category, rating, source, added_at FROM sites"))) {
+        while (q.next()) {
+            QJsonObject obj;
+            obj[QStringLiteral("url")]         = q.value(0).toString();
+            obj[QStringLiteral("title")]       = q.value(1).toString();
+            obj[QStringLiteral("description")] = q.value(2).toString();
+            obj[QStringLiteral("category")]    = q.value(3).toString();
+            obj[QStringLiteral("rating")]      = q.value(4).toDouble();
+            obj[QStringLiteral("source")]      = q.value(5).toString();
+            obj[QStringLiteral("added_at")]    = q.value(6).toString();
+            file.write(QJsonDocument(obj).toJson(QJsonDocument::Compact));
+            file.write("\n");
+        }
+    }
+
+    return true;
+}
+
 bool Database::importFromJson(const QString &path)
 {
     QFile file(path);
@@ -453,6 +507,18 @@ QJsonObject Database::getStats() const
 
     if (q.exec(QStringLiteral("SELECT SUM(visit_count) FROM pages")) && q.next())
         stats[QStringLiteral("total_visits")] = q.value(0).toInt();
+
+    // Count unique websites (distinct domains across pages + distinct URLs in sites)
+    if (q.exec(QStringLiteral(
+            "SELECT COUNT(*) FROM ("
+            "  SELECT DISTINCT domain FROM pages WHERE domain != '' "
+            "  UNION "
+            "  SELECT DISTINCT REPLACE(REPLACE(REPLACE(url, 'https://', ''), 'http://', ''), "
+            "    SUBSTR(REPLACE(REPLACE(url, 'https://', ''), 'http://', ''), "
+            "      INSTR(REPLACE(REPLACE(url, 'https://', ''), 'http://', ''), '/')), '') "
+            "  FROM sites WHERE url != ''"
+            ")")) && q.next())
+        stats[QStringLiteral("unique_websites")] = q.value(0).toInt();
 
     stats[QStringLiteral("db_path")] = m_dbPath;
 

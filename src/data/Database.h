@@ -27,11 +27,13 @@ public:
     [[nodiscard]] bool compare_site(const QString &url1, const QString &url2) const;
 
     // Page operations
-    bool addPage(const QString &url, const QString &title, const QString &content, const QString &domain);
+    bool addPage(const QString &url, const QString &title, const QString &content,
+                 const QString &domain, const QString &source = QStringLiteral("nyx"));
     [[nodiscard]] QJsonArray searchPages(const QString &query, int limit = 50) const;
 
     // Import/export
     bool exportToJson(const QString &path) const;
+    bool exportToJsonl(const QString &path) const;
     bool importFromJson(const QString &path);
 
     // Stats

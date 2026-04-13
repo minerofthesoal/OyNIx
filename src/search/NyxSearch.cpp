@@ -32,10 +32,11 @@ NyxSearch::~NyxSearch()
 // ---------------------------------------------------------------------------
 // Index a visited page into the FTS5 index
 // ---------------------------------------------------------------------------
-void NyxSearch::indexPage(const QString &url, const QString &title, const QString &contentSnippet)
+void NyxSearch::indexPage(const QString &url, const QString &title, const QString &contentSnippet,
+                          const QString &source)
 {
     const QString domain = QUrl(url).host();
-    m_db->addPage(url, title, contentSnippet, domain);
+    m_db->addPage(url, title, contentSnippet, domain, source);
 }
 
 // ---------------------------------------------------------------------------
@@ -47,12 +48,14 @@ void NyxSearch::indexCrawledPage(const QJsonObject &page)
     const QString title   = page[QStringLiteral("title")].toString();
     const QString snippet = page[QStringLiteral("content_snippet")].toString();
     const QString status  = page[QStringLiteral("status")].toString();
+    // Source: "nyx" for list-mode crawl, "nyx+" for random/broad crawl
+    const QString source  = page[QStringLiteral("source")].toString(QStringLiteral("nyx"));
 
     // Only index pages that were successfully crawled
     if (url.isEmpty() || status != QLatin1String("ok"))
         return;
 
-    indexPage(url, title, snippet);
+    indexPage(url, title, snippet, source);
 }
 
 // ---------------------------------------------------------------------------
@@ -62,7 +65,7 @@ QJsonObject NyxSearch::search(const QString &query)
 {
     QJsonObject result;
 
-    // 1. Local page index (FTS5)
+    // 1. Local page index (FTS5) — source comes from DB (nyx / nyx+)
     QJsonArray localPages = m_db->searchPages(query);
     QJsonArray localResults;
     for (const QJsonValue &v : localPages) {
@@ -71,13 +74,13 @@ QJsonObject NyxSearch::search(const QString &query)
         item[QStringLiteral("url")] = page[QStringLiteral("url")].toString();
         item[QStringLiteral("title")] = page[QStringLiteral("title")].toString();
         item[QStringLiteral("description")] = page[QStringLiteral("snippet")].toString();
-        item[QStringLiteral("source")] = QStringLiteral("nyx");
+        item[QStringLiteral("source")] = page[QStringLiteral("source")].toString(QStringLiteral("nyx"));
         item[QStringLiteral("score")] = 1.0;  // local results ranked highest
         localResults.append(item);
     }
     result[QStringLiteral("local")] = localResults;
 
-    // 2. Curated site database
+    // 2. Curated site database — source comes from DB (oyn / oyn+)
     QJsonArray dbSites = m_db->searchSites(query);
     QJsonArray dbResults;
     for (const QJsonValue &v : dbSites) {
@@ -86,14 +89,16 @@ QJsonObject NyxSearch::search(const QString &query)
         item[QStringLiteral("url")] = site[QStringLiteral("url")].toString();
         item[QStringLiteral("title")] = site[QStringLiteral("title")].toString();
         item[QStringLiteral("description")] = site[QStringLiteral("description")].toString();
-        item[QStringLiteral("source")] = QStringLiteral("database");
+        // Preserve source from DB: "oyn", "oyn+", or fallback "oyn"
+        item[QStringLiteral("source")] = site[QStringLiteral("source")].toString(QStringLiteral("oyn"));
         item[QStringLiteral("score")] = site[QStringLiteral("rating")].toDouble();
         dbResults.append(item);
     }
     result[QStringLiteral("database")] = dbResults;
 
-    // 3. Kick off async web search (DDG + Google)
-    launchWebSearch(query);
+    // 3. Kick off async web search (DDG + Google) — only if enabled
+    if (m_useWebSearch)
+        launchWebSearch(query);
 
     return result;
 }
@@ -132,6 +137,19 @@ void NyxSearch::onWebResults(const QJsonArray &results)
 }
 
 // ---------------------------------------------------------------------------
+// Search mode control
+// ---------------------------------------------------------------------------
+void NyxSearch::setUseWebSearch(bool enabled)
+{
+    m_useWebSearch = enabled;
+}
+
+bool NyxSearch::useWebSearch() const
+{
+    return m_useWebSearch;
+}
+
+// ---------------------------------------------------------------------------
 // Stats
 // ---------------------------------------------------------------------------
 QJsonObject NyxSearch::getStats() const
@@ -141,6 +159,7 @@ QJsonObject NyxSearch::getStats() const
     stats[QStringLiteral("indexed_pages")] = dbStats[QStringLiteral("page_count")].toInt();
     stats[QStringLiteral("database_sites")] = dbStats[QStringLiteral("site_count")].toInt();
     stats[QStringLiteral("total_visits")] = dbStats[QStringLiteral("total_visits")].toInt();
+    stats[QStringLiteral("unique_websites")] = dbStats[QStringLiteral("unique_websites")].toInt();
     return stats;
 }
 
