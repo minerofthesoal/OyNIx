@@ -54,6 +54,8 @@
 #include "extensions/ExtensionManager.h"
 #include "extensions/ExtensionBridge.h"
 #include "data/Database.h"
+#include "data/CommunityDbSync.h"
+#include "data/WebCache.h"
 #include "search/NyxSearch.h"
 #include "interop/CoreBridge.h"
 #include "ui/ExtensionPanel.h"
@@ -61,6 +63,7 @@
 #include "theme/ThemeEngine.h"
 #include "pages/InternalPages.h"
 
+#include <QProgressBar>
 #include <QSplitter>
 #include <QWebEngineProfile>
 #include <QWebEngineDownloadRequest>
@@ -184,10 +187,13 @@ BrowserWindow::BrowserWindow(QWidget *parent)
         if (url.scheme() == QLatin1String("http") || url.scheme() == QLatin1String("https")) {
             auto *view = m_tabWidget->currentWebView();
             if (view) {
-                NyxSearch::instance()->indexPage(
-                    url.toString(), view->title(), QString());
+                const QString urlStr = url.toString();
+                const QString title = view->title();
+                NyxSearch::instance()->indexPage(urlStr, title, QString());
                 if (m_historyManager)
-                    m_historyManager->addEntry(url.toString(), view->title());
+                    m_historyManager->addEntry(urlStr, title);
+                // Cache visited page metadata
+                WebCache::instance().store(urlStr, title, QString());
             }
         }
     });
@@ -203,6 +209,12 @@ BrowserWindow::BrowserWindow(QWidget *parent)
 
     // Start extension background scripts after UI is ready
     m_extensionManager->startBackgroundScripts();
+
+    // Fetch community database from GitHub (async, once per day)
+    CommunityDbSync::instance().fetchOnStartup();
+
+    // Prune stale web cache entries (older than 30 days)
+    WebCache::instance().pruneOldEntries(30);
 
     // Restore session or open default tab
     if (m_config[QStringLiteral("restore_session")].toBool() && m_sessionManager) {
@@ -459,61 +471,167 @@ void BrowserWindow::createNavigationToolbar()
 {
     m_navToolbar = addToolBar(tr("Navigation"));
     m_navToolbar->setMovable(false);
-    m_navToolbar->setIconSize(QSize(20, 20));
+    m_navToolbar->setIconSize(QSize(18, 18));
+    m_navToolbar->setContentsMargins(4, 2, 4, 2);
 
-    m_backAction   = m_navToolbar->addAction(style()->standardIcon(QStyle::SP_ArrowBack),
-                                              tr("Back"), this, &BrowserWindow::goBack);
-    m_fwdAction    = m_navToolbar->addAction(style()->standardIcon(QStyle::SP_ArrowForward),
-                                              tr("Forward"), this, &BrowserWindow::goForward);
-    m_reloadAction = m_navToolbar->addAction(style()->standardIcon(QStyle::SP_BrowserReload),
-                                              tr("Reload"), this, &BrowserWindow::reload);
-    m_homeAction   = m_navToolbar->addAction(style()->standardIcon(QStyle::SP_DirHomeIcon),
-                                              tr("Home"), this, &BrowserWindow::goHome);
+    const auto &c = ThemeEngine::instance().colors();
+
+    // ── Navigation buttons ──────────────────────────────────────
+    m_backAction = m_navToolbar->addAction(
+        style()->standardIcon(QStyle::SP_ArrowBack), tr("Back"),
+        this, &BrowserWindow::goBack);
+    m_fwdAction = m_navToolbar->addAction(
+        style()->standardIcon(QStyle::SP_ArrowForward), tr("Forward"),
+        this, &BrowserWindow::goForward);
+
+    // Reload / Stop — swap visibility based on loading state
+    m_reloadAction = m_navToolbar->addAction(
+        style()->standardIcon(QStyle::SP_BrowserReload), tr("Reload"),
+        this, &BrowserWindow::reload);
+    m_stopAction = m_navToolbar->addAction(
+        style()->standardIcon(QStyle::SP_BrowserStop), tr("Stop"),
+        this, [this]{
+            auto *v = m_tabWidget ? m_tabWidget->currentWebView() : nullptr;
+            if (v) v->stop();
+        });
+    m_stopAction->setVisible(false);
+
+    m_homeAction = m_navToolbar->addAction(
+        style()->standardIcon(QStyle::SP_DirHomeIcon), tr("Home"),
+        this, &BrowserWindow::goHome);
 
     m_backAction->setShortcut(QKeySequence::Back);
     m_fwdAction->setShortcut(QKeySequence::Forward);
     m_reloadAction->setShortcut(QKeySequence::Refresh);
+    m_stopAction->setShortcut(QKeySequence(QStringLiteral("Escape")));
+    m_backAction->setToolTip(tr("Back (Alt+Left)"));
+    m_fwdAction->setToolTip(tr("Forward (Alt+Right)"));
+    m_reloadAction->setToolTip(tr("Reload (F5)"));
+    m_homeAction->setToolTip(tr("Home (Alt+Home)"));
 
-    // URL bar
+    // ── URL bar ─────────────────────────────────────────────────
     m_urlBar = new UrlBar(this);
     m_navToolbar->addWidget(m_urlBar);
 
     connect(m_urlBar, &UrlBar::urlEntered, this, &BrowserWindow::navigateTo);
     connect(m_urlBar, &UrlBar::searchRequested, this, &BrowserWindow::performSearch);
 
-    // Bookmark star
+    // ── Bookmark star ───────────────────────────────────────────
     m_bookmarkStar = m_navToolbar->addAction(
         style()->standardIcon(QStyle::SP_DialogApplyButton),
         tr("Bookmark"), this, [this]{
-            // placeholder: toggle bookmark for current page
+            auto *v = m_tabWidget ? m_tabWidget->currentWebView() : nullptr;
+            if (v && m_bookmarkManager)
+                m_bookmarkManager->add(v->url().toString(), v->title());
         });
+    m_bookmarkStar->setToolTip(tr("Bookmark this page (Ctrl+D)"));
 
-    // Crawler button
+    // ── Zoom indicator ──────────────────────────────────────────
+    m_zoomLabel = new QLabel(this);
+    m_zoomLabel->setFixedWidth(42);
+    m_zoomLabel->setAlignment(Qt::AlignCenter);
+    m_zoomLabel->setToolTip(tr("Zoom level — Ctrl+0 to reset"));
+    m_zoomLabel->setStyleSheet(QStringLiteral(
+        "QLabel { color: %1; font-size: 11px; padding: 0 2px; }")
+        .arg(c.value(QStringLiteral("text-secondary")).toString()));
+    m_zoomLabel->hide(); // only show when zoom != 100%
+    m_navToolbar->addWidget(m_zoomLabel);
+
+    // ── Crawler button ──────────────────────────────────────────
     auto *crawlerAction = m_navToolbar->addAction(
         style()->standardIcon(QStyle::SP_DriveNetIcon),
-        tr("Web Crawler"), this, [this]{
+        tr("Crawler"), this, [this]{
             if (m_crawlerPanel) m_crawlerPanel->setVisible(!m_crawlerPanel->isVisible());
         });
-    crawlerAction->setToolTip(tr("Toggle Web Crawler (Ctrl+Shift+W)"));
+    crawlerAction->setToolTip(tr("Web Crawler (Ctrl+Shift+W)"));
 
-    // Extensions area (spacer + placeholder)
-    auto *spacer = new QWidget(this);
-    spacer->setFixedWidth(4);
-    m_navToolbar->addWidget(spacer);
+    // ── Tab count badge ─────────────────────────────────────────
+    m_tabCountLabel = new QLabel(this);
+    m_tabCountLabel->setFixedSize(26, 20);
+    m_tabCountLabel->setAlignment(Qt::AlignCenter);
+    m_tabCountLabel->setStyleSheet(QStringLiteral(
+        "QLabel { color: %1; background: %2; border: 1px solid %3; "
+        "border-radius: 4px; font-size: 11px; font-weight: bold; }")
+        .arg(c.value(QStringLiteral("text-primary")).toString(),
+             c.value(QStringLiteral("bg-mid")).toString(),
+             c.value(QStringLiteral("border")).toString()));
+    m_tabCountLabel->setToolTip(tr("Open tabs"));
+    m_tabCountLabel->setText(QStringLiteral("1"));
+    m_navToolbar->addWidget(m_tabCountLabel);
 
-    // Menu button
+    connect(m_tabWidget, &TabWidget::tabCountChanged, this, [this](int count) {
+        if (m_tabCountLabel) m_tabCountLabel->setText(QString::number(count));
+    });
+
+    // ── Menu button ─────────────────────────────────────────────
     m_menuButton = new QToolButton(this);
     m_menuButton->setIcon(style()->standardIcon(QStyle::SP_TitleBarMenuButton));
     m_menuButton->setPopupMode(QToolButton::InstantPopup);
+    m_menuButton->setToolTip(tr("Menu"));
 
     auto *btnMenu = new QMenu(m_menuButton);
-    btnMenu->addAction(tr("New Tab"),   this, [this]{ newTab(); });
-    btnMenu->addAction(tr("Settings"),  this, &BrowserWindow::showSettings);
+    btnMenu->addAction(tr("New Tab"),       this, [this]{ newTab(); });
+    btnMenu->addAction(tr("Downloads"),     this, &BrowserWindow::showDownloads);
+    btnMenu->addAction(tr("Bookmarks"),     this, &BrowserWindow::showBookmarks);
+    btnMenu->addAction(tr("History"),       this, &BrowserWindow::showHistory);
     btnMenu->addSeparator();
-    btnMenu->addAction(tr("Quit"),      this, &QWidget::close);
+    btnMenu->addAction(tr("Zoom In"),       this, &BrowserWindow::zoomIn);
+    btnMenu->addAction(tr("Zoom Out"),      this, &BrowserWindow::zoomOut);
+    btnMenu->addAction(tr("Reset Zoom"),    this, &BrowserWindow::resetZoom);
+    btnMenu->addSeparator();
+    btnMenu->addAction(tr("Settings"),      this, &BrowserWindow::showSettings);
+    btnMenu->addAction(tr("Quit"),          this, &QWidget::close);
     m_menuButton->setMenu(btnMenu);
 
     m_navToolbar->addWidget(m_menuButton);
+
+    // ── Loading progress bar (spans full toolbar width) ─────────
+    m_loadProgress = new QProgressBar(this);
+    m_loadProgress->setMaximumHeight(3);
+    m_loadProgress->setTextVisible(false);
+    m_loadProgress->setRange(0, 100);
+    m_loadProgress->setValue(0);
+    m_loadProgress->hide();
+    m_loadProgress->setStyleSheet(QStringLiteral(
+        "QProgressBar { background: transparent; border: none; }"
+        "QProgressBar::chunk { background: %1; }")
+        .arg(c.value(QStringLiteral("purple-mid")).toString()));
+
+    // Track page load progress from current tab
+    auto updateLoadState = [this]() {
+        auto *v = m_tabWidget ? m_tabWidget->currentWebView() : nullptr;
+        if (!v) return;
+
+        connect(v, &QWebEngineView::loadStarted, this, [this]{
+            if (m_loadProgress) { m_loadProgress->setValue(0); m_loadProgress->show(); }
+            if (m_reloadAction) m_reloadAction->setVisible(false);
+            if (m_stopAction) m_stopAction->setVisible(true);
+        }, Qt::UniqueConnection);
+
+        connect(v, &QWebEngineView::loadProgress, this, [this](int p){
+            if (m_loadProgress) m_loadProgress->setValue(p);
+        }, Qt::UniqueConnection);
+
+        connect(v, &QWebEngineView::loadFinished, this, [this]{
+            if (m_loadProgress) m_loadProgress->hide();
+            if (m_reloadAction) m_reloadAction->setVisible(true);
+            if (m_stopAction) m_stopAction->setVisible(false);
+            // Update zoom label
+            auto *view = m_tabWidget ? m_tabWidget->currentWebView() : nullptr;
+            if (view && m_zoomLabel) {
+                int pct = qRound(view->zoomFactor() * 100);
+                if (pct != 100) {
+                    m_zoomLabel->setText(QStringLiteral("%1%").arg(pct));
+                    m_zoomLabel->show();
+                } else {
+                    m_zoomLabel->hide();
+                }
+            }
+        }, Qt::UniqueConnection);
+    };
+
+    connect(m_tabWidget, &QTabWidget::currentChanged, this, updateLoadState);
+    updateLoadState();
 }
 
 // ── Status bar ───────────────────────────────────────────────────────
@@ -811,19 +929,36 @@ void BrowserWindow::showSettings()
 void BrowserWindow::zoomIn()
 {
     auto *v = m_tabWidget ? m_tabWidget->currentWebView() : nullptr;
-    if (v) v->setZoomFactor(v->zoomFactor() + 0.1);
+    if (v) {
+        v->setZoomFactor(v->zoomFactor() + 0.1);
+        int pct = qRound(v->zoomFactor() * 100);
+        if (m_zoomLabel) {
+            m_zoomLabel->setText(QStringLiteral("%1%").arg(pct));
+            m_zoomLabel->setVisible(pct != 100);
+        }
+    }
 }
 
 void BrowserWindow::zoomOut()
 {
     auto *v = m_tabWidget ? m_tabWidget->currentWebView() : nullptr;
-    if (v) v->setZoomFactor(qMax(0.25, v->zoomFactor() - 0.1));
+    if (v) {
+        v->setZoomFactor(qMax(0.25, v->zoomFactor() - 0.1));
+        int pct = qRound(v->zoomFactor() * 100);
+        if (m_zoomLabel) {
+            m_zoomLabel->setText(QStringLiteral("%1%").arg(pct));
+            m_zoomLabel->setVisible(pct != 100);
+        }
+    }
 }
 
 void BrowserWindow::resetZoom()
 {
     auto *v = m_tabWidget ? m_tabWidget->currentWebView() : nullptr;
-    if (v) v->setZoomFactor(1.0);
+    if (v) {
+        v->setZoomFactor(1.0);
+        if (m_zoomLabel) m_zoomLabel->hide();
+    }
 }
 
 void BrowserWindow::toggleFullscreen()
@@ -885,7 +1020,13 @@ void BrowserWindow::updateDbStats()
     auto stats = db->getStats();
     const int sites = stats[QStringLiteral("site_count")].toInt();
     const int pages = stats[QStringLiteral("page_count")].toInt();
-    m_dbStatsLabel->setText(tr("DB: %1 sites, %2 pages").arg(sites).arg(pages));
+    auto cacheStats = WebCache::instance().getStats();
+    const int cached = cacheStats[QStringLiteral("cached_pages")].toInt();
+    const double cacheMb = cacheStats[QStringLiteral("cache_size_mb")].toDouble();
+
+    m_dbStatsLabel->setText(
+        tr("DB: %1 sites, %2 pages | Cache: %3 pages (%4 MB)")
+            .arg(sites).arg(pages).arg(cached).arg(cacheMb, 0, 'f', 1));
 }
 
 // ── Download handling ────────────────────────────────────────────
@@ -1066,6 +1207,8 @@ void BrowserWindow::registerCommands()
         [this]{
             if (m_historyManager) m_historyManager->clear();
             QWebEngineProfile::defaultProfile()->clearHttpCache();
+            WebCache::instance().clear();
+            updateDbStats();
         }});
 }
 
@@ -1079,11 +1222,19 @@ void BrowserWindow::closeEvent(QCloseEvent *event)
 
 bool BrowserWindow::event(QEvent *event)
 {
-    // Reposition find bar when the window is resized
-    if (event->type() == QEvent::Resize && m_findBar && m_findBar->isVisible()) {
-        const int barH = m_findBar->sizeHint().height();
-        m_findBar->setGeometry(0, height() - barH - statusBar()->height(),
-                               width(), barH);
+    if (event->type() == QEvent::Resize) {
+        // Reposition loading progress bar below toolbar
+        if (m_loadProgress && m_navToolbar) {
+            const int y = m_navToolbar->geometry().bottom();
+            m_loadProgress->setGeometry(0, y, width(), 3);
+            m_loadProgress->raise();
+        }
+        // Reposition find bar at the bottom
+        if (m_findBar && m_findBar->isVisible()) {
+            const int barH = m_findBar->sizeHint().height();
+            m_findBar->setGeometry(0, height() - barH - statusBar()->height(),
+                                   width(), barH);
+        }
     }
     return QMainWindow::event(event);
 }

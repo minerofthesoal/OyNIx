@@ -5,6 +5,7 @@
  */
 
 #include "WebCrawler.h"
+#include "data/WebCache.h"
 
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
@@ -44,7 +45,7 @@ void WebCrawler::configure(int maxDepth, int maxPages, int concurrency, bool fol
     QMutexLocker lock(&m_mutex);
     m_maxDepth       = maxDepth;
     m_maxPages       = maxPages;
-    m_concurrency    = qBound(1, concurrency, 20);
+    m_concurrency    = qBound(1, concurrency, 8);
     m_followExternal = followExternal;
 }
 
@@ -347,6 +348,12 @@ void WebCrawler::onPageFinished(QNetworkReply *reply, const CrawlTask &task)
                 pageObj[QStringLiteral("content_snippet")] = snippet;
                 pageObj[QStringLiteral("status")]          = QStringLiteral("ok");
                 success = true;
+
+                // Cache the page content for offline search
+                QJsonObject meta;
+                meta[QStringLiteral("status_code")] = statusCode;
+                meta[QStringLiteral("depth")]       = task.depth;
+                WebCache::instance().store(canon, title, snippet, meta);
             }
 
             // Extract and enqueue links for BFS (even for skipped-language pages)
@@ -402,8 +409,10 @@ void WebCrawler::onPageFinished(QNetworkReply *reply, const CrawlTask &task)
         }
     }
 
-    // Schedule more work
-    scheduleNext();
+    // Schedule more work — use a timer so the UI event loop stays responsive.
+    // This prevents the browser from freezing during crawls.
+    if (!m_scheduleTimer->isActive())
+        m_scheduleTimer->start(m_politenessMs);
 }
 
 // ── Robots.txt ──────────────────────────────────────────────────────────

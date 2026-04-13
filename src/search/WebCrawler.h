@@ -106,9 +106,9 @@ private:
     // ── Config ──────────────────────────────────────────────────────────
     int  m_maxDepth       = 2;
     int  m_maxPages       = 500;
-    int  m_concurrency    = 4;
+    int  m_concurrency    = 2;
     bool m_followExternal = false;
-    int  m_politenessMs   = 200;
+    int  m_politenessMs   = 500;
 
     // ── State (protected by m_mutex) ────────────────────────────────────
     mutable QMutex m_mutex;

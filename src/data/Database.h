@@ -35,6 +35,7 @@ public:
     bool exportToJson(const QString &path) const;
     bool exportToJsonl(const QString &path) const;
     bool importFromJson(const QString &path);
+    bool importFromJsonl(const QByteArray &data);
 
     // Stats
     [[nodiscard]] QJsonObject getStats() const;

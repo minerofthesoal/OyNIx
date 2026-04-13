@@ -74,6 +74,10 @@ set(OYNIX_SOURCES
     # Data
     src/data/Database.cpp
     src/data/Database.h
+    src/data/CommunityDbSync.cpp
+    src/data/CommunityDbSync.h
+    src/data/WebCache.cpp
+    src/data/WebCache.h
     src/data/BookmarkManager.cpp
     src/data/BookmarkManager.h
     src/data/HistoryManager.cpp

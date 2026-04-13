@@ -8,6 +8,7 @@ class QAction;
 class QActionGroup;
 class QLabel;
 class QMenu;
+class QProgressBar;
 class QToolBar;
 class QToolButton;
 class QLineEdit;
@@ -108,14 +109,18 @@ private:
     QMenu *m_helpMenu       = nullptr;
 
     // Navigation
-    QToolBar  *m_navToolbar  = nullptr;
-    QAction   *m_backAction  = nullptr;
-    QAction   *m_fwdAction   = nullptr;
-    QAction   *m_reloadAction = nullptr;
-    QAction   *m_homeAction  = nullptr;
-    UrlBar    *m_urlBar      = nullptr;
-    QAction   *m_bookmarkStar = nullptr;
-    QToolButton *m_menuButton = nullptr;
+    QToolBar    *m_navToolbar    = nullptr;
+    QAction     *m_backAction    = nullptr;
+    QAction     *m_fwdAction     = nullptr;
+    QAction     *m_reloadAction  = nullptr;
+    QAction     *m_stopAction    = nullptr;
+    QAction     *m_homeAction    = nullptr;
+    UrlBar      *m_urlBar        = nullptr;
+    QAction     *m_bookmarkStar  = nullptr;
+    QToolButton *m_menuButton    = nullptr;
+    QProgressBar *m_loadProgress = nullptr;
+    QLabel      *m_tabCountLabel = nullptr;
+    QLabel      *m_zoomLabel     = nullptr;
 
     // Central
     TabWidget *m_tabWidget   = nullptr;

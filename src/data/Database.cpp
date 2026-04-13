@@ -470,6 +470,69 @@ bool Database::exportToJsonl(const QString &path) const
     return true;
 }
 
+bool Database::importFromJsonl(const QByteArray &data)
+{
+    QMutexLocker locker(&m_mutex);
+    QSqlDatabase db = QSqlDatabase::database(QStringLiteral("oynix_main"));
+
+    if (!db.transaction())
+        return false;
+
+    const QString now = QDateTime::currentDateTimeUtc().toString(Qt::ISODate);
+    int imported = 0;
+
+    const auto lines = data.split('\n');
+    for (const QByteArray &line : lines) {
+        if (line.trimmed().isEmpty())
+            continue;
+
+        QJsonParseError err;
+        QJsonDocument doc = QJsonDocument::fromJson(line, &err);
+        if (err.error != QJsonParseError::NoError || !doc.isObject())
+            continue;
+
+        const QJsonObject obj = doc.object();
+        const QString url = obj[QStringLiteral("url")].toString();
+        if (url.isEmpty())
+            continue;
+
+        // Detect if this is a site (has category/rating) or a page (has content/domain)
+        if (obj.contains(QStringLiteral("category")) || obj.contains(QStringLiteral("rating"))) {
+            QSqlQuery q(db);
+            q.prepare(QStringLiteral(
+                "INSERT OR IGNORE INTO sites(url, title, description, category, rating, source, added_at) "
+                "VALUES(?, ?, ?, ?, ?, ?, ?)"
+            ));
+            q.addBindValue(url);
+            q.addBindValue(obj[QStringLiteral("title")].toString());
+            q.addBindValue(obj[QStringLiteral("description")].toString());
+            q.addBindValue(obj[QStringLiteral("category")].toString());
+            q.addBindValue(obj[QStringLiteral("rating")].toDouble());
+            q.addBindValue(obj[QStringLiteral("source")].toString(QStringLiteral("oyn")));
+            q.addBindValue(obj[QStringLiteral("added_at")].toString(now));
+            if (q.exec()) ++imported;
+        } else {
+            QSqlQuery q(db);
+            q.prepare(QStringLiteral(
+                "INSERT OR IGNORE INTO pages(url, title, content, domain, source, visited_at, visit_count) "
+                "VALUES(?, ?, ?, ?, ?, ?, 1)"
+            ));
+            q.addBindValue(url);
+            q.addBindValue(obj[QStringLiteral("title")].toString());
+            q.addBindValue(obj[QStringLiteral("content")].toString());
+            q.addBindValue(obj[QStringLiteral("domain")].toString());
+            q.addBindValue(obj[QStringLiteral("source")].toString(QStringLiteral("nyx")));
+            q.addBindValue(obj[QStringLiteral("indexed_at")].toString(now));
+            if (q.exec()) ++imported;
+        }
+    }
+
+    bool ok = db.commit();
+    if (ok && imported > 0)
+        emit databaseChanged();
+    return ok;
+}
+
 bool Database::importFromJson(const QString &path)
 {
     QFile file(path);
