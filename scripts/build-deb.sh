@@ -188,6 +188,17 @@ export QT_PLUGIN_PATH="${OYNIX_DIR}/plugins"
 export QTWEBENGINEPROCESS_PATH="${OYNIX_DIR}/libexec/QtWebEngineProcess"
 export QTWEBENGINE_RESOURCES_PATH="${OYNIX_DIR}/resources"
 export QTWEBENGINE_LOCALES_PATH="${OYNIX_DIR}/translations"
+
+# Wayland / X11 detection
+if [ -n "${WAYLAND_DISPLAY:-}" ] && [ -z "${QT_QPA_PLATFORM:-}" ]; then
+    export QT_QPA_PLATFORM="wayland;xcb"
+fi
+
+# HiDPI scale override
+if [ -n "${OYNIX_SCALE:-}" ]; then
+    export QT_SCALE_FACTOR="${OYNIX_SCALE}"
+fi
+
 exec "${OYNIX_DIR}/oynix" "$@"
 LAUNCHER
 chmod 755 "${PKG}/usr/bin/oynix"

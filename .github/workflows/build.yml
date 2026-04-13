@@ -3,6 +3,9 @@ name: Build Packages
 on:
   push:
     tags: ['v*']
+    branches: ['main', 'claude/*']
+  pull_request:
+    branches: ['main']
   workflow_dispatch:
     inputs:
       version:
@@ -35,7 +38,7 @@ jobs:
             echo "version=v${{ github.event.inputs.version || '3.1.0' }}" >> "$GITHUB_OUTPUT"
           fi
 
-  # ── Debian/Ubuntu .deb ──────────────────────────────────────────────
+  # ── Ubuntu/Mint .deb ─────────────────────────────────────────────────
   build-deb:
     needs: prepare
     runs-on: ubuntu-22.04
@@ -49,7 +52,8 @@ jobs:
             dpkg-dev fakeroot gcc g++ cmake ninja-build pkg-config \
             libsqlite3-dev libnss3-dev libnspr4-dev \
             libxcomposite-dev libxdamage-dev libxrandr-dev libxtst-dev \
-            libxkbcommon-dev libx11-xcb-dev libxcb1-dev libxext-dev libxfixes-dev \
+            libxkbcommon-dev libxkbcommon-x11-dev \
+            libx11-xcb-dev libxcb1-dev libxext-dev libxfixes-dev \
             libgl1-mesa-dev libegl1-mesa-dev libdrm-dev libgbm-dev \
             libfontconfig1-dev libfreetype6-dev libglib2.0-dev \
             libdbus-1-dev libasound2-dev libpulse-dev libexpat1-dev
@@ -67,13 +71,23 @@ jobs:
 
       - name: Verify toolchain
         run: |
+          echo "=== Build Environment ==="
           echo "CMake:    $(cmake --version | head -1)"
-          echo "Ninja:    $(ninja --version)"
+          echo "Ninja:    $(ninja --version 2>/dev/null || echo 'not found')"
+          echo "GCC:      $(g++ --version | head -1)"
           echo ".NET:     $(dotnet --version)"
-          echo "Qt root:  ${QT_ROOT_DIR}"
-          echo "Qt6 dir:  ${Qt6_DIR}"
-          echo "Contents:"
-          ls -la "${QT_ROOT_DIR}/lib" 2>/dev/null | head -5 || echo "  (not found)"
+          echo "Qt root:  ${QT_ROOT_DIR:-unset}"
+          echo "Qt6 dir:  ${Qt6_DIR:-unset}"
+
+          # Verify Qt prefix
+          QT_PREFIX="${QT_ROOT_DIR:-}"
+          if [ -z "$QT_PREFIX" ] && [ -n "${Qt6_DIR:-}" ]; then
+            QT_PREFIX="$(cd "${Qt6_DIR}/../../.." 2>/dev/null && pwd)"
+          fi
+          echo "QT_PREFIX: ${QT_PREFIX}"
+          if [ -n "$QT_PREFIX" ] && [ -d "$QT_PREFIX/lib" ]; then
+            echo "  Qt libs found: $(ls "${QT_PREFIX}/lib/"libQt6Core.so* 2>/dev/null | head -1)"
+          fi
 
       - name: Build .deb
         env:
@@ -82,10 +96,87 @@ jobs:
           chmod +x scripts/build-deb.sh
           ./scripts/build-deb.sh "${{ needs.prepare.outputs.version }}"
 
+      - name: Verify .deb
+        run: |
+          DEB=$(ls *.deb 2>/dev/null | head -1)
+          if [ -z "$DEB" ]; then
+            echo "::error::No .deb file produced"
+            exit 1
+          fi
+          echo "=== Package ==="
+          dpkg-deb --info "$DEB"
+          echo ""
+          echo "=== Binary files ==="
+          dpkg-deb --contents "$DEB" | grep -E '(oynix|\.so|\.desktop)' | head -20
+          echo ""
+          echo "=== Size ==="
+          du -sh "$DEB"
+
       - uses: actions/upload-artifact@v4
         with:
           name: deb-package
           path: '*.deb'
+
+  # ── Ubuntu compile check (no packaging) ──────────────────────────────
+  build-ubuntu-check:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            gcc g++ cmake ninja-build pkg-config \
+            libsqlite3-dev libnss3-dev libnspr4-dev \
+            libxcomposite-dev libxdamage-dev libxrandr-dev libxtst-dev \
+            libxkbcommon-dev libxkbcommon-x11-dev \
+            libx11-xcb-dev libxcb1-dev libxext-dev libxfixes-dev \
+            libgl1-mesa-dev libegl1-mesa-dev libdrm-dev libgbm-dev \
+            libfontconfig1-dev libfreetype6-dev libglib2.0-dev \
+            libdbus-1-dev libasound2-dev libpulse-dev libexpat1-dev
+
+      - name: Install Qt6
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: ${{ env.QT_VERSION }}
+          modules: 'qtwebengine qtwebchannel qtpositioning'
+
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: CMake configure
+        run: |
+          cmake -S . -B build -GNinja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_PREFIX_PATH="${QT_ROOT_DIR}"
+
+      - name: Build
+        run: cmake --build build -j$(nproc)
+
+      - name: Verify binary
+        run: |
+          if [ ! -f build/oynix ]; then
+            echo "::error::Binary not found after build"
+            exit 1
+          fi
+          echo "Binary: $(file build/oynix)"
+          echo "Size:   $(du -sh build/oynix | awk '{print $1}')"
+          echo "Libs:   $(ldd build/oynix | grep -c '=>')"
+
+          # List Qt dependencies
+          echo ""
+          echo "=== Qt6 dependencies ==="
+          ldd build/oynix | grep -i qt | head -20
+
+          # Check C# core
+          if [ -f build/dotnet/OyNIxCore.so ]; then
+            echo ""
+            echo "=== C# NativeAOT core ==="
+            echo "Size: $(du -sh build/dotnet/OyNIxCore.so | awk '{print $1}')"
+          fi
 
   # ── Windows .exe (C++ / MSVC) ──────────────────────────────────────
   build-exe:
@@ -201,7 +292,7 @@ jobs:
   # ── Release ──────────────────────────────────────────────────────────
   release:
     needs: [prepare, build-deb, build-exe, build-pacman]
-    if: always()
+    if: always() && github.ref_type == 'tag'
     runs-on: ubuntu-latest
     steps:
       - name: Check if any build succeeded
@@ -250,24 +341,27 @@ jobs:
 
             ### Features
             - **Nyx Search Engine** — local FTS5 index + web results
-            - **Native Web Crawler** — BFS crawler with robots.txt support
+            - **Source Labels** — OYN, Nyx, OYN+, Nyx+ result badges
+            - **Native Web Crawler** — BFS crawler with language filter & robots.txt
             - **AI Assistant** — Ollama / OpenAI integration
             - **Tree Tabs** — domain-grouped sidebar
             - **Glass UI** — modern frosted glass internal pages
             - **Command Palette** — VS Code-style Ctrl+K launcher
+            - **Community DB** — JSONL export for community contributions
 
             ### Install
 
             | Platform | Command |
             |----------|---------|
-            | **Debian/Ubuntu** | `sudo apt install ./oynix-*.deb` |
+            | **Ubuntu/Mint** | `sudo apt install ./oynix-*.deb` |
             | **Arch Linux** | `sudo pacman -U oynix-*.pkg.tar.zst` |
             | **Windows** | Extract `.zip` or run `.exe` directly |
 
-            ### Build from source
+            ### Build from source (Ubuntu/Mint)
             ```bash
-            cmake -S . -B build -GNinja -DCMAKE_BUILD_TYPE=Release
-            cmake --build build
+            ./scripts/build-ubuntu.sh --deps-only   # install dependencies
+            ./scripts/build-ubuntu.sh                # build
+            ./scripts/build-ubuntu.sh --install      # install to ~/.local
             ```
 
             ---
@@ -287,6 +381,6 @@ jobs:
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "| Platform | Result |" >> "$GITHUB_STEP_SUMMARY"
           echo "|----------|--------|" >> "$GITHUB_STEP_SUMMARY"
-          echo "| Debian   | ${{ needs.build-deb.result }} |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| Windows  | ${{ needs.build-exe.result }} |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| Arch     | ${{ needs.build-pacman.result }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Ubuntu .deb | ${{ needs.build-deb.result }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Windows .exe | ${{ needs.build-exe.result }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Arch pacman | ${{ needs.build-pacman.result }} |" >> "$GITHUB_STEP_SUMMARY"
