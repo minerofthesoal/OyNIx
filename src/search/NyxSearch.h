@@ -15,6 +15,7 @@ public:
     static NyxSearch *instance();
 
     void indexPage(const QString &url, const QString &title, const QString &contentSnippet);
+    void indexCrawledPage(const QJsonObject &page);
     [[nodiscard]] QJsonObject search(const QString &query);
 
     [[nodiscard]] QJsonObject getStats() const;

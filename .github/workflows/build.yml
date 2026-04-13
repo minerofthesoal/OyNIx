@@ -6,12 +6,16 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Version (e.g. 1.1.0)'
-        default: '1.1.0'
+        description: 'Version (e.g. 3.1.0)'
+        default: '3.1.0'
         required: false
 
 permissions:
   contents: write
+
+env:
+  QT_VERSION: '6.8.3'
+  DOTNET_VERSION: '8.0.x'
 
 jobs:
   # ── Compute version string ──────────────────────────────────────────
@@ -28,7 +32,7 @@ jobs:
             CLEAN="$(echo "$RAW" | sed 's/[. ]*$//')"
             echo "version=$CLEAN" >> "$GITHUB_OUTPUT"
           else
-            echo "version=v${{ github.event.inputs.version || '1.1.0' }}" >> "$GITHUB_OUTPUT"
+            echo "version=v${{ github.event.inputs.version || '3.1.0' }}" >> "$GITHUB_OUTPUT"
           fi
 
   # ── Debian/Ubuntu .deb ──────────────────────────────────────────────
@@ -53,13 +57,13 @@ jobs:
       - name: Install Qt6
         uses: jurplel/install-qt-action@v4
         with:
-          version: '6.8.3'
+          version: ${{ env.QT_VERSION }}
           modules: 'qtwebengine qtwebchannel qtpositioning'
 
       - name: Setup .NET 8
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: '8.0.x'
+          dotnet-version: ${{ env.DOTNET_VERSION }}
 
       - name: Verify toolchain
         run: |
@@ -90,13 +94,13 @@ jobs:
       - name: Install Qt6
         uses: jurplel/install-qt-action@v4
         with:
-          version: '6.8.3'
+          version: ${{ env.QT_VERSION }}
           modules: 'qtwebengine qtwebchannel qtpositioning'
 
       - name: Setup .NET 8
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: '8.0.x'
+          dotnet-version: ${{ env.DOTNET_VERSION }}
 
       - name: Install SQLite3 via vcpkg
         shell: pwsh
@@ -235,10 +239,19 @@ jobs:
         with:
           tag_name: ${{ steps.tag.outputs.version }}
           name: "OyNIx ${{ steps.tag.outputs.version }}"
+          generate_release_notes: true
           body: |
             ## OyNIx Browser ${{ steps.tag.outputs.version }}
 
-            Built with C++17, Qt6 WebEngine, and .NET 8 NativeAOT.
+            Custom Chromium-based browser with C++17, Qt6 WebEngine, and .NET 8 NativeAOT core.
+
+            ### Features
+            - **Nyx Search Engine** — local FTS5 index + web results
+            - **Native Web Crawler** — BFS crawler with robots.txt support
+            - **AI Assistant** — Ollama / OpenAI integration
+            - **Tree Tabs** — domain-grouped sidebar
+            - **Glass UI** — modern frosted glass internal pages
+            - **Command Palette** — VS Code-style Ctrl+K launcher
 
             ### Install
 
@@ -248,8 +261,14 @@ jobs:
             | **Arch Linux** | `sudo pacman -U oynix-*.pkg.tar.zst` |
             | **Windows** | Extract `.zip` or run `.exe` directly |
 
+            ### Build from source
+            ```bash
+            cmake -S . -B build -GNinja -DCMAKE_BUILD_TYPE=Release
+            cmake --build build
+            ```
+
             ---
-            *Coded by Claude (Anthropic)*
+            *Built with Qt6 WebEngine + C++17 + .NET 8 NativeAOT*
           files: |
             *.deb
             *.exe
@@ -258,8 +277,8 @@ jobs:
           fail_on_unmatched_files: false
           make_latest: true
 
-      - name: Fail summary
-        if: steps.check.outputs.has_artifacts != 'true'
+      - name: Build summary
+        if: always()
         run: |
           echo "## Build Results" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"

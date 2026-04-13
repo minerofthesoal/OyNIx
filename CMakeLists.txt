@@ -91,6 +91,8 @@ set(OYNIX_SOURCES
     # Search
     src/search/NyxSearch.cpp
     src/search/NyxSearch.h
+    src/search/WebCrawler.cpp
+    src/search/WebCrawler.h
     src/search/WebResultsFetcher.cpp
     src/search/WebResultsFetcher.h
     src/search/SearchEngineBuilder.cpp

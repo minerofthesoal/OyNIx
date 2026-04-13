@@ -42,6 +42,7 @@ private slots:
 
 private:
     void setupUi();
+    void connectCrawlerSignals();
     void setRunningState(bool running);
     void refreshResults();
 

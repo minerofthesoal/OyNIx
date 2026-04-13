@@ -39,6 +39,23 @@ void NyxSearch::indexPage(const QString &url, const QString &title, const QStrin
 }
 
 // ---------------------------------------------------------------------------
+// Index a page discovered by the WebCrawler into the FTS5 index
+// ---------------------------------------------------------------------------
+void NyxSearch::indexCrawledPage(const QJsonObject &page)
+{
+    const QString url     = page[QStringLiteral("url")].toString();
+    const QString title   = page[QStringLiteral("title")].toString();
+    const QString snippet = page[QStringLiteral("content_snippet")].toString();
+    const QString status  = page[QStringLiteral("status")].toString();
+
+    // Only index pages that were successfully crawled
+    if (url.isEmpty() || status != QLatin1String("ok"))
+        return;
+
+    indexPage(url, title, snippet);
+}
+
+// ---------------------------------------------------------------------------
 // Combined search: local FTS5 pages + curated site database + async web
 // ---------------------------------------------------------------------------
 QJsonObject NyxSearch::search(const QString &query)

@@ -152,8 +152,17 @@ WebView *TabWidget::addNewTab(const QUrl &url)
     updateTabTooltip(index);
     emitTabCountChanged();
 
-    if (!url.isEmpty())
-        view->load(url);
+    if (!url.isEmpty()) {
+        if (url.scheme() == QLatin1String("oyn")) {
+            // Internal URLs must NOT go through view->load() because
+            // acceptNavigationRequest cancels the navigation, and the
+            // subsequent setHtml() races with the cancelled load state,
+            // resulting in a blank page. Emit the signal directly.
+            emit internalUrlRequested(url);
+        } else {
+            view->load(url);
+        }
+    }
 
     return view;
 }

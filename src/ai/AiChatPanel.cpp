@@ -13,6 +13,7 @@
 #include <QDateTime>
 #include <QKeyEvent>
 #include <QGraphicsOpacityEffect>
+#include <QRegularExpression>
 
 // ── Constructor / Destructor ─────────────────────────────────────────
 AiChatPanel::AiChatPanel(QWidget *parent)
@@ -185,9 +186,48 @@ QWidget *AiChatPanel::createMessageBubble(const QString &text, bool isUser)
     contentLayout->setContentsMargins(0, 0, 0, 0);
     contentLayout->setSpacing(2);
 
-    auto *msgLabel = new QLabel(text, contentWidget);
+    // Basic markdown rendering for AI responses
+    QString displayText = text;
+    if (!isUser) {
+        // Convert markdown to rich text
+        displayText.replace(QLatin1String("&"), QLatin1String("&amp;"));
+        displayText.replace(QLatin1String("<"), QLatin1String("&lt;"));
+        displayText.replace(QLatin1String(">"), QLatin1String("&gt;"));
+        // Code blocks: ```...```
+        static QRegularExpression codeBlockRe(QStringLiteral("```[\\w]*\\n?([\\s\\S]*?)```"));
+        displayText.replace(codeBlockRe, QStringLiteral(
+            "<pre style='background:#1a1b26;padding:8px;border-radius:6px;"
+            "font-family:monospace;font-size:12px;color:#a09cd8;'>"
+            "\\1</pre>"));
+        // Inline code: `...`
+        static QRegularExpression inlineCodeRe(QStringLiteral("`([^`]+)`"));
+        displayText.replace(inlineCodeRe, QStringLiteral(
+            "<code style='background:#1a1b26;padding:1px 4px;border-radius:3px;"
+            "font-family:monospace;font-size:12px;color:#a09cd8;'>\\1</code>"));
+        // Bold: **...**
+        static QRegularExpression boldRe(QStringLiteral("\\*\\*([^*]+)\\*\\*"));
+        displayText.replace(boldRe, QStringLiteral("<b>\\1</b>"));
+        // Italic: *...*
+        static QRegularExpression italicRe(QStringLiteral("(?<!\\*)\\*([^*]+)\\*(?!\\*)"));
+        displayText.replace(italicRe, QStringLiteral("<i>\\1</i>"));
+        // Bullet lists: - item
+        displayText.replace(QRegularExpression(QStringLiteral("^- (.+)$"),
+            QRegularExpression::MultilineOption),
+            QStringLiteral("&bull; \\1<br>"));
+        // Numbered lists: 1. item
+        displayText.replace(QRegularExpression(QStringLiteral("^(\\d+)\\. (.+)$"),
+            QRegularExpression::MultilineOption),
+            QStringLiteral("\\1. \\2<br>"));
+        // Line breaks
+        displayText.replace(QLatin1String("\n\n"), QLatin1String("<br><br>"));
+        displayText.replace(QLatin1String("\n"), QLatin1String("<br>"));
+    }
+
+    auto *msgLabel = new QLabel(isUser ? text : displayText, contentWidget);
     msgLabel->setWordWrap(true);
-    msgLabel->setTextFormat(Qt::PlainText);
+    msgLabel->setTextFormat(isUser ? Qt::PlainText : Qt::RichText);
+    msgLabel->setTextInteractionFlags(Qt::TextSelectableByMouse | Qt::LinksAccessibleByMouse);
+    msgLabel->setOpenExternalLinks(false);
     msgLabel->setStyleSheet(isUser
         ? QStringLiteral("background: #2a2d42; color: #c8cad8; border-radius: 8px;"
                          " padding: 8px 12px; font-size: 13px;")

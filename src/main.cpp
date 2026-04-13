@@ -47,7 +47,7 @@ int main(int argc, char *argv[])
 
     QApplication app(argc, argv);
     app.setApplicationName(QStringLiteral("OyNIx Browser"));
-    app.setApplicationVersion(QStringLiteral("3.0"));
+    app.setApplicationVersion(QStringLiteral("3.1"));
     app.setOrganizationName(QStringLiteral("OyNIx"));
     app.setOrganizationDomain(QStringLiteral("oynix.dev"));
 

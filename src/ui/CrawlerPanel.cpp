@@ -3,10 +3,13 @@
  * Local web crawler UI with two modes:
  *   1) Crawl from a list of URLs
  *   2) Broad web crawl (asks for confirmation)
+ *
+ * Uses the native C++ WebCrawler instead of the C# NativeAOT CoreBridge.
  */
 
 #include "CrawlerPanel.h"
-#include "interop/CoreBridge.h"
+#include "search/WebCrawler.h"
+#include "search/NyxSearch.h"
 
 #include <QVBoxLayout>
 #include <QHBoxLayout>
@@ -28,6 +31,7 @@ CrawlerPanel::CrawlerPanel(QWidget *parent)
     : QWidget(parent)
 {
     setupUi();
+    connectCrawlerSignals();
 }
 
 CrawlerPanel::~CrawlerPanel() = default;
@@ -166,6 +170,18 @@ void CrawlerPanel::setupUi()
     setFixedWidth(300);
 }
 
+// ── Connect to native WebCrawler signals ────────────────────────────────
+
+void CrawlerPanel::connectCrawlerSignals()
+{
+    auto &crawler = WebCrawler::instance();
+
+    // Index each discovered page into the search database
+    connect(&crawler, &WebCrawler::pageDiscovered, this, [](const QJsonObject &page) {
+        NyxSearch::instance()->indexCrawledPage(page);
+    });
+}
+
 // ── Crawl Actions ───────────────────────────────────────────────────────
 
 void CrawlerPanel::onStartListCrawl()
@@ -188,16 +204,16 @@ void CrawlerPanel::onStartListCrawl()
 
     if (urlArray.isEmpty()) return;
 
-    // Apply settings
-    auto &bridge = CoreBridge::instance();
-    bridge.crawlerConfigure(
+    // Apply settings and start
+    auto &crawler = WebCrawler::instance();
+    crawler.configure(
         m_depthSpin->value(),
         m_maxPagesSpin->value(),
         4, // concurrency
         m_followExternal->isChecked()
     );
 
-    bridge.crawlerStartList(urlArray);
+    crawler.startList(urlArray);
     setRunningState(true);
     m_statusLabel->setText(QStringLiteral("Crawling %1 URL(s)...").arg(urlArray.size()));
 }
@@ -238,22 +254,22 @@ void CrawlerPanel::onStartBroadCrawl()
 
     if (result != QMessageBox::Yes) return;
 
-    auto &bridge = CoreBridge::instance();
-    bridge.crawlerConfigure(
+    auto &crawler = WebCrawler::instance();
+    crawler.configure(
         m_depthSpin->value(),
         m_maxPagesSpin->value(),
         4,
         m_followExternal->isChecked()
     );
 
-    bridge.crawlerStartBroad(seedUrl.trimmed());
+    crawler.startBroad(seedUrl.trimmed());
     setRunningState(true);
     m_statusLabel->setText(QStringLiteral("Broad crawl from %1...").arg(seedUrl.trimmed()));
 }
 
 void CrawlerPanel::onStopCrawl()
 {
-    CoreBridge::instance().crawlerStop();
+    WebCrawler::instance().stop();
     m_statusLabel->setText(QStringLiteral("Stopping..."));
 }
 
@@ -261,8 +277,8 @@ void CrawlerPanel::onStopCrawl()
 
 void CrawlerPanel::onPollStatus()
 {
-    auto &bridge = CoreBridge::instance();
-    const auto status = bridge.crawlerStatus();
+    auto &crawler = WebCrawler::instance();
+    const auto status = crawler.status();
 
     const bool running = status[QStringLiteral("running")].toBool();
     const int crawled  = status[QStringLiteral("crawled")].toInt();
@@ -297,13 +313,13 @@ void CrawlerPanel::onPollStatus()
 
 void CrawlerPanel::refreshResults()
 {
-    auto &bridge = CoreBridge::instance();
-    const int count = bridge.crawlerCount();
+    auto &crawler = WebCrawler::instance();
+    const int count = crawler.count();
     m_resultsCount->setText(QString::number(count));
 
     // Show last 200 results
     const int offset = qMax(0, count - 200);
-    const auto results = bridge.crawlerResults(offset, 200);
+    const auto results = crawler.results(offset, 200);
 
     m_resultsList->clear();
     for (const auto &val : results) {
@@ -311,7 +327,7 @@ void CrawlerPanel::refreshResults()
         const QString url    = page[QStringLiteral("url")].toString();
         const QString title  = page[QStringLiteral("title")].toString();
         const QString status = page[QStringLiteral("status")].toString();
-        const int depth      = page[QStringLiteral("depth")].toInt();
+        const int depth      = page[QStringLiteral("crawl_depth")].toInt();
 
         auto *item = new QListWidgetItem(m_resultsList);
 
