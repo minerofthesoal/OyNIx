@@ -329,7 +329,7 @@ echo "=== Package info ==="
 dpkg-deb --info "${OUTPUT}" 2>/dev/null | grep -E '^\s*(Package|Version|Architecture|Installed-Size|Depends|Section)' || true
 echo ""
 echo "=== Top-level contents ==="
-dpkg-deb --contents "${OUTPUT}" | head -25
+dpkg-deb --contents "${OUTPUT}" 2>/dev/null | head -25 || true
 echo "  ..."
 
 DEB_SIZE=$(du -sh "${OUTPUT}" | awk '{print $1}')
