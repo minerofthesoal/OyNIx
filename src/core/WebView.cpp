@@ -5,6 +5,8 @@
 #include <QContextMenuEvent>
 #include <QMenu>
 #include <QAction>
+#include <QClipboard>
+#include <QApplication>
 #include <QWebEngineHistory>
 #include <QWebEngineProfile>
 #include <QWebEngineSettings>
@@ -154,28 +156,30 @@ void WebView::injectContentScripts(const QUrl &pageUrl)
 // ── Context menu ──────────────────────────────────────────────────────
 void WebView::contextMenuEvent(QContextMenuEvent *event)
 {
-    // Use Qt's built-in context menu with Nyx theming
     QMenu *menu = createStandardContextMenu();
     if (!menu)
         return;
 
     menu->setAttribute(Qt::WA_DeleteOnClose);
 
-    // Context menu inherits from ThemeEngine global stylesheet
-    // No manual styling needed
-
-    // Add "Open Link in New Tab" if a link was right-clicked
-    const QUrl pageUrl = page()->url();
     menu->addSeparator();
 
+    // Open Link in New Tab
     QAction *newTabAction = menu->addAction(tr("Open Link in New &Tab"));
+    newTabAction->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_T));
     connect(newTabAction, &QAction::triggered, this, [this]() {
-        // Trigger "open in new window" which our createWindow() intercepts as a new tab
         page()->triggerAction(QWebEnginePage::OpenLinkInNewWindow);
+    });
+
+    // Copy page URL
+    QAction *copyUrlAction = menu->addAction(tr("Copy Page &URL"));
+    connect(copyUrlAction, &QAction::triggered, this, [this]() {
+        QApplication::clipboard()->setText(page()->url().toString());
     });
 
     // Save page
     QAction *saveAction = menu->addAction(tr("&Save Page As..."));
+    saveAction->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_S));
     connect(saveAction, &QAction::triggered, this, [this]() {
         const QString defaultPath =
             QStandardPaths::writableLocation(QStandardPaths::DownloadLocation)
@@ -185,6 +189,27 @@ void WebView::contextMenuEvent(QContextMenuEvent *event)
             tr("MHTML (*.mhtml);;HTML (*.html)"));
         if (!path.isEmpty())
             page()->save(path);
+    });
+
+    // View page source
+    QAction *sourceAction = menu->addAction(tr("View Page &Source"));
+    connect(sourceAction, &QAction::triggered, this, [this]() {
+        page()->toHtml([this](const QString &html) {
+            // Open source in a data URL new tab
+            const QByteArray encoded = html.toUtf8().toBase64();
+            const QUrl sourceUrl = QUrl(QStringLiteral("data:text/plain;base64,")
+                + QString::fromLatin1(encoded));
+            emit newTabRequested(sourceUrl);
+        });
+    });
+
+    // Print page
+    QAction *printAction = menu->addAction(tr("&Print Page..."));
+    printAction->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_P));
+    connect(printAction, &QAction::triggered, this, [this]() {
+        page()->printToPdf(
+            QStandardPaths::writableLocation(QStandardPaths::DownloadLocation)
+            + QLatin1Char('/') + page()->title() + QStringLiteral(".pdf"));
     });
 
     menu->popup(event->globalPos());

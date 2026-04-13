@@ -63,6 +63,7 @@ private:
 
     // Search
     QComboBox *m_searchEngineCombo = nullptr;
+    QComboBox *m_searchModeCombo = nullptr;
     QCheckBox *m_searchSuggestionsCheck = nullptr;
     QCheckBox *m_autoIndexCheck = nullptr;
 

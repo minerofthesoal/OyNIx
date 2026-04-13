@@ -1,6 +1,7 @@
 #include "core/TabWidget.h"
 #include "core/WebView.h"
 #include "core/WebPage.h"
+#include "theme/ThemeEngine.h"
 
 #include <QTabBar>
 #include <QToolButton>
@@ -22,29 +23,23 @@ TabWidget::TabWidget(QWidget *parent)
     setMovable(true);
     setTabsClosable(true);
 
-    // Apply OyNIx dark theme to tab bar
-    const QString bg     = QStringLiteral("#08080d");
-    const QString purple = QStringLiteral("#7B4FBF");
-    const QString text   = QStringLiteral("#E8E0F0");
+    // Apply theme-consistent styling
+    const auto &c = ThemeEngine::instance().colors();
 
-    setStyleSheet(QStringLiteral(
-        "QTabWidget::pane { border: none; background: %1; }"
-        "QTabBar { background: %1; }"
-        "QTabBar::tab {"
-        "  background: %1; color: %3; padding: 6px 16px;"
-        "  border: 1px solid transparent; border-bottom: none;"
-        "  min-width: 120px; max-width: 240px;"
-        "}"
-        "QTabBar::tab:selected {"
-        "  background: %2; border-color: %2;"
-        "}"
-        "QTabBar::tab:hover:!selected {"
-        "  background: rgba(123,79,191,0.3);"
-        "}"
-        "QTabBar::close-button {"
-        "  image: none; /* custom paint handled by style */ "
-        "}"
-    ).arg(bg, purple, text));
+    QString ss;
+    ss += QStringLiteral("QTabWidget::pane { border: none; background: ") + c["bg-darkest"]
+       + QStringLiteral("; }\n");
+    ss += QStringLiteral("QTabBar { background: ") + c["bg-darkest"] + QStringLiteral("; }\n");
+    ss += QStringLiteral("QTabBar::tab { background: ") + c["bg-darkest"]
+       + QStringLiteral("; color: ") + c["text-primary"]
+       + QStringLiteral("; padding: 6px 16px; border: 1px solid transparent;"
+                        " border-bottom: none; min-width: 120px; max-width: 240px; }\n");
+    ss += QStringLiteral("QTabBar::tab:selected { background: ") + c["purple-dark"]
+       + QStringLiteral("; border-color: ") + c["purple-mid"] + QStringLiteral("; }\n");
+    ss += QStringLiteral("QTabBar::tab:hover:!selected { background: ") + c["selection"]
+       + QStringLiteral("; }\n");
+    ss += QStringLiteral("QTabBar::close-button { image: none; }\n");
+    setStyleSheet(ss);
 }
 
 TabWidget::~TabWidget() = default;
@@ -66,13 +61,13 @@ void TabWidget::setupNewTabButton()
     m_newTabButton->setAutoRaise(true);
     m_newTabButton->setToolTip(tr("New Tab"));
 
-    const QString purple = QStringLiteral("#7B4FBF");
-    const QString text   = QStringLiteral("#E8E0F0");
-    m_newTabButton->setStyleSheet(QStringLiteral(
-        "QToolButton { color: %1; font-size: 18px; font-weight: bold;"
-        "  border: none; padding: 4px 10px; }"
-        "QToolButton:hover { background: %2; border-radius: 4px; }"
-    ).arg(text, purple));
+    const auto &cb = ThemeEngine::instance().colors();
+    m_newTabButton->setStyleSheet(
+        QStringLiteral("QToolButton { color: ") + cb["text-primary"]
+        + QStringLiteral("; font-size: 18px; font-weight: bold;"
+                         " border: none; padding: 4px 10px; }"
+                         "QToolButton:hover { background: ") + cb["purple-mid"]
+        + QStringLiteral("; border-radius: 4px; }"));
 
     setCornerWidget(m_newTabButton, Qt::TopRightCorner);
 
@@ -152,8 +147,17 @@ WebView *TabWidget::addNewTab(const QUrl &url)
     updateTabTooltip(index);
     emitTabCountChanged();
 
-    if (!url.isEmpty())
-        view->load(url);
+    if (!url.isEmpty()) {
+        if (url.scheme() == QLatin1String("oyn")) {
+            // Internal URLs must NOT go through view->load() because
+            // acceptNavigationRequest cancels the navigation, and the
+            // subsequent setHtml() races with the cancelled load state,
+            // resulting in a blank page. Emit the signal directly.
+            emit internalUrlRequested(url);
+        } else {
+            view->load(url);
+        }
+    }
 
     return view;
 }
@@ -290,14 +294,17 @@ void TabWidget::showTabContextMenu(const QPoint &pos)
     auto *menu = new QMenu(this);
     menu->setAttribute(Qt::WA_DeleteOnClose);
 
-    const QString bg     = QStringLiteral("#08080d");
-    const QString purple = QStringLiteral("#7B4FBF");
-    const QString text   = QStringLiteral("#E8E0F0");
-    menu->setStyleSheet(QStringLiteral(
-        "QMenu { background: %1; color: %3; border: 1px solid %2; }"
-        "QMenu::item:selected { background: %2; }"
-        "QMenu::separator { background: %2; height: 1px; margin: 4px 8px; }")
-        .arg(bg, purple, text));
+    const auto &cm = ThemeEngine::instance().colors();
+    menu->setStyleSheet(
+        QStringLiteral("QMenu { background: ") + cm["bg-darkest"]
+        + QStringLiteral("; color: ") + cm["text-primary"]
+        + QStringLiteral("; border: 1px solid ") + cm["purple-mid"]
+        + QStringLiteral("; border-radius: 8px; }"
+                         "QMenu::item { padding: 6px 16px; border-radius: 4px; }"
+                         "QMenu::item:selected { background: ") + cm["purple-dark"]
+        + QStringLiteral("; }"
+                         "QMenu::separator { background: ") + cm["border"]
+        + QStringLiteral("; height: 1px; margin: 4px 8px; }"));
 
     // Pin / Unpin
     if (isTabPinned(index)) {

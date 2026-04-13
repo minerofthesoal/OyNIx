@@ -1,4 +1,5 @@
 #include "CommandPalette.h"
+#include "theme/ThemeEngine.h"
 
 #include <QLineEdit>
 #include <QListWidget>
@@ -55,20 +56,36 @@ void CommandPalette::setupUi()
 
 void CommandPalette::setupStyles()
 {
-    setStyleSheet(QStringLiteral(
-        "#cpInput { background: #12121e; color: #E8E0F0; border: 1px solid #7B4FBF;"
-        "  border-radius: 8px; padding: 10px 14px; font-size: 14px; }"
-        "#cpInput:focus { border-color: #9B6FDF; }"
-        "#cpResults { background: #0e0e16; border: 1px solid #2a2a40;"
-        "  border-radius: 8px; color: #E8E0F0; font-size: 13px;"
-        "  outline: none; }"
-        "#cpResults::item { padding: 8px 12px; border-radius: 4px; }"
-        "#cpResults::item:selected { background: rgba(123,79,191,0.4); }"
-        "#cpResults::item:hover { background: rgba(123,79,191,0.2); }"
-        "QScrollBar:vertical { background: transparent; width: 6px; }"
-        "QScrollBar::handle:vertical { background: #7B4FBF; border-radius: 3px; }"
-        "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }"
-    ));
+    const auto &c = ThemeEngine::instance().colors();
+    QString ss;
+
+    ss += QStringLiteral("#cpInput { background: ") + c["bg-mid"]
+       + QStringLiteral("; color: ") + c["text-primary"]
+       + QStringLiteral("; border: 2px solid ") + c["purple-mid"]
+       + QStringLiteral("; border-radius: 12px; padding: 12px 16px; font-size: 14px; }\n");
+    ss += QStringLiteral("#cpInput:focus { border-color: ") + c["purple-light"]
+       + QStringLiteral("; background: ") + c["bg-light"] + QStringLiteral("; }\n");
+
+    ss += QStringLiteral("#cpResults { background: ") + c["bg-dark"]
+       + QStringLiteral("; border: 1px solid ") + c["border"]
+       + QStringLiteral("; border-radius: 10px; color: ") + c["text-primary"]
+       + QStringLiteral("; font-size: 13px; outline: none; }\n");
+    ss += QStringLiteral("#cpResults::item { padding: 10px 14px; border-radius: 6px;"
+                         " margin: 1px 2px; }\n");
+    ss += QStringLiteral("#cpResults::item:selected { background: ") + c["purple-dark"]
+       + QStringLiteral("; color: ") + c["purple-pale"] + QStringLiteral("; }\n");
+    ss += QStringLiteral("#cpResults::item:hover:!selected { background: ") + c["bg-lighter"]
+       + QStringLiteral("; }\n");
+
+    ss += QStringLiteral("QScrollBar:vertical { background: transparent; width: 6px; }\n");
+    ss += QStringLiteral("QScrollBar::handle:vertical { background: ") + c["scrollbar"]
+       + QStringLiteral("; border-radius: 3px; }\n");
+    ss += QStringLiteral("QScrollBar::handle:vertical:hover { background: ") + c["scrollbar-hover"]
+       + QStringLiteral("; }\n");
+    ss += QStringLiteral("QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {"
+                         " height: 0; }\n");
+
+    setStyleSheet(ss);
 }
 
 // ── Command registration ─────────────────────────────────────────────
@@ -140,12 +157,17 @@ void CommandPalette::setFadeOpacity(qreal o)
 // ── Paint with transparency ──────────────────────────────────────────
 void CommandPalette::paintEvent(QPaintEvent * /*event*/)
 {
+    const auto &c = ThemeEngine::instance().colors();
     QPainter p(this);
     p.setOpacity(m_opacity);
     p.setRenderHint(QPainter::Antialiasing);
-    p.setBrush(QColor(10, 10, 18, 240));
-    p.setPen(QColor(123, 79, 191));
-    p.drawRoundedRect(rect().adjusted(1, 1, -1, -1), 12, 12);
+
+    // Dark frosted background
+    QColor bg(c.value(QStringLiteral("bg-darkest"), QStringLiteral("#1a1b26")));
+    bg.setAlpha(245);
+    p.setBrush(bg);
+    p.setPen(QPen(QColor(c.value(QStringLiteral("purple-mid"), QStringLiteral("#6e6ab3"))), 1.5));
+    p.drawRoundedRect(rect().adjusted(1, 1, -1, -1), 14, 14);
 }
 
 // ── Fuzzy matching ───────────────────────────────────────────────────

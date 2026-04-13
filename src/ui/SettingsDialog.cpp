@@ -1,5 +1,6 @@
 #include "SettingsDialog.h"
 #include "ai/AiManager.h"
+#include "theme/ThemeEngine.h"
 
 #include <QTabWidget>
 #include <QVBoxLayout>
@@ -151,6 +152,15 @@ QWidget *SettingsDialog::createSearchTab()
             this, &SettingsDialog::searchEngineChanged);
     form->addRow(QStringLiteral("Default search engine:"), m_searchEngineCombo);
 
+    m_searchModeCombo = new QComboBox(this);
+    m_searchModeCombo->addItem(QStringLiteral("OYN + Nyx only (internal)"), QStringLiteral("internal"));
+    m_searchModeCombo->addItem(QStringLiteral("OYN + Nyx + Web (hybrid)"),  QStringLiteral("hybrid"));
+    m_searchModeCombo->setCurrentIndex(1); // default: hybrid
+    m_searchModeCombo->setToolTip(
+        QStringLiteral("Internal-only uses your local database and crawled pages.\n"
+                       "Hybrid also fetches results from the selected search engine."));
+    form->addRow(QStringLiteral("Search mode:"), m_searchModeCombo);
+
     m_searchSuggestionsCheck = new QCheckBox(QStringLiteral("Show search suggestions"), this);
     m_searchSuggestionsCheck->setChecked(true);
     form->addRow(QString(), m_searchSuggestionsCheck);
@@ -216,7 +226,7 @@ QWidget *SettingsDialog::createAiTab()
     // Status & test
     auto *statusRow = new QHBoxLayout;
     m_aiStatusLabel = new QLabel(QStringLiteral("Status: Unknown"), this);
-    m_aiStatusLabel->setStyleSheet(QStringLiteral("color: #A8A0B8;"));
+    m_aiStatusLabel->setStyleSheet(QStringLiteral("color: ") + ThemeEngine::instance().colors()["text-secondary"] + QStringLiteral(";"));
     statusRow->addWidget(m_aiStatusLabel);
     statusRow->addStretch();
 
@@ -293,17 +303,21 @@ QWidget *SettingsDialog::createExtensionsTab()
     auto *layout = new QVBoxLayout(widget);
     layout->setContentsMargins(16, 16, 16, 16);
 
+    const auto &ce = ThemeEngine::instance().colors();
     auto *label = new QLabel(QStringLiteral("Installed extensions appear here.\n"
         "Use Tools > Extensions to install new NPI/XPI extensions."), this);
-    label->setStyleSheet(QStringLiteral("color: #A8A0B8;"));
+    label->setStyleSheet(QStringLiteral("color: ") + ce["text-secondary"] + QStringLiteral(";"));
     layout->addWidget(label);
 
     auto *list = new QListWidget(this);
-    list->setStyleSheet(QStringLiteral(
-        "QListWidget { background: #12121e; color: #E8E0F0; border: 1px solid #2a2a40;"
-        "  border-radius: 4px; }"
-        "QListWidget::item { padding: 8px; }"
-        "QListWidget::item:selected { background: rgba(123,79,191,0.3); }"));
+    list->setStyleSheet(
+        QStringLiteral("QListWidget { background: ") + ce["bg-dark"]
+        + QStringLiteral("; color: ") + ce["text-primary"]
+        + QStringLiteral("; border: 1px solid ") + ce["border"]
+        + QStringLiteral("; border-radius: 8px; }"
+                         "QListWidget::item { padding: 8px; border-radius: 4px; }"
+                         "QListWidget::item:selected { background: ") + ce["selection"]
+        + QStringLiteral("; }"));
     layout->addWidget(list, 1);
 
     return widget;
@@ -346,13 +360,16 @@ QWidget *SettingsDialog::createAboutTab()
     layout->setContentsMargins(24, 24, 24, 24);
     layout->setAlignment(Qt::AlignCenter);
 
+    const auto &ca = ThemeEngine::instance().colors();
     auto *titleLabel = new QLabel(QStringLiteral("OyNIx Browser"), this);
-    titleLabel->setStyleSheet(QStringLiteral("color: #E8E0F0; font-size: 24px; font-weight: bold;"));
+    titleLabel->setStyleSheet(QStringLiteral("color: ") + ca["text-primary"]
+        + QStringLiteral("; font-size: 24px; font-weight: bold;"));
     titleLabel->setAlignment(Qt::AlignCenter);
     layout->addWidget(titleLabel);
 
-    auto *versionLabel = new QLabel(QStringLiteral("Version 3.0.0"), this);
-    versionLabel->setStyleSheet(QStringLiteral("color: #7B4FBF; font-size: 16px;"));
+    auto *versionLabel = new QLabel(QStringLiteral("Version 3.1.0"), this);
+    versionLabel->setStyleSheet(QStringLiteral("color: ") + ca["purple-mid"]
+        + QStringLiteral("; font-size: 16px;"));
     versionLabel->setAlignment(Qt::AlignCenter);
     layout->addWidget(versionLabel);
 
@@ -368,7 +385,8 @@ QWidget *SettingsDialog::createAboutTab()
         "- Command palette\n"
         "- Audio player with web media detection\n"
         "- Chrome data import"), this);
-    descLabel->setStyleSheet(QStringLiteral("color: #A8A0B8; font-size: 12px;"));
+    descLabel->setStyleSheet(QStringLiteral("color: ") + ca["text-secondary"]
+        + QStringLiteral("; font-size: 12px;"));
     descLabel->setAlignment(Qt::AlignCenter);
     descLabel->setWordWrap(true);
     layout->addWidget(descLabel);
@@ -380,36 +398,60 @@ QWidget *SettingsDialog::createAboutTab()
 // ── Styles ───────────────────────────────────────────────────────────
 void SettingsDialog::applyStyles()
 {
-    setStyleSheet(QStringLiteral(
-        "QDialog { background: #08080d; }"
-        "QTabWidget::pane { border: 1px solid #2a2a40; background: #0a0a12; }"
-        "QTabBar::tab { background: #0e0e16; color: #A8A0B8; padding: 8px 16px;"
-        "  border: 1px solid transparent; border-bottom: none; }"
-        "QTabBar::tab:selected { background: #0a0a12; color: #E8E0F0; border-color: #7B4FBF; }"
-        "QTabBar::tab:hover { color: #E8E0F0; }"
-        "QLabel { color: #E8E0F0; }"
-        "QLineEdit { background: #12121e; color: #E8E0F0; border: 1px solid #2a2a40;"
-        "  border-radius: 4px; padding: 6px; }"
-        "QLineEdit:focus { border-color: #7B4FBF; }"
-        "QComboBox { background: #12121e; color: #E8E0F0; border: 1px solid #2a2a40;"
-        "  border-radius: 4px; padding: 4px 8px; }"
-        "QComboBox::drop-down { border: none; }"
-        "QComboBox QAbstractItemView { background: #0e0e16; color: #E8E0F0;"
-        "  selection-background-color: #7B4FBF; }"
-        "QCheckBox { color: #E8E0F0; spacing: 8px; }"
-        "QCheckBox::indicator { width: 16px; height: 16px; border: 1px solid #7B4FBF;"
-        "  border-radius: 3px; background: #12121e; }"
-        "QCheckBox::indicator:checked { background: #7B4FBF; }"
-        "QSpinBox { background: #12121e; color: #E8E0F0; border: 1px solid #2a2a40;"
-        "  border-radius: 4px; padding: 4px; }"
-        "QGroupBox { color: #E8E0F0; border: 1px solid #2a2a40; border-radius: 6px;"
-        "  margin-top: 12px; padding-top: 16px; }"
-        "QGroupBox::title { subcontrol-origin: margin; left: 12px; padding: 0 4px; }"
-        "QPushButton { background: #7B4FBF; color: white; border: none;"
-        "  border-radius: 4px; padding: 6px 14px; }"
-        "QPushButton:hover { background: #9B6FDF; }"
-        "QDialogButtonBox QPushButton { min-width: 80px; }"
-    ));
+    const auto &c = ThemeEngine::instance().colors();
+
+    QString ss;
+    ss += QStringLiteral("QDialog { background: ") + c["bg-darkest"] + QStringLiteral("; }\n");
+    ss += QStringLiteral("QTabWidget::pane { border: 1px solid ") + c["border"]
+       + QStringLiteral("; background: ") + c["bg-dark"] + QStringLiteral("; }\n");
+    ss += QStringLiteral("QTabBar::tab { background: ") + c["bg-darkest"]
+       + QStringLiteral("; color: ") + c["text-secondary"]
+       + QStringLiteral("; padding: 8px 16px; border: 1px solid transparent;"
+                        " border-bottom: none; }\n");
+    ss += QStringLiteral("QTabBar::tab:selected { background: ") + c["bg-dark"]
+       + QStringLiteral("; color: ") + c["text-primary"]
+       + QStringLiteral("; border-color: ") + c["purple-mid"] + QStringLiteral("; }\n");
+    ss += QStringLiteral("QTabBar::tab:hover { color: ") + c["text-primary"]
+       + QStringLiteral("; }\n");
+    ss += QStringLiteral("QLabel { color: ") + c["text-primary"] + QStringLiteral("; }\n");
+    ss += QStringLiteral("QLineEdit { background: ") + c["bg-mid"]
+       + QStringLiteral("; color: ") + c["text-primary"]
+       + QStringLiteral("; border: 1px solid ") + c["border"]
+       + QStringLiteral("; border-radius: 6px; padding: 6px; }\n");
+    ss += QStringLiteral("QLineEdit:focus { border-color: ") + c["purple-mid"]
+       + QStringLiteral("; }\n");
+    ss += QStringLiteral("QComboBox { background: ") + c["bg-mid"]
+       + QStringLiteral("; color: ") + c["text-primary"]
+       + QStringLiteral("; border: 1px solid ") + c["border"]
+       + QStringLiteral("; border-radius: 6px; padding: 4px 8px; }\n");
+    ss += QStringLiteral("QComboBox::drop-down { border: none; }\n");
+    ss += QStringLiteral("QComboBox QAbstractItemView { background: ") + c["bg-darkest"]
+       + QStringLiteral("; color: ") + c["text-primary"]
+       + QStringLiteral("; selection-background-color: ") + c["purple-dark"]
+       + QStringLiteral("; }\n");
+    ss += QStringLiteral("QCheckBox { color: ") + c["text-primary"]
+       + QStringLiteral("; spacing: 8px; }\n");
+    ss += QStringLiteral("QCheckBox::indicator { width: 16px; height: 16px; border: 1px solid ")
+       + c["purple-mid"] + QStringLiteral("; border-radius: 4px; background: ") + c["bg-mid"]
+       + QStringLiteral("; }\n");
+    ss += QStringLiteral("QCheckBox::indicator:checked { background: ") + c["purple-mid"]
+       + QStringLiteral("; }\n");
+    ss += QStringLiteral("QSpinBox { background: ") + c["bg-mid"]
+       + QStringLiteral("; color: ") + c["text-primary"]
+       + QStringLiteral("; border: 1px solid ") + c["border"]
+       + QStringLiteral("; border-radius: 6px; padding: 4px; }\n");
+    ss += QStringLiteral("QGroupBox { color: ") + c["text-primary"]
+       + QStringLiteral("; border: 1px solid ") + c["border"]
+       + QStringLiteral("; border-radius: 8px; margin-top: 12px; padding-top: 16px; }\n");
+    ss += QStringLiteral("QGroupBox::title { subcontrol-origin: margin; left: 12px;"
+                         " padding: 0 4px; }\n");
+    ss += QStringLiteral("QPushButton { background: ") + c["purple-mid"]
+       + QStringLiteral("; color: white; border: none; border-radius: 6px;"
+                        " padding: 6px 14px; }\n");
+    ss += QStringLiteral("QPushButton:hover { background: ") + c["purple-light"]
+       + QStringLiteral("; }\n");
+    ss += QStringLiteral("QDialogButtonBox QPushButton { min-width: 80px; }\n");
+    setStyleSheet(ss);
 }
 
 // ── Load / Save ──────────────────────────────────────────────────────
@@ -425,6 +467,11 @@ void SettingsDialog::loadFromConfig()
         const int idx = m_searchEngineCombo->findText(
             m_config[QStringLiteral("search_engine")].toString());
         if (idx >= 0) m_searchEngineCombo->setCurrentIndex(idx);
+    }
+    if (m_searchModeCombo) {
+        const QString mode = m_config[QStringLiteral("search_mode")].toString(QStringLiteral("hybrid"));
+        const int idx = m_searchModeCombo->findData(mode);
+        if (idx >= 0) m_searchModeCombo->setCurrentIndex(idx);
     }
     if (m_treeTabsCheck)
         m_treeTabsCheck->setChecked(m_config[QStringLiteral("tree_tabs")].toBool());
@@ -449,6 +496,8 @@ void SettingsDialog::saveToConfig()
         m_config[QStringLiteral("theme")] = m_themeCombo->currentText();
     if (m_searchEngineCombo)
         m_config[QStringLiteral("search_engine")] = m_searchEngineCombo->currentText();
+    if (m_searchModeCombo)
+        m_config[QStringLiteral("search_mode")] = m_searchModeCombo->currentData().toString();
     if (m_treeTabsCheck)
         m_config[QStringLiteral("tree_tabs")] = m_treeTabsCheck->isChecked();
     if (m_restoreSessionCheck)

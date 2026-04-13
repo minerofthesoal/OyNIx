@@ -1,9 +1,11 @@
 /*
- * OyNIx Browser v3.0 — FindBar implementation
- * Find-in-page bar with slide-in animation and match counting.
+ * OyNIx Browser v3.1 — FindBar implementation
+ * Find-in-page bar with slide-in animation, match counting, and
+ * theme-consistent glass styling.
  */
 
 #include "FindBar.h"
+#include "theme/ThemeEngine.h"
 
 #include <QHBoxLayout>
 #include <QKeyEvent>
@@ -213,10 +215,12 @@ void FindBar::updateMatchCount(int current, int total)
 
     if (total == 0 && !m_searchInput->text().isEmpty()) {
         m_matchLabel->setText(tr("No matches"));
-        m_matchLabel->setStyleSheet(QStringLiteral("color: #FF6B6B;"));
+        m_matchLabel->setStyleSheet(QStringLiteral("color: ") +
+            ThemeEngine::instance().getColor(QStringLiteral("error")) + QStringLiteral(";"));
     } else if (total > 0) {
         m_matchLabel->setText(tr("%1 of %2").arg(current).arg(total));
-        m_matchLabel->setStyleSheet(QStringLiteral("color: #A8A0B8;"));
+        m_matchLabel->setStyleSheet(QStringLiteral("color: ") +
+            ThemeEngine::instance().getColor(QStringLiteral("text-secondary")) + QStringLiteral(";"));
     } else {
         m_matchLabel->clear();
     }
@@ -226,37 +230,36 @@ void FindBar::updateMatchCount(int current, int total)
 
 void FindBar::applyStyle()
 {
-    setStyleSheet(QStringLiteral(
-        "FindBar {"
-        "  background-color: #0e0e16;"
-        "  border-top: 1px solid #7B4FBF;"
-        "}"
-        "QLineEdit {"
-        "  background-color: #08080d;"
-        "  color: #E8E0F0;"
-        "  border: 1px solid #7B4FBF;"
-        "  border-radius: 4px;"
-        "  padding: 4px 8px;"
-        "  selection-background-color: #7B4FBF;"
-        "}"
-        "QLineEdit:focus {"
-        "  border-color: #9B6FDF;"
-        "}"
-        "QPushButton {"
-        "  background-color: #0e0e16;"
-        "  color: #E8E0F0;"
-        "  border: 1px solid #7B4FBF;"
-        "  border-radius: 4px;"
-        "}"
-        "QPushButton:hover {"
-        "  background-color: #7B4FBF;"
-        "}"
-        "QPushButton:pressed {"
-        "  background-color: #9B6FDF;"
-        "}"
-        "QLabel {"
-        "  color: #A8A0B8;"
-        "  font-size: 12px;"
-        "}"
-    ));
+    const auto &c = ThemeEngine::instance().colors();
+    QString ss;
+
+    ss += QStringLiteral("FindBar { background: ") + c["bg-darkest"]
+       + QStringLiteral("; border-top: 2px solid ") + c["purple-mid"]
+       + QStringLiteral("; }\n");
+
+    ss += QStringLiteral("QLineEdit { background: ") + c["bg-mid"]
+       + QStringLiteral("; color: ") + c["text-primary"]
+       + QStringLiteral("; border: 1px solid ") + c["border"]
+       + QStringLiteral("; border-radius: 8px; padding: 5px 10px;"
+                        " selection-background-color: ") + c["selection"]
+       + QStringLiteral("; font-size: 13px; }\n");
+    ss += QStringLiteral("QLineEdit:focus { border-color: ") + c["purple-mid"]
+       + QStringLiteral("; background: ") + c["bg-light"]
+       + QStringLiteral("; }\n");
+
+    ss += QStringLiteral("QPushButton { background: ") + c["bg-mid"]
+       + QStringLiteral("; color: ") + c["text-primary"]
+       + QStringLiteral("; border: 1px solid ") + c["border"]
+       + QStringLiteral("; border-radius: 6px; }\n");
+    ss += QStringLiteral("QPushButton:hover { background: ") + c["purple-dark"]
+       + QStringLiteral("; border-color: ") + c["purple-mid"]
+       + QStringLiteral("; }\n");
+    ss += QStringLiteral("QPushButton:pressed { background: ") + c["purple-mid"]
+       + QStringLiteral("; color: ") + c["bg-darkest"]
+       + QStringLiteral("; }\n");
+
+    ss += QStringLiteral("QLabel { color: ") + c["text-secondary"]
+       + QStringLiteral("; font-size: 12px; background: transparent; }\n");
+
+    setStyleSheet(ss);
 }

@@ -74,6 +74,10 @@ set(OYNIX_SOURCES
     # Data
     src/data/Database.cpp
     src/data/Database.h
+    src/data/CommunityDbSync.cpp
+    src/data/CommunityDbSync.h
+    src/data/WebCache.cpp
+    src/data/WebCache.h
     src/data/BookmarkManager.cpp
     src/data/BookmarkManager.h
     src/data/HistoryManager.cpp
@@ -91,6 +95,8 @@ set(OYNIX_SOURCES
     # Search
     src/search/NyxSearch.cpp
     src/search/NyxSearch.h
+    src/search/WebCrawler.cpp
+    src/search/WebCrawler.h
     src/search/WebResultsFetcher.cpp
     src/search/WebResultsFetcher.h
     src/search/SearchEngineBuilder.cpp
@@ -204,13 +210,25 @@ if(EXISTS "${CMAKE_SOURCE_DIR}/themes")
     install(DIRECTORY themes/ DESTINATION share/oynix/themes)
 endif()
 
-# Platform-specific
+# Platform-specific (Linux)
 if(UNIX AND NOT APPLE)
     if(EXISTS "${CMAKE_SOURCE_DIR}/resources/oynix.desktop")
         install(FILES resources/oynix.desktop DESTINATION share/applications)
     endif()
-    if(EXISTS "${CMAKE_SOURCE_DIR}/resources/oynix.png")
-        install(FILES resources/oynix.png DESTINATION share/icons/hicolor/256x256/apps)
+
+    # Icons — install all available sizes from assets/
+    foreach(SIZE 256 128 64 48)
+        set(_icon "${CMAKE_SOURCE_DIR}/assets/icon-${SIZE}.png")
+        if(EXISTS "${_icon}")
+            install(FILES "${_icon}"
+                DESTINATION "share/icons/hicolor/${SIZE}x${SIZE}/apps"
+                RENAME oynix.png)
+        endif()
+    endforeach()
+    if(EXISTS "${CMAKE_SOURCE_DIR}/assets/icon.svg")
+        install(FILES "${CMAKE_SOURCE_DIR}/assets/icon.svg"
+            DESTINATION share/icons/hicolor/scalable/apps
+            RENAME oynix.svg)
     endif()
 endif()
 

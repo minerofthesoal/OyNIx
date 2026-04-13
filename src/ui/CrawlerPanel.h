@@ -15,6 +15,7 @@ class QPushButton;
 class QLabel;
 class QSpinBox;
 class QCheckBox;
+class QComboBox;
 class QProgressBar;
 class QTimer;
 class QStackedWidget;
@@ -42,6 +43,8 @@ private slots:
 
 private:
     void setupUi();
+    void setupStyles();
+    void connectCrawlerSignals();
     void setRunningState(bool running);
     void refreshResults();
 
@@ -54,6 +57,7 @@ private:
     QSpinBox      *m_depthSpin      = nullptr;
     QSpinBox      *m_maxPagesSpin   = nullptr;
     QCheckBox     *m_followExternal = nullptr;
+    QComboBox     *m_langFilter     = nullptr;
 
     // Progress
     QProgressBar  *m_progressBar    = nullptr;

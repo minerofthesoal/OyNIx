@@ -415,41 +415,81 @@ QString AiManager::fallbackResponse(const QString &prompt) const
 {
     const QString lower = prompt.toLower();
 
-    if (lower.contains(QStringLiteral("hello")) || lower.contains(QStringLiteral("hi")))
-        return QStringLiteral("Hello! I'm Nyx, the OyNIx Browser AI assistant. "
-                              "I'm currently running in fallback mode. To enable full AI, "
-                              "install Ollama and run a model like TinyLlama.");
+    if (lower.contains(QLatin1String("hello")) || lower.contains(QLatin1String("hi")))
+        return QStringLiteral(
+            "Hello! I'm **Nyx**, the AI assistant in OyNIx Browser.\n\n"
+            "I'm running in fallback mode right now. To unlock full AI:\n"
+            "- **Ollama (local):** Install from ollama.ai, then `ollama pull llama3.2`\n"
+            "- **OpenAI API:** Add your key in Settings → AI\n\n"
+            "I can still help with basic browser questions!");
 
-    if (lower.contains(QStringLiteral("summarize")) || lower.contains(QStringLiteral("summary")))
-        return QStringLiteral("I'm in fallback mode and can't summarize pages right now. "
-                              "To enable AI summarization, configure an Ollama or OpenAI endpoint "
-                              "in Settings > AI.");
+    if (lower.contains(QLatin1String("summarize")) || lower.contains(QLatin1String("summary")))
+        return QStringLiteral(
+            "**Page Summary** (Fallback Mode)\n\n"
+            "I can't generate an AI summary without an LLM backend. To enable:\n\n"
+            "1. Install Ollama: `curl -fsSL https://ollama.ai/install.sh | sh`\n"
+            "2. Pull a model: `ollama pull llama3.2`\n"
+            "3. Restart OyNIx — it auto-connects\n\n"
+            "**Tip:** Skim headings and bold text for key points.");
 
-    if (lower.contains(QStringLiteral("search")) || lower.contains(QStringLiteral("find")))
-        return QStringLiteral("You can use the Nyx search bar (Ctrl+L) to search across your "
-                              "bookmarks, history, and the web. Try typing your query there!");
+    if (lower.contains(QLatin1String("explain")) || lower.contains(QLatin1String("what does")))
+        return QStringLiteral(
+            "**Code Explanation** (Fallback Mode)\n\n"
+            "I need an LLM backend to explain code. Set up Ollama or an OpenAI-compatible "
+            "API in **Settings → AI** to enable this feature.\n\n"
+            "**Tip:** Read function names and comments for understanding.");
 
-    if (lower.contains(QStringLiteral("bookmark")))
-        return QStringLiteral("To bookmark a page, click the star icon in the toolbar or press Ctrl+D. "
-                              "View all bookmarks with Ctrl+B or go to oyn://bookmarks.");
+    if (lower.contains(QLatin1String("search")) || lower.contains(QLatin1String("find")))
+        return QStringLiteral(
+            "**Nyx Search Tips:**\n\n"
+            "- `Ctrl+L` — Focus URL bar and search\n"
+            "- Nyx searches your **bookmarks**, **history**, and the **web**\n"
+            "- Use the **Web Crawler** (`Ctrl+Shift+W`) to index more sites\n"
+            "- Results from crawled pages appear in local search");
 
-    if (lower.contains(QStringLiteral("theme")) || lower.contains(QStringLiteral("dark")))
-        return QStringLiteral("OyNIx comes with several themes: Nyx Dark, Midnight, Violet, "
-                              "Amethyst, and Ember. Go to View > Themes to switch.");
+    if (lower.contains(QLatin1String("bookmark")))
+        return QStringLiteral(
+            "**Bookmarks:**\n\n"
+            "- `Ctrl+D` — Bookmark current page\n"
+            "- `Ctrl+B` — Toggle bookmark panel\n"
+            "- Visit `oyn://bookmarks` to manage all bookmarks\n"
+            "- Bookmarks are organized by folder");
 
-    if (lower.contains(QStringLiteral("extension")) || lower.contains(QStringLiteral("npi")))
-        return QStringLiteral("OyNIx supports NPI extensions. Go to Tools > Extensions to manage them, "
-                              "or use the NPI Builder to create your own.");
+    if (lower.contains(QLatin1String("theme")) || lower.contains(QLatin1String("dark")))
+        return QStringLiteral(
+            "**Themes:**\n\n"
+            "OyNIx includes these themes: **Obsidian**, **Midnight**, **Slate**, "
+            "**Nord**, and **Ember**.\n\n"
+            "Switch via **View → Themes** or in **Settings → Appearance**.");
 
-    if (lower.contains(QStringLiteral("help")))
-        return QStringLiteral("I can help with:\n"
-                              "- Summarizing web pages\n"
-                              "- Explaining code snippets\n"
-                              "- Searching your browsing data\n"
-                              "- Browser tips and shortcuts\n\n"
-                              "For full AI capabilities, configure Ollama in Settings > AI.");
+    if (lower.contains(QLatin1String("crawler")) || lower.contains(QLatin1String("crawl")))
+        return QStringLiteral(
+            "**Web Crawler:**\n\n"
+            "- `Ctrl+Shift+W` — Open crawler panel\n"
+            "- **List mode:** Crawl specific URLs\n"
+            "- **Broad mode:** BFS from a seed URL\n"
+            "- Crawled pages are indexed by Nyx for local search\n"
+            "- Respects robots.txt");
 
-    return QStringLiteral("I'm Nyx, running in fallback mode. For full AI capabilities, "
-                          "set up Ollama (http://localhost:11434) or an OpenAI-compatible API "
-                          "in Settings > AI. I can still help with basic browser questions!");
+    if (lower.contains(QLatin1String("help")) || lower.contains(QLatin1String("how")))
+        return QStringLiteral(
+            "**OyNIx Help:**\n\n"
+            "With an LLM connected, I can:\n"
+            "- **Summarize pages** — Quick page summaries\n"
+            "- **Explain code** — Understand code snippets\n"
+            "- **Answer questions** — General knowledge\n"
+            "- **Analyze search** — Insights from results\n\n"
+            "**Shortcuts:**\n"
+            "- `Ctrl+K` — Command Palette\n"
+            "- `Ctrl+L` — Focus URL bar\n"
+            "- `Ctrl+Shift+A` — AI panel\n"
+            "- `Ctrl+Shift+W` — Web Crawler\n"
+            "- `F11` — Fullscreen");
+
+    return QStringLiteral(
+        "I received your message, but I'm running in **fallback mode**.\n\n"
+        "To enable full AI:\n"
+        "- **Ollama (local):** Install from ollama.ai, then `ollama pull llama3.2`\n"
+        "- **OpenAI API:** Add your key in Settings → AI\n\n"
+        "I can still help with browser tips — try asking about search, bookmarks, themes, or shortcuts.");
 }

@@ -3,10 +3,15 @@
  * Local web crawler UI with two modes:
  *   1) Crawl from a list of URLs
  *   2) Broad web crawl (asks for confirmation)
+ *
+ * Uses the native C++ WebCrawler instead of the C# NativeAOT CoreBridge.
  */
 
 #include "CrawlerPanel.h"
-#include "interop/CoreBridge.h"
+#include "data/Database.h"
+#include "search/WebCrawler.h"
+#include "search/NyxSearch.h"
+#include "theme/ThemeEngine.h"
 
 #include <QVBoxLayout>
 #include <QHBoxLayout>
@@ -17,8 +22,11 @@
 #include <QLabel>
 #include <QSpinBox>
 #include <QCheckBox>
+#include <QComboBox>
 #include <QProgressBar>
 #include <QTimer>
+#include <QDir>
+#include <QFileDialog>
 #include <QMessageBox>
 #include <QJsonArray>
 #include <QJsonObject>
@@ -28,6 +36,8 @@ CrawlerPanel::CrawlerPanel(QWidget *parent)
     : QWidget(parent)
 {
     setupUi();
+    setupStyles();
+    connectCrawlerSignals();
 }
 
 CrawlerPanel::~CrawlerPanel() = default;
@@ -67,7 +77,7 @@ void CrawlerPanel::setupUi()
     auto *depthRow = new QHBoxLayout;
     depthRow->addWidget(new QLabel(QStringLiteral("Max depth:"), this));
     m_depthSpin = new QSpinBox(this);
-    m_depthSpin->setRange(1, 10);
+    m_depthSpin->setRange(1, 42);
     m_depthSpin->setValue(2);
     m_depthSpin->setToolTip(QStringLiteral("How many link levels deep to crawl"));
     depthRow->addWidget(m_depthSpin);
@@ -92,6 +102,35 @@ void CrawlerPanel::setupUi()
     m_followExternal->setToolTip(
         QStringLiteral("When unchecked, only crawls links within the same domain"));
     root->addWidget(m_followExternal);
+
+    // Language filter
+    auto *langRow = new QHBoxLayout;
+    langRow->addWidget(new QLabel(QStringLiteral("Language:"), this));
+    m_langFilter = new QComboBox(this);
+    m_langFilter->setToolTip(QStringLiteral("Only index pages in this language (based on html lang attribute)"));
+    m_langFilter->addItem(QStringLiteral("Any language"), QString());
+    m_langFilter->addItem(QStringLiteral("English"),    QStringLiteral("en"));
+    m_langFilter->addItem(QStringLiteral("Spanish"),    QStringLiteral("es"));
+    m_langFilter->addItem(QStringLiteral("French"),     QStringLiteral("fr"));
+    m_langFilter->addItem(QStringLiteral("German"),     QStringLiteral("de"));
+    m_langFilter->addItem(QStringLiteral("Portuguese"), QStringLiteral("pt"));
+    m_langFilter->addItem(QStringLiteral("Italian"),    QStringLiteral("it"));
+    m_langFilter->addItem(QStringLiteral("Dutch"),      QStringLiteral("nl"));
+    m_langFilter->addItem(QStringLiteral("Russian"),    QStringLiteral("ru"));
+    m_langFilter->addItem(QStringLiteral("Chinese"),    QStringLiteral("zh"));
+    m_langFilter->addItem(QStringLiteral("Japanese"),   QStringLiteral("ja"));
+    m_langFilter->addItem(QStringLiteral("Korean"),     QStringLiteral("ko"));
+    m_langFilter->addItem(QStringLiteral("Arabic"),     QStringLiteral("ar"));
+    m_langFilter->addItem(QStringLiteral("Hindi"),      QStringLiteral("hi"));
+    m_langFilter->addItem(QStringLiteral("Turkish"),    QStringLiteral("tr"));
+    m_langFilter->addItem(QStringLiteral("Polish"),     QStringLiteral("pl"));
+    m_langFilter->addItem(QStringLiteral("Swedish"),    QStringLiteral("sv"));
+    m_langFilter->addItem(QStringLiteral("Norwegian"),  QStringLiteral("no"));
+    m_langFilter->addItem(QStringLiteral("Danish"),     QStringLiteral("da"));
+    m_langFilter->addItem(QStringLiteral("Finnish"),    QStringLiteral("fi"));
+    m_langFilter->addItem(QStringLiteral("Czech"),      QStringLiteral("cs"));
+    langRow->addWidget(m_langFilter, 1);
+    root->addLayout(langRow);
 
     // ── Action Buttons ──────────────────────────────────────────────────
     auto *btnRow = new QHBoxLayout;
@@ -157,6 +196,29 @@ void CrawlerPanel::setupUi()
             this, &CrawlerPanel::onResultDoubleClicked);
     root->addWidget(m_resultsList, 1);
 
+    // ── Community DB export ────────────────────────────────────────────
+    auto *exportBtn = new QPushButton(QStringLiteral("Export JSONL for Community DB"), this);
+    exportBtn->setObjectName(QStringLiteral("exportBtn"));
+    exportBtn->setToolTip(QStringLiteral("Export your crawled data as JSONL to upload to the community extras database on GitHub"));
+    connect(exportBtn, &QPushButton::clicked, this, [this]() {
+        const QString path = QFileDialog::getSaveFileName(
+            this, QStringLiteral("Export Community DB"),
+            QDir::homePath() + QStringLiteral("/oynix_community_export.jsonl"),
+            QStringLiteral("JSONL Files (*.jsonl)"));
+        if (path.isEmpty()) return;
+
+        if (Database::instance()->exportToJsonl(path)) {
+            QMessageBox::information(this, QStringLiteral("Export Complete"),
+                QStringLiteral("Data exported to:\n%1\n\n"
+                    "You can upload this file to the OyNIx community extras "
+                    "database on GitHub.").arg(path));
+        } else {
+            QMessageBox::warning(this, QStringLiteral("Export Failed"),
+                QStringLiteral("Could not write to:\n%1").arg(path));
+        }
+    });
+    root->addWidget(exportBtn);
+
     // ── Poll timer ──────────────────────────────────────────────────────
     m_pollTimer = new QTimer(this);
     m_pollTimer->setInterval(500);
@@ -164,6 +226,92 @@ void CrawlerPanel::setupUi()
             this, &CrawlerPanel::onPollStatus);
 
     setFixedWidth(300);
+}
+
+// ── Styles ──��──────────────────────────────────────────────────────────
+
+void CrawlerPanel::setupStyles()
+{
+    const auto &c = ThemeEngine::instance().colors();
+
+    QString ss;
+    ss += QStringLiteral("CrawlerPanel { background: ") + c["bg-darkest"] + QStringLiteral("; }\n");
+    ss += QStringLiteral("#panelTitle { color: ") + c["purple-light"]
+       + QStringLiteral("; font-size: 13px; font-weight: 700;"
+                        " letter-spacing: 0.05em; text-transform: uppercase; }\n");
+    ss += QStringLiteral("#sectionLabel { color: ") + c["text-secondary"]
+       + QStringLiteral("; font-size: 11px; font-weight: 600;"
+                        " text-transform: uppercase; letter-spacing: 0.05em; }\n");
+    ss += QStringLiteral("#badge { color: ") + c["bg-darkest"]
+       + QStringLiteral("; background: ") + c["purple-mid"]
+       + QStringLiteral("; font-size: 10px; font-weight: 700;"
+                        " padding: 1px 7px; border-radius: 8px; }\n");
+    ss += QStringLiteral("#crawlerUrlInput { background: ") + c["bg-mid"]
+       + QStringLiteral("; color: ") + c["text-primary"]
+       + QStringLiteral("; border: 1px solid ") + c["border"]
+       + QStringLiteral("; border-radius: 8px; padding: 6px; font-size: 12px; }\n");
+    ss += QStringLiteral("#crawlerUrlInput:focus { border-color: ") + c["purple-mid"]
+       + QStringLiteral("; }\n");
+    ss += QStringLiteral("QLabel { color: ") + c["text-primary"] + QStringLiteral("; }\n");
+    ss += QStringLiteral("QSpinBox { background: ") + c["bg-mid"]
+       + QStringLiteral("; color: ") + c["text-primary"]
+       + QStringLiteral("; border: 1px solid ") + c["border"]
+       + QStringLiteral("; border-radius: 6px; padding: 4px; }\n");
+    ss += QStringLiteral("QCheckBox { color: ") + c["text-primary"]
+       + QStringLiteral("; spacing: 6px; }\n");
+    ss += QStringLiteral("QCheckBox::indicator { width: 14px; height: 14px; border: 1px solid ")
+       + c["purple-mid"] + QStringLiteral("; border-radius: 3px; background: ") + c["bg-mid"]
+       + QStringLiteral("; }\n");
+    ss += QStringLiteral("QCheckBox::indicator:checked { background: ") + c["purple-mid"]
+       + QStringLiteral("; }\n");
+    ss += QStringLiteral("#crawlBtn { background: ") + c["purple-mid"]
+       + QStringLiteral("; color: white; border: none; border-radius: 8px;"
+                        " padding: 6px 14px; font-weight: 600; }\n");
+    ss += QStringLiteral("#crawlBtn:hover { background: ") + c["purple-light"]
+       + QStringLiteral("; }\n");
+    ss += QStringLiteral("#crawlWebBtn { background: rgba(110,106,179,0.15); color: ")
+       + c["purple-light"] + QStringLiteral("; border: 1px solid rgba(110,106,179,0.3);"
+                                             " border-radius: 8px; padding: 6px 14px;"
+                                             " font-weight: 600; }\n");
+    ss += QStringLiteral("#crawlWebBtn:hover { background: rgba(110,106,179,0.3); }\n");
+    ss += QStringLiteral("#stopBtn { background: rgba(212,86,94,0.2); color: ") + c["error"]
+       + QStringLiteral("; border: 1px solid rgba(212,86,94,0.3); border-radius: 6px;"
+                        " padding: 4px 12px; }\n");
+    ss += QStringLiteral("#stopBtn:hover { background: rgba(212,86,94,0.4); }\n");
+    ss += QStringLiteral("#crawlerProgress { background: ") + c["bg-lighter"]
+       + QStringLiteral("; border: none; border-radius: 3px; }\n");
+    ss += QStringLiteral("#crawlerProgress::chunk { background: qlineargradient("
+                         "x1:0,y1:0,x2:1,y2:0,stop:0 ") + c["purple-mid"]
+       + QStringLiteral(",stop:1 ") + c["purple-light"]
+       + QStringLiteral("); border-radius: 3px; }\n");
+    ss += QStringLiteral("#crawlerStatus { color: ") + c["text-secondary"]
+       + QStringLiteral("; font-size: 11px; }\n");
+    ss += QStringLiteral("#crawlerResults { background: ") + c["bg-dark"]
+       + QStringLiteral("; color: ") + c["text-primary"]
+       + QStringLiteral("; border: 1px solid ") + c["border"]
+       + QStringLiteral("; border-radius: 8px; font-size: 12px; outline: none; }\n");
+    ss += QStringLiteral("#crawlerResults::item { padding: 4px 8px; border-radius: 4px; }\n");
+    ss += QStringLiteral("#crawlerResults::item:selected { background: ") + c["selection"]
+       + QStringLiteral("; }\n");
+    ss += QStringLiteral("QScrollBar:vertical { background: transparent; width: 5px; }\n");
+    ss += QStringLiteral("QScrollBar::handle:vertical { background: ") + c["scrollbar"]
+       + QStringLiteral("; border-radius: 2px; }\n");
+    ss += QStringLiteral("QScrollBar::handle:vertical:hover { background: ") + c["scrollbar-hover"]
+       + QStringLiteral("; }\n");
+    ss += QStringLiteral("QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }\n");
+    setStyleSheet(ss);
+}
+
+// ── Connect to native WebCrawler signals ────────────────────────────────
+
+void CrawlerPanel::connectCrawlerSignals()
+{
+    auto &crawler = WebCrawler::instance();
+
+    // Index each discovered page into the search database
+    connect(&crawler, &WebCrawler::pageDiscovered, this, [](const QJsonObject &page) {
+        NyxSearch::instance()->indexCrawledPage(page);
+    });
 }
 
 // ── Crawl Actions ───────────────────────────────────────────────────────
@@ -188,16 +336,17 @@ void CrawlerPanel::onStartListCrawl()
 
     if (urlArray.isEmpty()) return;
 
-    // Apply settings
-    auto &bridge = CoreBridge::instance();
-    bridge.crawlerConfigure(
+    // Apply settings and start
+    auto &crawler = WebCrawler::instance();
+    crawler.configure(
         m_depthSpin->value(),
         m_maxPagesSpin->value(),
         4, // concurrency
         m_followExternal->isChecked()
     );
+    crawler.setLanguageFilter(m_langFilter->currentData().toString());
 
-    bridge.crawlerStartList(urlArray);
+    crawler.startList(urlArray);
     setRunningState(true);
     m_statusLabel->setText(QStringLiteral("Crawling %1 URL(s)...").arg(urlArray.size()));
 }
@@ -238,22 +387,23 @@ void CrawlerPanel::onStartBroadCrawl()
 
     if (result != QMessageBox::Yes) return;
 
-    auto &bridge = CoreBridge::instance();
-    bridge.crawlerConfigure(
+    auto &crawler = WebCrawler::instance();
+    crawler.configure(
         m_depthSpin->value(),
         m_maxPagesSpin->value(),
         4,
         m_followExternal->isChecked()
     );
+    crawler.setLanguageFilter(m_langFilter->currentData().toString());
 
-    bridge.crawlerStartBroad(seedUrl.trimmed());
+    crawler.startBroad(seedUrl.trimmed());
     setRunningState(true);
     m_statusLabel->setText(QStringLiteral("Broad crawl from %1...").arg(seedUrl.trimmed()));
 }
 
 void CrawlerPanel::onStopCrawl()
 {
-    CoreBridge::instance().crawlerStop();
+    WebCrawler::instance().stop();
     m_statusLabel->setText(QStringLiteral("Stopping..."));
 }
 
@@ -261,8 +411,8 @@ void CrawlerPanel::onStopCrawl()
 
 void CrawlerPanel::onPollStatus()
 {
-    auto &bridge = CoreBridge::instance();
-    const auto status = bridge.crawlerStatus();
+    auto &crawler = WebCrawler::instance();
+    const auto status = crawler.status();
 
     const bool running = status[QStringLiteral("running")].toBool();
     const int crawled  = status[QStringLiteral("crawled")].toInt();
@@ -297,13 +447,13 @@ void CrawlerPanel::onPollStatus()
 
 void CrawlerPanel::refreshResults()
 {
-    auto &bridge = CoreBridge::instance();
-    const int count = bridge.crawlerCount();
+    auto &crawler = WebCrawler::instance();
+    const int count = crawler.count();
     m_resultsCount->setText(QString::number(count));
 
     // Show last 200 results
     const int offset = qMax(0, count - 200);
-    const auto results = bridge.crawlerResults(offset, 200);
+    const auto results = crawler.results(offset, 200);
 
     m_resultsList->clear();
     for (const auto &val : results) {
@@ -311,7 +461,7 @@ void CrawlerPanel::refreshResults()
         const QString url    = page[QStringLiteral("url")].toString();
         const QString title  = page[QStringLiteral("title")].toString();
         const QString status = page[QStringLiteral("status")].toString();
-        const int depth      = page[QStringLiteral("depth")].toInt();
+        const int depth      = page[QStringLiteral("crawl_depth")].toInt();
 
         auto *item = new QListWidgetItem(m_resultsList);
 
@@ -326,12 +476,13 @@ void CrawlerPanel::refreshResults()
                 .arg(url, status).arg(depth));
 
         // Color code by status
+        const auto &tc = ThemeEngine::instance().colors();
         if (status == QLatin1String("ok"))
-            item->setForeground(QColor(115, 201, 145)); // success green
+            item->setForeground(QColor(tc["success"]));
         else if (status.startsWith(QLatin1String("error")))
-            item->setForeground(QColor(212, 86, 94));    // error red
+            item->setForeground(QColor(tc["error"]));
         else
-            item->setForeground(QColor(200, 202, 216));   // text-primary
+            item->setForeground(QColor(tc["text-primary"]));
     }
 
     // Auto-scroll to bottom

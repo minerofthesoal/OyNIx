@@ -72,6 +72,7 @@ void Database::createTables()
     QSqlDatabase db = QSqlDatabase::database(QStringLiteral("oynix_main"));
     QSqlQuery q(db);
 
+    // ── Sites table with indexes ──
     q.exec(QStringLiteral(
         "CREATE TABLE IF NOT EXISTS sites("
         "id INTEGER PRIMARY KEY, "
@@ -79,11 +80,14 @@ void Database::createTables()
         "title TEXT, "
         "description TEXT, "
         "category TEXT, "
-        "rating REAL, "
+        "rating REAL DEFAULT 0.0, "
         "source TEXT, "
         "added_at TEXT)"
     ));
+    q.exec(QStringLiteral("CREATE INDEX IF NOT EXISTS idx_sites_category ON sites(category)"));
+    q.exec(QStringLiteral("CREATE INDEX IF NOT EXISTS idx_sites_rating ON sites(rating DESC)"));
 
+    // ── Pages table with indexes ──
     q.exec(QStringLiteral(
         "CREATE TABLE IF NOT EXISTS pages("
         "id INTEGER PRIMARY KEY, "
@@ -91,12 +95,32 @@ void Database::createTables()
         "title TEXT, "
         "content TEXT, "
         "domain TEXT, "
+        "source TEXT DEFAULT 'nyx', "
         "visited_at TEXT, "
         "visit_count INTEGER DEFAULT 1)"
     ));
+    q.exec(QStringLiteral("CREATE INDEX IF NOT EXISTS idx_pages_domain ON pages(domain)"));
+    q.exec(QStringLiteral("CREATE INDEX IF NOT EXISTS idx_pages_visited ON pages(visited_at DESC)"));
+    q.exec(QStringLiteral("CREATE INDEX IF NOT EXISTS idx_pages_visits ON pages(visit_count DESC)"));
 
+    // Migrate: add source column if missing (existing DBs)
+    q.exec(QStringLiteral("ALTER TABLE pages ADD COLUMN source TEXT DEFAULT 'nyx'"));
+    // (ALTER TABLE ... ADD COLUMN silently fails if column already exists in SQLite 3.35+)
+
+    // ── FTS5 with porter tokenizer and prefix indexes for fast autocomplete ──
     q.exec(QStringLiteral(
-        "CREATE VIRTUAL TABLE IF NOT EXISTS pages_fts USING fts5(url, title, content, domain)"
+        "CREATE VIRTUAL TABLE IF NOT EXISTS pages_fts USING fts5("
+        "url, title, content, domain, "
+        "tokenize='porter unicode61', "
+        "prefix='2,3')"
+    ));
+
+    // ── Sites FTS for full-text search on the curated database ──
+    q.exec(QStringLiteral(
+        "CREATE VIRTUAL TABLE IF NOT EXISTS sites_fts USING fts5("
+        "url, title, description, category, "
+        "tokenize='porter unicode61', "
+        "prefix='2,3')"
     ));
 }
 
@@ -119,8 +143,20 @@ bool Database::addSite(const QString &url, const QString &title, const QString &
     q.addBindValue(QDateTime::currentDateTimeUtc().toString(Qt::ISODate));
 
     bool ok = q.exec();
-    if (ok)
+    if (ok) {
+        // Update FTS index for sites
+        QSqlQuery fts(db);
+        fts.prepare(QStringLiteral("DELETE FROM sites_fts WHERE url = ?"));
+        fts.addBindValue(url);
+        fts.exec();
+        fts.prepare(QStringLiteral("INSERT INTO sites_fts(url, title, description, category) VALUES(?,?,?,?)"));
+        fts.addBindValue(url);
+        fts.addBindValue(title);
+        fts.addBindValue(description);
+        fts.addBindValue(category);
+        fts.exec();
         emit databaseChanged();
+    }
     return ok;
 }
 
@@ -166,31 +202,70 @@ QJsonArray Database::searchSites(const QString &query, int limit) const
     QMutexLocker locker(&m_mutex);
     QJsonArray results;
     QSqlDatabase db = QSqlDatabase::database(QStringLiteral("oynix_main"));
-    QSqlQuery q(db);
 
-    const QString pattern = QStringLiteral("%%1%").arg(query);
-    q.prepare(QStringLiteral(
-        "SELECT url, title, description, category, rating, source, added_at FROM sites "
-        "WHERE url LIKE ? OR title LIKE ? OR description LIKE ? OR category LIKE ? "
-        "ORDER BY rating DESC LIMIT ?"
-    ));
-    q.addBindValue(pattern);
-    q.addBindValue(pattern);
-    q.addBindValue(pattern);
-    q.addBindValue(pattern);
-    q.addBindValue(limit);
+    // Try FTS5 search first (faster + ranked)
+    QStringList words = query.simplified().split(QLatin1Char(' '), Qt::SkipEmptyParts);
+    QStringList ftsTerms;
+    for (const QString &word : words) {
+        QString safe = word;
+        safe.replace(QLatin1Char('"'), QString());
+        if (!safe.isEmpty())
+            ftsTerms << (QLatin1Char('"') + safe + QLatin1Char('"'));
+    }
 
-    if (q.exec()) {
-        while (q.next()) {
-            QJsonObject obj;
-            obj[QStringLiteral("url")] = q.value(0).toString();
-            obj[QStringLiteral("title")] = q.value(1).toString();
-            obj[QStringLiteral("description")] = q.value(2).toString();
-            obj[QStringLiteral("category")] = q.value(3).toString();
-            obj[QStringLiteral("rating")] = q.value(4).toDouble();
-            obj[QStringLiteral("source")] = q.value(5).toString();
-            obj[QStringLiteral("added_at")] = q.value(6).toString();
-            results.append(obj);
+    if (!ftsTerms.isEmpty()) {
+        const QString ftsQuery = ftsTerms.join(QStringLiteral(" AND "));
+        QSqlQuery q(db);
+        q.prepare(QStringLiteral(
+            "SELECT s.url, s.title, s.description, s.category, s.rating, s.source, s.added_at "
+            "FROM sites_fts f JOIN sites s ON f.url = s.url "
+            "WHERE sites_fts MATCH ? ORDER BY s.rating DESC LIMIT ?"
+        ));
+        q.addBindValue(ftsQuery);
+        q.addBindValue(limit);
+
+        if (q.exec()) {
+            while (q.next()) {
+                QJsonObject obj;
+                obj[QStringLiteral("url")] = q.value(0).toString();
+                obj[QStringLiteral("title")] = q.value(1).toString();
+                obj[QStringLiteral("description")] = q.value(2).toString();
+                obj[QStringLiteral("category")] = q.value(3).toString();
+                obj[QStringLiteral("rating")] = q.value(4).toDouble();
+                obj[QStringLiteral("source")] = q.value(5).toString();
+                obj[QStringLiteral("added_at")] = q.value(6).toString();
+                results.append(obj);
+            }
+        }
+    }
+
+    // Fallback to LIKE search if FTS returned nothing
+    if (results.isEmpty()) {
+        const QString pattern = QStringLiteral("%%1%").arg(query);
+        QSqlQuery q(db);
+        q.prepare(QStringLiteral(
+            "SELECT url, title, description, category, rating, source, added_at FROM sites "
+            "WHERE url LIKE ? OR title LIKE ? OR description LIKE ? OR category LIKE ? "
+            "ORDER BY rating DESC LIMIT ?"
+        ));
+        q.addBindValue(pattern);
+        q.addBindValue(pattern);
+        q.addBindValue(pattern);
+        q.addBindValue(pattern);
+        q.addBindValue(limit);
+
+        if (q.exec()) {
+            while (q.next()) {
+                QJsonObject obj;
+                obj[QStringLiteral("url")] = q.value(0).toString();
+                obj[QStringLiteral("title")] = q.value(1).toString();
+                obj[QStringLiteral("description")] = q.value(2).toString();
+                obj[QStringLiteral("category")] = q.value(3).toString();
+                obj[QStringLiteral("rating")] = q.value(4).toDouble();
+                obj[QStringLiteral("source")] = q.value(5).toString();
+                obj[QStringLiteral("added_at")] = q.value(6).toString();
+                results.append(obj);
+            }
         }
     }
 
@@ -226,7 +301,8 @@ bool Database::compare_site(const QString &url1, const QString &url2) const
     return r1 >= r2;
 }
 
-bool Database::addPage(const QString &url, const QString &title, const QString &content, const QString &domain)
+bool Database::addPage(const QString &url, const QString &title, const QString &content,
+                       const QString &domain, const QString &source)
 {
     QMutexLocker locker(&m_mutex);
     QSqlDatabase db = QSqlDatabase::database(QStringLiteral("oynix_main"));
@@ -235,16 +311,17 @@ bool Database::addPage(const QString &url, const QString &title, const QString &
     // Upsert into pages
     QSqlQuery q(db);
     q.prepare(QStringLiteral(
-        "INSERT INTO pages(url, title, content, domain, visited_at, visit_count) "
-        "VALUES(?, ?, ?, ?, ?, 1) "
+        "INSERT INTO pages(url, title, content, domain, source, visited_at, visit_count) "
+        "VALUES(?, ?, ?, ?, ?, ?, 1) "
         "ON CONFLICT(url) DO UPDATE SET "
-        "title=excluded.title, content=excluded.content, "
+        "title=excluded.title, content=excluded.content, source=excluded.source, "
         "visited_at=excluded.visited_at, visit_count=visit_count+1"
     ));
     q.addBindValue(url);
     q.addBindValue(title);
     q.addBindValue(content);
     q.addBindValue(domain);
+    q.addBindValue(source);
     q.addBindValue(now);
 
     if (!q.exec())
@@ -292,8 +369,10 @@ QJsonArray Database::searchPages(const QString &query, int limit) const
     const QString ftsQuery = ftsTerms.join(QStringLiteral(" AND "));
 
     q.prepare(QStringLiteral(
-        "SELECT url, title, snippet(pages_fts, 2, '<b>', '</b>', '...', 64), domain "
-        "FROM pages_fts WHERE pages_fts MATCH ? ORDER BY rank LIMIT ?"
+        "SELECT f.url, f.title, snippet(pages_fts, 2, '<b>', '</b>', '...', 64), f.domain, "
+        "COALESCE(p.source, 'nyx') "
+        "FROM pages_fts f LEFT JOIN pages p ON f.url = p.url "
+        "WHERE pages_fts MATCH ? ORDER BY rank LIMIT ?"
     ));
     q.addBindValue(ftsQuery);
     q.addBindValue(limit);
@@ -305,6 +384,7 @@ QJsonArray Database::searchPages(const QString &query, int limit) const
             obj[QStringLiteral("title")] = q.value(1).toString();
             obj[QStringLiteral("snippet")] = q.value(2).toString();
             obj[QStringLiteral("domain")] = q.value(3).toString();
+            obj[QStringLiteral("source")] = q.value(4).toString();
             results.append(obj);
         }
     }
@@ -346,6 +426,113 @@ bool Database::exportToJson(const QString &path) const
     return true;
 }
 
+bool Database::exportToJsonl(const QString &path) const
+{
+    QMutexLocker locker(&m_mutex);
+    QSqlDatabase db = QSqlDatabase::database(QStringLiteral("oynix_main"));
+
+    QFile file(path);
+    if (!file.open(QIODevice::WriteOnly | QIODevice::Text))
+        return false;
+
+    // Export crawled pages (from pages table) as JSONL — one JSON object per line
+    QSqlQuery q(db);
+    if (q.exec(QStringLiteral("SELECT url, title, content, domain, source, visited_at FROM pages"))) {
+        while (q.next()) {
+            QJsonObject obj;
+            obj[QStringLiteral("url")]        = q.value(0).toString();
+            obj[QStringLiteral("title")]      = q.value(1).toString();
+            obj[QStringLiteral("content")]    = q.value(2).toString();
+            obj[QStringLiteral("domain")]     = q.value(3).toString();
+            obj[QStringLiteral("source")]     = q.value(4).toString();
+            obj[QStringLiteral("indexed_at")] = q.value(5).toString();
+            file.write(QJsonDocument(obj).toJson(QJsonDocument::Compact));
+            file.write("\n");
+        }
+    }
+
+    // Also export sites
+    if (q.exec(QStringLiteral("SELECT url, title, description, category, rating, source, added_at FROM sites"))) {
+        while (q.next()) {
+            QJsonObject obj;
+            obj[QStringLiteral("url")]         = q.value(0).toString();
+            obj[QStringLiteral("title")]       = q.value(1).toString();
+            obj[QStringLiteral("description")] = q.value(2).toString();
+            obj[QStringLiteral("category")]    = q.value(3).toString();
+            obj[QStringLiteral("rating")]      = q.value(4).toDouble();
+            obj[QStringLiteral("source")]      = q.value(5).toString();
+            obj[QStringLiteral("added_at")]    = q.value(6).toString();
+            file.write(QJsonDocument(obj).toJson(QJsonDocument::Compact));
+            file.write("\n");
+        }
+    }
+
+    return true;
+}
+
+bool Database::importFromJsonl(const QByteArray &data)
+{
+    QMutexLocker locker(&m_mutex);
+    QSqlDatabase db = QSqlDatabase::database(QStringLiteral("oynix_main"));
+
+    if (!db.transaction())
+        return false;
+
+    const QString now = QDateTime::currentDateTimeUtc().toString(Qt::ISODate);
+    int imported = 0;
+
+    const auto lines = data.split('\n');
+    for (const QByteArray &line : lines) {
+        if (line.trimmed().isEmpty())
+            continue;
+
+        QJsonParseError err;
+        QJsonDocument doc = QJsonDocument::fromJson(line, &err);
+        if (err.error != QJsonParseError::NoError || !doc.isObject())
+            continue;
+
+        const QJsonObject obj = doc.object();
+        const QString url = obj[QStringLiteral("url")].toString();
+        if (url.isEmpty())
+            continue;
+
+        // Detect if this is a site (has category/rating) or a page (has content/domain)
+        if (obj.contains(QStringLiteral("category")) || obj.contains(QStringLiteral("rating"))) {
+            QSqlQuery q(db);
+            q.prepare(QStringLiteral(
+                "INSERT OR IGNORE INTO sites(url, title, description, category, rating, source, added_at) "
+                "VALUES(?, ?, ?, ?, ?, ?, ?)"
+            ));
+            q.addBindValue(url);
+            q.addBindValue(obj[QStringLiteral("title")].toString());
+            q.addBindValue(obj[QStringLiteral("description")].toString());
+            q.addBindValue(obj[QStringLiteral("category")].toString());
+            q.addBindValue(obj[QStringLiteral("rating")].toDouble());
+            q.addBindValue(obj[QStringLiteral("source")].toString(QStringLiteral("oyn")));
+            q.addBindValue(obj[QStringLiteral("added_at")].toString(now));
+            if (q.exec()) ++imported;
+        } else {
+            QSqlQuery q(db);
+            q.prepare(QStringLiteral(
+                "INSERT OR IGNORE INTO pages(url, title, content, domain, source, visited_at, visit_count) "
+                "VALUES(?, ?, ?, ?, ?, ?, 1)"
+            ));
+            q.addBindValue(url);
+            q.addBindValue(obj[QStringLiteral("title")].toString());
+            q.addBindValue(obj[QStringLiteral("content")].toString());
+            q.addBindValue(obj[QStringLiteral("domain")].toString());
+            q.addBindValue(obj[QStringLiteral("source")].toString(QStringLiteral("nyx")));
+            q.addBindValue(obj[QStringLiteral("indexed_at")].toString(now));
+            if (q.exec()) ++imported;
+        }
+    }
+
+    bool ok = db.commit();
+    if (ok && imported > 0)
+        emit databaseChanged();
+    return ok;
+}
+
 bool Database::importFromJson(const QString &path)
 {
     QFile file(path);
@@ -383,6 +570,18 @@ QJsonObject Database::getStats() const
 
     if (q.exec(QStringLiteral("SELECT SUM(visit_count) FROM pages")) && q.next())
         stats[QStringLiteral("total_visits")] = q.value(0).toInt();
+
+    // Count unique websites (distinct domains across pages + distinct URLs in sites)
+    if (q.exec(QStringLiteral(
+            "SELECT COUNT(*) FROM ("
+            "  SELECT DISTINCT domain FROM pages WHERE domain != '' "
+            "  UNION "
+            "  SELECT DISTINCT REPLACE(REPLACE(REPLACE(url, 'https://', ''), 'http://', ''), "
+            "    SUBSTR(REPLACE(REPLACE(url, 'https://', ''), 'http://', ''), "
+            "      INSTR(REPLACE(REPLACE(url, 'https://', ''), 'http://', ''), '/')), '') "
+            "  FROM sites WHERE url != ''"
+            ")")) && q.next())
+        stats[QStringLiteral("unique_websites")] = q.value(0).toInt();
 
     stats[QStringLiteral("db_path")] = m_dbPath;
 

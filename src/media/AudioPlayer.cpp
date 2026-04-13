@@ -1,4 +1,5 @@
 #include "AudioPlayer.h"
+#include "theme/ThemeEngine.h"
 
 #include <QVBoxLayout>
 #include <QHBoxLayout>
@@ -77,19 +78,25 @@ void AudioPlayer::setupUi()
     layout->setContentsMargins(12, 8, 12, 8);
     layout->setSpacing(6);
 
+    const auto &c = ThemeEngine::instance().colors();
+
     // Title
     auto *header = new QLabel(QStringLiteral("Audio Player"), this);
-    header->setStyleSheet(QStringLiteral("color: #E8E0F0; font-size: 14px; font-weight: bold;"));
+    header->setStyleSheet(QStringLiteral("color: ") + c["purple-light"]
+        + QStringLiteral("; font-size: 13px; font-weight: 700;"
+                         " letter-spacing: 0.05em; text-transform: uppercase;"));
     layout->addWidget(header);
 
     // Now playing info
     m_titleLabel = new QLabel(QStringLiteral("No track selected"), this);
-    m_titleLabel->setStyleSheet(QStringLiteral("color: #E8E0F0; font-size: 13px;"));
+    m_titleLabel->setStyleSheet(QStringLiteral("color: ") + c["text-primary"]
+        + QStringLiteral("; font-size: 13px;"));
     m_titleLabel->setMaximumWidth(300);
     layout->addWidget(m_titleLabel);
 
     m_artistLabel = new QLabel(QString(), this);
-    m_artistLabel->setStyleSheet(QStringLiteral("color: #A8A0B8; font-size: 11px;"));
+    m_artistLabel->setStyleSheet(QStringLiteral("color: ") + c["text-secondary"]
+        + QStringLiteral("; font-size: 11px;"));
     layout->addWidget(m_artistLabel);
 
     // Progress
@@ -99,7 +106,8 @@ void AudioPlayer::setupUi()
     progressRow->addWidget(m_progressSlider, 1);
 
     m_timeLabel = new QLabel(QStringLiteral("0:00 / 0:00"), this);
-    m_timeLabel->setStyleSheet(QStringLiteral("color: #A8A0B8; font-size: 10px;"));
+    m_timeLabel->setStyleSheet(QStringLiteral("color: ") + c["text-secondary"]
+        + QStringLiteral("; font-size: 10px;"));
     m_timeLabel->setFixedWidth(80);
     progressRow->addWidget(m_timeLabel);
     layout->addLayout(progressRow);
@@ -126,7 +134,8 @@ void AudioPlayer::setupUi()
 
     // Volume
     auto *volIcon = new QLabel(QStringLiteral("Vol"), this);
-    volIcon->setStyleSheet(QStringLiteral("color: #A8A0B8; font-size: 10px;"));
+    volIcon->setStyleSheet(QStringLiteral("color: ") + c["text-secondary"]
+        + QStringLiteral("; font-size: 10px;"));
     controlsRow->addWidget(volIcon);
     m_volumeSlider = new QSlider(Qt::Horizontal, this);
     m_volumeSlider->setRange(0, 100);
@@ -177,20 +186,31 @@ void AudioPlayer::setupUi()
 
 void AudioPlayer::setupStyles()
 {
-    setStyleSheet(QStringLiteral(
-        "AudioPlayer { background: #0a0a12; }"
-        "QPushButton { background: #1e1e30; color: #E8E0F0; border: 1px solid #2a2a40;"
-        "  border-radius: 4px; font-size: 12px; font-weight: bold; }"
-        "QPushButton:hover { background: #7B4FBF; border-color: #7B4FBF; }"
-        "QSlider::groove:horizontal { background: #1e1e30; height: 4px; border-radius: 2px; }"
-        "QSlider::handle:horizontal { background: #7B4FBF; width: 12px; height: 12px;"
-        "  margin: -4px 0; border-radius: 6px; }"
-        "QSlider::sub-page:horizontal { background: #7B4FBF; border-radius: 2px; }"
-        "QListWidget { background: #12121e; color: #E8E0F0; border: 1px solid #2a2a40;"
-        "  border-radius: 4px; font-size: 12px; }"
-        "QListWidget::item { padding: 4px 8px; }"
-        "QListWidget::item:selected { background: rgba(123,79,191,0.3); }"
-    ));
+    const auto &c = ThemeEngine::instance().colors();
+
+    QString ss;
+    ss += QStringLiteral("AudioPlayer { background: ") + c["bg-darkest"] + QStringLiteral("; }\n");
+    ss += QStringLiteral("QPushButton { background: ") + c["bg-mid"]
+       + QStringLiteral("; color: ") + c["text-primary"]
+       + QStringLiteral("; border: 1px solid ") + c["border"]
+       + QStringLiteral("; border-radius: 6px; font-size: 12px; font-weight: bold; }\n");
+    ss += QStringLiteral("QPushButton:hover { background: ") + c["purple-mid"]
+       + QStringLiteral("; border-color: ") + c["purple-mid"] + QStringLiteral("; }\n");
+    ss += QStringLiteral("QSlider::groove:horizontal { background: ") + c["bg-mid"]
+       + QStringLiteral("; height: 4px; border-radius: 2px; }\n");
+    ss += QStringLiteral("QSlider::handle:horizontal { background: ") + c["purple-mid"]
+       + QStringLiteral("; width: 12px; height: 12px; margin: -4px 0; border-radius: 6px; }\n");
+    ss += QStringLiteral("QSlider::sub-page:horizontal { background: ") + c["purple-mid"]
+       + QStringLiteral("; border-radius: 2px; }\n");
+    ss += QStringLiteral("QListWidget { background: ") + c["bg-dark"]
+       + QStringLiteral("; color: ") + c["text-primary"]
+       + QStringLiteral("; border: 1px solid ") + c["border"]
+       + QStringLiteral("; border-radius: 8px; font-size: 12px; }\n");
+    ss += QStringLiteral("QListWidget::item { padding: 4px 8px; border-radius: 4px; }\n");
+    ss += QStringLiteral("QListWidget::item:selected { background: ") + c["selection"]
+       + QStringLiteral("; }\n");
+    ss += QStringLiteral("QListWidget::item:hover:!selected { background: rgba(110,106,179,0.12); }\n");
+    setStyleSheet(ss);
 }
 
 // ── Playlist management ──────────────────────────────────────────────

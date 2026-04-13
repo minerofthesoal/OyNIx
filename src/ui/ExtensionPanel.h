@@ -32,6 +32,7 @@ signals:
 
 private:
     void setupUi();
+    void setupStyles();
     void onItemClicked(QListWidgetItem *item);
     void onContextMenu(const QPoint &pos);
 
