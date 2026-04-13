@@ -533,7 +533,7 @@ void BrowserWindow::createNavigationToolbar()
     m_zoomLabel->setToolTip(tr("Zoom level — Ctrl+0 to reset"));
     m_zoomLabel->setStyleSheet(QStringLiteral(
         "QLabel { color: %1; font-size: 11px; padding: 0 2px; }")
-        .arg(c.value(QStringLiteral("text-secondary")).toString()));
+        .arg(c.value(QStringLiteral("text-secondary"))));
     m_zoomLabel->hide(); // only show when zoom != 100%
     m_navToolbar->addWidget(m_zoomLabel);
 
@@ -552,9 +552,9 @@ void BrowserWindow::createNavigationToolbar()
     m_tabCountLabel->setStyleSheet(QStringLiteral(
         "QLabel { color: %1; background: %2; border: 1px solid %3; "
         "border-radius: 4px; font-size: 11px; font-weight: bold; }")
-        .arg(c.value(QStringLiteral("text-primary")).toString(),
-             c.value(QStringLiteral("bg-mid")).toString(),
-             c.value(QStringLiteral("border")).toString()));
+        .arg(c.value(QStringLiteral("text-primary")),
+             c.value(QStringLiteral("bg-mid")),
+             c.value(QStringLiteral("border"))));
     m_tabCountLabel->setToolTip(tr("Open tabs"));
     m_tabCountLabel->setText(QStringLiteral("1"));
     m_navToolbar->addWidget(m_tabCountLabel);
@@ -595,7 +595,7 @@ void BrowserWindow::createNavigationToolbar()
     m_loadProgress->setStyleSheet(QStringLiteral(
         "QProgressBar { background: transparent; border: none; }"
         "QProgressBar::chunk { background: %1; }")
-        .arg(c.value(QStringLiteral("purple-mid")).toString()));
+        .arg(c.value(QStringLiteral("purple-mid"))));
 
     // Track page load progress from current tab
     auto updateLoadState = [this]() {
