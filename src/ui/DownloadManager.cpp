@@ -1,4 +1,5 @@
 #include "DownloadManager.h"
+#include "theme/ThemeEngine.h"
 
 #include <QVBoxLayout>
 #include <QHBoxLayout>
@@ -25,24 +26,28 @@ DownloadManager::~DownloadManager() = default;
 // ── UI Setup ─────────────────────────────────────────────────────────
 void DownloadManager::setupUi()
 {
+    const auto &c = ThemeEngine::instance().colors();
+
     auto *mainLayout = new QVBoxLayout(this);
     mainLayout->setContentsMargins(0, 0, 0, 0);
 
     // Header
     auto *header = new QWidget(this);
     auto *headerLayout = new QHBoxLayout(header);
-    headerLayout->setContentsMargins(12, 8, 12, 8);
+    headerLayout->setContentsMargins(14, 10, 14, 10);
     auto *titleLabel = new QLabel(QStringLiteral("Downloads"), this);
-    titleLabel->setStyleSheet(QStringLiteral("color: #E8E0F0; font-size: 14px; font-weight: bold;"));
+    titleLabel->setStyleSheet(QStringLiteral("color: ") + c["purple-light"]
+        + QStringLiteral("; font-size: 14px; font-weight: bold;"));
     headerLayout->addWidget(titleLabel);
     headerLayout->addStretch();
 
     m_clearAllBtn = new QPushButton(QStringLiteral("Clear Completed"), this);
-    m_clearAllBtn->setStyleSheet(QStringLiteral(
-        "QPushButton { background: rgba(123,79,191,0.2); color: #B090E0;"
-        "  border: 1px solid rgba(123,79,191,0.4); border-radius: 4px;"
-        "  padding: 4px 10px; font-size: 11px; }"
-        "QPushButton:hover { background: rgba(123,79,191,0.4); }"));
+    m_clearAllBtn->setStyleSheet(
+        QStringLiteral("QPushButton { background: rgba(110,106,179,0.15); color: ")
+        + c["purple-light"]
+        + QStringLiteral("; border: 1px solid rgba(110,106,179,0.3); border-radius: 8px;"
+                         " padding: 5px 14px; font-size: 11px; }"
+                         "QPushButton:hover { background: rgba(110,106,179,0.3); }"));
     connect(m_clearAllBtn, &QPushButton::clicked, this, &DownloadManager::clearCompleted);
     headerLayout->addWidget(m_clearAllBtn);
     mainLayout->addWidget(header);
@@ -51,26 +56,32 @@ void DownloadManager::setupUi()
     auto *scrollArea = new QScrollArea(this);
     scrollArea->setWidgetResizable(true);
     scrollArea->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-    scrollArea->setStyleSheet(QStringLiteral(
-        "QScrollArea { background: transparent; border: none; }"
-        "QScrollBar:vertical { background: #0a0a12; width: 6px; }"
-        "QScrollBar::handle:vertical { background: #7B4FBF; border-radius: 3px; }"));
+    scrollArea->setStyleSheet(
+        QStringLiteral("QScrollArea { background: transparent; border: none; }"
+                       "QScrollBar:vertical { background: transparent; width: 6px; }"
+                       "QScrollBar::handle:vertical { background: ") + c["scrollbar"]
+        + QStringLiteral("; border-radius: 3px; }"
+                         "QScrollBar::handle:vertical:hover { background: ") + c["scrollbar-hover"]
+        + QStringLiteral("; }"
+                         "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }"));
 
     auto *listWidget = new QWidget(this);
     m_listLayout = new QVBoxLayout(listWidget);
-    m_listLayout->setContentsMargins(8, 4, 8, 4);
-    m_listLayout->setSpacing(6);
+    m_listLayout->setContentsMargins(10, 4, 10, 4);
+    m_listLayout->setSpacing(8);
 
     m_emptyLabel = new QLabel(QStringLiteral("No downloads yet"), listWidget);
     m_emptyLabel->setAlignment(Qt::AlignCenter);
-    m_emptyLabel->setStyleSheet(QStringLiteral("color: #605878; font-size: 13px; padding: 40px;"));
+    m_emptyLabel->setStyleSheet(QStringLiteral("color: ") + c["text-muted"]
+        + QStringLiteral("; font-size: 13px; padding: 40px;"));
     m_listLayout->addWidget(m_emptyLabel);
     m_listLayout->addStretch();
 
     scrollArea->setWidget(listWidget);
     mainLayout->addWidget(scrollArea, 1);
 
-    setStyleSheet(QStringLiteral("DownloadManager { background: #0a0a12; }"));
+    setStyleSheet(QStringLiteral("DownloadManager { background: ") + c["bg-darkest"]
+        + QStringLiteral("; }"));
 }
 
 // ── Add download ─────────────────────────────────────────────────────
@@ -170,41 +181,47 @@ void DownloadManager::addDownload(QWebEngineDownloadRequest *download)
 
 QWidget *DownloadManager::createDownloadWidget(QWebEngineDownloadRequest *download)
 {
+    const auto &c = ThemeEngine::instance().colors();
+
     auto *widget = new QWidget(this);
-    widget->setStyleSheet(QStringLiteral(
-        "QWidget { background: #12121e; border-radius: 8px; }"));
+    widget->setStyleSheet(QStringLiteral("QWidget#dlCard { background: ") + c["bg-mid"]
+        + QStringLiteral("; border: 1px solid ") + c["border"]
+        + QStringLiteral("; border-radius: 12px; }"));
+    widget->setObjectName(QStringLiteral("dlCard"));
 
     auto *layout = new QVBoxLayout(widget);
-    layout->setContentsMargins(10, 8, 10, 8);
-    layout->setSpacing(4);
+    layout->setContentsMargins(12, 10, 12, 10);
+    layout->setSpacing(6);
 
     // Filename row
     auto *topRow = new QHBoxLayout;
     auto *nameLabel = new QLabel(download->downloadFileName(), widget);
     nameLabel->setObjectName(QStringLiteral("dlName"));
-    nameLabel->setStyleSheet(QStringLiteral("color: #E8E0F0; font-size: 13px; font-weight: bold;"));
+    nameLabel->setStyleSheet(QStringLiteral("color: ") + c["text-primary"]
+        + QStringLiteral("; font-size: 13px; font-weight: bold;"));
     nameLabel->setMaximumWidth(280);
     topRow->addWidget(nameLabel, 1);
 
     auto *cancelBtn = new QPushButton(QStringLiteral("X"), widget);
     cancelBtn->setObjectName(QStringLiteral("dlCancel"));
-    cancelBtn->setFixedSize(24, 24);
+    cancelBtn->setFixedSize(26, 26);
     cancelBtn->setStyleSheet(QStringLiteral(
-        "QPushButton { background: rgba(255,68,68,0.3); color: #ff6666;"
-        "  border-radius: 12px; font-size: 12px; border: none; }"
-        "QPushButton:hover { background: rgba(255,68,68,0.5); }"));
+        "QPushButton { background: rgba(212,86,94,0.2); color: ") + c["error"]
+        + QStringLiteral("; border-radius: 13px; font-size: 12px; border: none; }"
+                         "QPushButton:hover { background: rgba(212,86,94,0.4); }"));
     topRow->addWidget(cancelBtn);
 
     auto *openBtn = new QPushButton(QStringLiteral("Open"), widget);
     openBtn->setObjectName(QStringLiteral("dlOpen"));
     openBtn->setStyleSheet(QStringLiteral(
-        "QPushButton { background: rgba(0,255,136,0.2); color: #00ff88;"
-        "  border-radius: 4px; padding: 2px 8px; font-size: 11px; border: none; }"
-        "QPushButton:hover { background: rgba(0,255,136,0.4); }"));
+        "QPushButton { background: rgba(115,201,145,0.15); color: ") + c["success"]
+        + QStringLiteral("; border-radius: 6px; padding: 3px 12px; font-size: 11px;"
+                         " border: none; font-weight: 600; }"
+                         "QPushButton:hover { background: rgba(115,201,145,0.3); }"));
     topRow->addWidget(openBtn);
     layout->addLayout(topRow);
 
-    // Progress bar
+    // Progress bar with gradient
     auto *progressBar = new QProgressBar(widget);
     progressBar->setObjectName(QStringLiteral("dlProgress"));
     progressBar->setMaximum(100);
@@ -212,14 +229,19 @@ QWidget *DownloadManager::createDownloadWidget(QWebEngineDownloadRequest *downlo
     progressBar->setFixedHeight(4);
     progressBar->setTextVisible(false);
     progressBar->setStyleSheet(QStringLiteral(
-        "QProgressBar { background: #1e1e30; border: none; border-radius: 2px; }"
-        "QProgressBar::chunk { background: #7B4FBF; border-radius: 2px; }"));
+        "QProgressBar { background: ") + c["bg-lighter"]
+        + QStringLiteral("; border: none; border-radius: 2px; }"
+                         "QProgressBar::chunk { background: qlineargradient("
+                         "x1:0,y1:0,x2:1,y2:0,stop:0 ") + c["purple-mid"]
+        + QStringLiteral(",stop:1 ") + c["purple-light"]
+        + QStringLiteral("); border-radius: 2px; }"));
     layout->addWidget(progressBar);
 
     // Status row
     auto *statusLabel = new QLabel(QStringLiteral("Starting..."), widget);
     statusLabel->setObjectName(QStringLiteral("dlStatus"));
-    statusLabel->setStyleSheet(QStringLiteral("color: #A8A0B8; font-size: 11px;"));
+    statusLabel->setStyleSheet(QStringLiteral("color: ") + c["text-secondary"]
+        + QStringLiteral("; font-size: 11px;"));
     layout->addWidget(statusLabel);
 
     return widget;

@@ -67,17 +67,20 @@ jobs:
 
       - name: Verify toolchain
         run: |
-          echo "CMake:  $(cmake --version | head -1)"
-          echo "Ninja:  $(ninja --version)"
-          echo ".NET:   $(dotnet --version)"
-          echo "Qt dir: ${Qt6_DIR}"
+          echo "CMake:    $(cmake --version | head -1)"
+          echo "Ninja:    $(ninja --version)"
+          echo ".NET:     $(dotnet --version)"
+          echo "Qt root:  ${QT_ROOT_DIR}"
+          echo "Qt6 dir:  ${Qt6_DIR}"
+          echo "Contents:"
+          ls -la "${QT_ROOT_DIR}/lib" 2>/dev/null | head -5 || echo "  (not found)"
 
       - name: Build .deb
+        env:
+          QT_PREFIX: ${{ env.QT_ROOT_DIR }}
         run: |
           chmod +x scripts/build-deb.sh
-          QT_PREFIX="${Qt6_DIR}" \
-          DOTNET_ROOT="${DOTNET_ROOT}" \
-            ./scripts/build-deb.sh "${{ needs.prepare.outputs.version }}"
+          ./scripts/build-deb.sh "${{ needs.prepare.outputs.version }}"
 
       - uses: actions/upload-artifact@v4
         with:

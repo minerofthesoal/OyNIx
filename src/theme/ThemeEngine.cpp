@@ -95,90 +95,231 @@ QString ThemeEngine::generateQtStylesheet() const {
     const auto &c = m_colors;
     auto g = [&](const QString &k) { return c.value(k); };
 
-    return QStringLiteral(R"(
-QMainWindow { background-color: %1; color: %2; }
-QWidget { background-color: %3; color: %2;
-  font-family: 'Segoe UI', 'Ubuntu', 'Cantarell', sans-serif; font-size: 13px; }
+    // Use string concatenation to avoid Qt's 9-arg limit and produce
+    // a richer, more polished stylesheet.
+    QString ss;
 
-QMenuBar { background: %1; color: %2; border-bottom: 1px solid %4; padding: 2px; }
-QMenuBar::item { padding: 6px 14px; border-radius: 6px; }
-QMenuBar::item:selected { background: %5; color: %6; }
-QMenu { background: %7; color: %2; border: 1px solid %4; border-radius: 10px; padding: 6px; }
-QMenu::item { padding: 8px 30px 8px 20px; border-radius: 6px; margin: 1px 2px; }
-QMenu::item:selected { background: %5; color: %6; }
-QMenu::separator { height: 1px; background: %4; margin: 4px 12px; }
+    // ── Global ──
+    ss += QStringLiteral("QMainWindow { background-color: ") + g("bg-darkest")
+       + QStringLiteral("; color: ") + g("text-primary") + QStringLiteral("; }\n");
+    ss += QStringLiteral("QWidget { background-color: ") + g("bg-dark")
+       + QStringLiteral("; color: ") + g("text-primary")
+       + QStringLiteral("; font-family: 'Inter', 'Segoe UI', 'Ubuntu', sans-serif;"
+                        " font-size: 13px; }\n");
 
-QToolBar { background: %1; border: none; padding: 4px 8px; spacing: 2px; }
-QToolBar::separator { width: 1px; background: %4; margin: 4px 6px; }
+    // ── MenuBar ──
+    ss += QStringLiteral("QMenuBar { background: ") + g("bg-darkest")
+       + QStringLiteral("; color: ") + g("text-primary")
+       + QStringLiteral("; border-bottom: 1px solid ") + g("border")
+       + QStringLiteral("; padding: 2px 4px; }\n");
+    ss += QStringLiteral("QMenuBar::item { padding: 6px 14px; border-radius: 6px;"
+                         " margin: 1px; }\n");
+    ss += QStringLiteral("QMenuBar::item:selected { background: ") + g("purple-dark")
+       + QStringLiteral("; color: ") + g("purple-pale") + QStringLiteral("; }\n");
 
-QLineEdit { background: %7; color: %2; border: 2px solid %4; border-radius: 22px;
-  padding: 9px 18px; font-size: 14px; selection-background-color: %8; }
-QLineEdit:focus { border-color: %9; background: %10; }
+    // ── Menu ──
+    ss += QStringLiteral("QMenu { background: ") + g("bg-mid")
+       + QStringLiteral("; color: ") + g("text-primary")
+       + QStringLiteral("; border: 1px solid ") + g("border")
+       + QStringLiteral("; border-radius: 10px; padding: 6px 4px; }\n");
+    ss += QStringLiteral("QMenu::item { padding: 8px 32px 8px 20px;"
+                         " border-radius: 6px; margin: 1px 2px; }\n");
+    ss += QStringLiteral("QMenu::item:selected { background: ") + g("purple-dark")
+       + QStringLiteral("; color: ") + g("purple-pale") + QStringLiteral("; }\n");
+    ss += QStringLiteral("QMenu::item:disabled { color: ") + g("text-muted")
+       + QStringLiteral("; }\n");
+    ss += QStringLiteral("QMenu::separator { height: 1px; background: ") + g("border")
+       + QStringLiteral("; margin: 4px 12px; }\n");
+    ss += QStringLiteral("QMenu::icon { padding-left: 8px; }\n");
 
-QPushButton { background: %11; color: %2; border: 1px solid %4; border-radius: 10px;
-  padding: 8px 14px; font-weight: 600; min-width: 28px; }
-QPushButton:hover { background: %5; border-color: %9; color: %6; }
-QPushButton:pressed { background: %9; color: %1; }
-QPushButton#navBtn { background: transparent; border: none; border-radius: 8px;
-  padding: 6px; min-width: 34px; min-height: 34px; }
-QPushButton#navBtn:hover { background: %11; }
-QPushButton#accentBtn { background: %9; color: %1; border: none; font-weight: bold; }
-QPushButton#accentBtn:hover { background: %12; }
+    // ── ToolBar ──
+    ss += QStringLiteral("QToolBar { background: ") + g("bg-darkest")
+       + QStringLiteral("; border: none; padding: 4px 8px; spacing: 3px; }\n");
+    ss += QStringLiteral("QToolBar::separator { width: 1px; background: ") + g("border")
+       + QStringLiteral("; margin: 4px 6px; }\n");
 
-QTabWidget::pane { border: none; background: %1; }
-QTabBar { background: %1; }
-QTabBar::tab { background: %7; color: %13; padding: 8px 20px; margin-right: 1px;
-  border-top-left-radius: 10px; border-top-right-radius: 10px;
-  border: 1px solid %4; border-bottom: none; min-width: 100px; max-width: 220px; }
-QTabBar::tab:selected { background: %10; color: %12; border-color: %9; }
-QTabBar::tab:hover:!selected { background: %11; color: %2; }
-QTabBar::close-button { subcontrol-position: right; border-radius: 4px; padding: 2px; }
-QTabBar::close-button:hover { background: %14; }
+    // ── LineEdit / URL bar ──
+    ss += QStringLiteral("QLineEdit { background: ") + g("bg-mid")
+       + QStringLiteral("; color: ") + g("text-primary")
+       + QStringLiteral("; border: 2px solid ") + g("border")
+       + QStringLiteral("; border-radius: 22px; padding: 9px 18px;"
+                        " font-size: 14px; selection-background-color: ") + g("selection")
+       + QStringLiteral("; }\n");
+    ss += QStringLiteral("QLineEdit:focus { border-color: ") + g("purple-mid")
+       + QStringLiteral("; background: ") + g("bg-light") + QStringLiteral("; }\n");
+    ss += QStringLiteral("QLineEdit:hover:!focus { border-color: ") + g("border-active")
+       + QStringLiteral("; }\n");
 
-QScrollBar:vertical { background: transparent; width: 8px; }
-QScrollBar::handle:vertical { background: %15; border-radius: 4px; min-height: 30px; }
-QScrollBar::handle:vertical:hover { background: %16; }
-QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }
-QScrollBar:horizontal { background: transparent; height: 8px; }
-QScrollBar::handle:horizontal { background: %15; border-radius: 4px; min-width: 30px; }
-QScrollBar::handle:horizontal:hover { background: %16; }
-QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal { width: 0; }
+    // ── Buttons ──
+    ss += QStringLiteral("QPushButton { background: ") + g("bg-lighter")
+       + QStringLiteral("; color: ") + g("text-primary")
+       + QStringLiteral("; border: 1px solid ") + g("border")
+       + QStringLiteral("; border-radius: 10px; padding: 8px 16px;"
+                        " font-weight: 600; min-width: 28px; }\n");
+    ss += QStringLiteral("QPushButton:hover { background: ") + g("purple-dark")
+       + QStringLiteral("; border-color: ") + g("purple-mid")
+       + QStringLiteral("; color: ") + g("purple-pale") + QStringLiteral("; }\n");
+    ss += QStringLiteral("QPushButton:pressed { background: ") + g("purple-mid")
+       + QStringLiteral("; color: ") + g("bg-darkest") + QStringLiteral("; }\n");
+    ss += QStringLiteral("QPushButton:disabled { background: ") + g("bg-dark")
+       + QStringLiteral("; color: ") + g("text-muted")
+       + QStringLiteral("; border-color: ") + g("border") + QStringLiteral("; }\n");
 
-QStatusBar { background: %1; color: %17; border-top: 1px solid %4; font-size: 11px; padding: 2px 8px; }
-QStatusBar::item { border: none; }
+    // Nav buttons
+    ss += QStringLiteral("QPushButton#navBtn { background: transparent; border: none;"
+                         " border-radius: 8px; padding: 6px;"
+                         " min-width: 34px; min-height: 34px; }\n");
+    ss += QStringLiteral("QPushButton#navBtn:hover { background: ") + g("bg-lighter")
+       + QStringLiteral("; }\n");
+    ss += QStringLiteral("QPushButton#navBtn:pressed { background: ") + g("purple-dark")
+       + QStringLiteral("; }\n");
 
-QDialog { background: %3; color: %2; border-radius: 14px; }
-QGroupBox { font-weight: bold; border: 1px solid %4; border-radius: 10px;
-  margin-top: 14px; padding-top: 18px; color: %12; }
+    // Accent buttons
+    ss += QStringLiteral("QPushButton#accentBtn { background: ") + g("purple-mid")
+       + QStringLiteral("; color: ") + g("bg-darkest")
+       + QStringLiteral("; border: none; font-weight: bold; }\n");
+    ss += QStringLiteral("QPushButton#accentBtn:hover { background: ") + g("purple-light")
+       + QStringLiteral("; }\n");
 
-QListWidget { background: %3; color: %2; border: 1px solid %4; border-radius: 8px; outline: none; }
-QListWidget::item { padding: 8px; border-radius: 6px; }
-QListWidget::item:selected { background: %5; color: %6; }
-QListWidget::item:hover:!selected { background: %11; }
+    // ── Tabs ──
+    ss += QStringLiteral("QTabWidget::pane { border: none; background: ") + g("bg-darkest")
+       + QStringLiteral("; }\n");
+    ss += QStringLiteral("QTabBar { background: ") + g("bg-darkest") + QStringLiteral("; }\n");
+    ss += QStringLiteral("QTabBar::tab { background: ") + g("bg-mid")
+       + QStringLiteral("; color: ") + g("text-secondary")
+       + QStringLiteral("; padding: 8px 20px; margin-right: 1px;"
+                        " border-top-left-radius: 10px; border-top-right-radius: 10px;"
+                        " border: 1px solid ") + g("border")
+       + QStringLiteral("; border-bottom: none;"
+                        " min-width: 100px; max-width: 220px; }\n");
+    ss += QStringLiteral("QTabBar::tab:selected { background: ") + g("bg-light")
+       + QStringLiteral("; color: ") + g("purple-light")
+       + QStringLiteral("; border-color: ") + g("purple-mid") + QStringLiteral("; }\n");
+    ss += QStringLiteral("QTabBar::tab:hover:!selected { background: ") + g("bg-lighter")
+       + QStringLiteral("; color: ") + g("text-primary") + QStringLiteral("; }\n");
+    ss += QStringLiteral("QTabBar::close-button { subcontrol-position: right;"
+                         " border-radius: 4px; padding: 2px; }\n");
+    ss += QStringLiteral("QTabBar::close-button:hover { background: ") + g("error")
+       + QStringLiteral("; }\n");
 
-QProgressBar { background: %11; border: none; border-radius: 4px; height: 6px; text-align: center; }
-QProgressBar::chunk { background: %9; border-radius: 4px; }
+    // ── ScrollBars ──
+    ss += QStringLiteral("QScrollBar:vertical { background: transparent; width: 7px;"
+                         " margin: 2px; }\n");
+    ss += QStringLiteral("QScrollBar::handle:vertical { background: ") + g("scrollbar")
+       + QStringLiteral("; border-radius: 3px; min-height: 30px; }\n");
+    ss += QStringLiteral("QScrollBar::handle:vertical:hover { background: ") + g("scrollbar-hover")
+       + QStringLiteral("; }\n");
+    ss += QStringLiteral("QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {"
+                         " height: 0; }\n");
+    ss += QStringLiteral("QScrollBar:horizontal { background: transparent; height: 7px;"
+                         " margin: 2px; }\n");
+    ss += QStringLiteral("QScrollBar::handle:horizontal { background: ") + g("scrollbar")
+       + QStringLiteral("; border-radius: 3px; min-width: 30px; }\n");
+    ss += QStringLiteral("QScrollBar::handle:horizontal:hover { background: ") + g("scrollbar-hover")
+       + QStringLiteral("; }\n");
+    ss += QStringLiteral("QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {"
+                         " width: 0; }\n");
+    ss += QStringLiteral("QScrollBar::add-page, QScrollBar::sub-page { background: none; }\n");
 
-QSplitter::handle { background: %4; width: 2px; }
-QTextEdit { background: %7; color: %2; border: 1px solid %4; border-radius: 8px; padding: 8px; }
-QLabel { background: transparent; }
-QToolTip { background: %7; color: %2; border: 1px solid %4; border-radius: 6px; padding: 6px 10px; }
-)")
-        .arg(g("bg-darkest"))           // %1
-        .arg(g("text-primary"))         // %2
-        .arg(g("bg-dark"))             // %3
-        .arg(g("border"))             // %4
-        .arg(g("purple-dark"))         // %5
-        .arg(g("purple-pale"))         // %6
-        .arg(g("bg-mid"))             // %7
-        .arg(g("selection"))           // %8
-        .arg(g("purple-mid"))          // %9
-        .arg(g("bg-light"))           // %10
-        .arg(g("bg-lighter"))          // %11
-        .arg(g("purple-light"))        // %12
-        .arg(g("text-secondary"))      // %13
-        .arg(g("error"))              // %14
-        .arg(g("scrollbar"))           // %15
-        .arg(g("scrollbar-hover"))     // %16
-        .arg(g("text-muted"));         // %17
+    // ── StatusBar ──
+    ss += QStringLiteral("QStatusBar { background: ") + g("bg-darkest")
+       + QStringLiteral("; color: ") + g("text-muted")
+       + QStringLiteral("; border-top: 1px solid ") + g("border")
+       + QStringLiteral("; font-size: 11px; padding: 2px 10px; }\n");
+    ss += QStringLiteral("QStatusBar::item { border: none; }\n");
+
+    // ── Dialog / GroupBox ──
+    ss += QStringLiteral("QDialog { background: ") + g("bg-dark")
+       + QStringLiteral("; color: ") + g("text-primary")
+       + QStringLiteral("; border-radius: 14px; }\n");
+    ss += QStringLiteral("QGroupBox { font-weight: bold; border: 1px solid ") + g("border")
+       + QStringLiteral("; border-radius: 10px; margin-top: 16px;"
+                        " padding-top: 20px; color: ") + g("purple-light")
+       + QStringLiteral("; }\n");
+    ss += QStringLiteral("QGroupBox::title { subcontrol-origin: margin;"
+                         " subcontrol-position: top left; padding: 4px 12px;"
+                         " color: ") + g("purple-light") + QStringLiteral("; }\n");
+
+    // ── List/Tree widgets ──
+    ss += QStringLiteral("QListWidget, QTreeWidget { background: ") + g("bg-dark")
+       + QStringLiteral("; color: ") + g("text-primary")
+       + QStringLiteral("; border: 1px solid ") + g("border")
+       + QStringLiteral("; border-radius: 8px; outline: none; }\n");
+    ss += QStringLiteral("QListWidget::item, QTreeWidget::item {"
+                         " padding: 8px; border-radius: 6px; }\n");
+    ss += QStringLiteral("QListWidget::item:selected, QTreeWidget::item:selected {"
+                         " background: ") + g("purple-dark")
+       + QStringLiteral("; color: ") + g("purple-pale") + QStringLiteral("; }\n");
+    ss += QStringLiteral("QListWidget::item:hover:!selected, QTreeWidget::item:hover:!selected {"
+                         " background: ") + g("bg-lighter") + QStringLiteral("; }\n");
+
+    // ── ProgressBar ──
+    ss += QStringLiteral("QProgressBar { background: ") + g("bg-lighter")
+       + QStringLiteral("; border: none; border-radius: 4px; height: 6px;"
+                        " text-align: center; color: transparent; }\n");
+    ss += QStringLiteral("QProgressBar::chunk { background: qlineargradient("
+                         "x1:0, y1:0, x2:1, y2:0, stop:0 ") + g("purple-mid")
+       + QStringLiteral(", stop:1 ") + g("purple-light")
+       + QStringLiteral("); border-radius: 4px; }\n");
+
+    // ── Splitter / TextEdit / Label / Tooltip ──
+    ss += QStringLiteral("QSplitter::handle { background: ") + g("border")
+       + QStringLiteral("; width: 2px; }\n");
+    ss += QStringLiteral("QSplitter::handle:hover { background: ") + g("purple-mid")
+       + QStringLiteral("; }\n");
+    ss += QStringLiteral("QTextEdit { background: ") + g("bg-mid")
+       + QStringLiteral("; color: ") + g("text-primary")
+       + QStringLiteral("; border: 1px solid ") + g("border")
+       + QStringLiteral("; border-radius: 10px; padding: 8px; }\n");
+    ss += QStringLiteral("QTextEdit:focus { border-color: ") + g("purple-mid")
+       + QStringLiteral("; }\n");
+    ss += QStringLiteral("QLabel { background: transparent; }\n");
+    ss += QStringLiteral("QToolTip { background: ") + g("bg-mid")
+       + QStringLiteral("; color: ") + g("text-primary")
+       + QStringLiteral("; border: 1px solid ") + g("border")
+       + QStringLiteral("; border-radius: 8px; padding: 6px 12px; }\n");
+
+    // ── ComboBox ──
+    ss += QStringLiteral("QComboBox { background: ") + g("bg-mid")
+       + QStringLiteral("; color: ") + g("text-primary")
+       + QStringLiteral("; border: 1px solid ") + g("border")
+       + QStringLiteral("; border-radius: 8px; padding: 6px 12px; }\n");
+    ss += QStringLiteral("QComboBox:hover { border-color: ") + g("purple-mid")
+       + QStringLiteral("; }\n");
+    ss += QStringLiteral("QComboBox::drop-down { border: none; width: 24px; }\n");
+    ss += QStringLiteral("QComboBox QAbstractItemView { background: ") + g("bg-mid")
+       + QStringLiteral("; color: ") + g("text-primary")
+       + QStringLiteral("; border: 1px solid ") + g("border")
+       + QStringLiteral("; border-radius: 8px; selection-background-color: ") + g("purple-dark")
+       + QStringLiteral("; }\n");
+
+    // ── CheckBox / RadioButton ──
+    ss += QStringLiteral("QCheckBox, QRadioButton { color: ") + g("text-primary")
+       + QStringLiteral("; spacing: 8px; }\n");
+    ss += QStringLiteral("QCheckBox::indicator { width: 18px; height: 18px;"
+                         " border-radius: 4px; border: 2px solid ") + g("border")
+       + QStringLiteral("; background: ") + g("bg-mid") + QStringLiteral("; }\n");
+    ss += QStringLiteral("QCheckBox::indicator:checked { background: ") + g("purple-mid")
+       + QStringLiteral("; border-color: ") + g("purple-mid") + QStringLiteral("; }\n");
+    ss += QStringLiteral("QCheckBox::indicator:hover { border-color: ") + g("purple-mid")
+       + QStringLiteral("; }\n");
+
+    // ── SpinBox ──
+    ss += QStringLiteral("QSpinBox, QDoubleSpinBox { background: ") + g("bg-mid")
+       + QStringLiteral("; color: ") + g("text-primary")
+       + QStringLiteral("; border: 1px solid ") + g("border")
+       + QStringLiteral("; border-radius: 8px; padding: 4px 8px; }\n");
+    ss += QStringLiteral("QSpinBox:focus, QDoubleSpinBox:focus { border-color: ")
+       + g("purple-mid") + QStringLiteral("; }\n");
+
+    // ── Slider ──
+    ss += QStringLiteral("QSlider::groove:horizontal { background: ") + g("bg-lighter")
+       + QStringLiteral("; height: 4px; border-radius: 2px; }\n");
+    ss += QStringLiteral("QSlider::handle:horizontal { background: ") + g("purple-mid")
+       + QStringLiteral("; width: 16px; height: 16px; margin: -6px 0;"
+                        " border-radius: 8px; }\n");
+    ss += QStringLiteral("QSlider::handle:horizontal:hover { background: ") + g("purple-light")
+       + QStringLiteral("; }\n");
+
+    return ss;
 }

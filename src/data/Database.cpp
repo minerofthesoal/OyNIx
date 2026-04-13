@@ -72,6 +72,7 @@ void Database::createTables()
     QSqlDatabase db = QSqlDatabase::database(QStringLiteral("oynix_main"));
     QSqlQuery q(db);
 
+    // ── Sites table with indexes ──
     q.exec(QStringLiteral(
         "CREATE TABLE IF NOT EXISTS sites("
         "id INTEGER PRIMARY KEY, "
@@ -79,11 +80,14 @@ void Database::createTables()
         "title TEXT, "
         "description TEXT, "
         "category TEXT, "
-        "rating REAL, "
+        "rating REAL DEFAULT 0.0, "
         "source TEXT, "
         "added_at TEXT)"
     ));
+    q.exec(QStringLiteral("CREATE INDEX IF NOT EXISTS idx_sites_category ON sites(category)"));
+    q.exec(QStringLiteral("CREATE INDEX IF NOT EXISTS idx_sites_rating ON sites(rating DESC)"));
 
+    // ── Pages table with indexes ──
     q.exec(QStringLiteral(
         "CREATE TABLE IF NOT EXISTS pages("
         "id INTEGER PRIMARY KEY, "
@@ -94,9 +98,24 @@ void Database::createTables()
         "visited_at TEXT, "
         "visit_count INTEGER DEFAULT 1)"
     ));
+    q.exec(QStringLiteral("CREATE INDEX IF NOT EXISTS idx_pages_domain ON pages(domain)"));
+    q.exec(QStringLiteral("CREATE INDEX IF NOT EXISTS idx_pages_visited ON pages(visited_at DESC)"));
+    q.exec(QStringLiteral("CREATE INDEX IF NOT EXISTS idx_pages_visits ON pages(visit_count DESC)"));
 
+    // ── FTS5 with porter tokenizer and prefix indexes for fast autocomplete ──
     q.exec(QStringLiteral(
-        "CREATE VIRTUAL TABLE IF NOT EXISTS pages_fts USING fts5(url, title, content, domain)"
+        "CREATE VIRTUAL TABLE IF NOT EXISTS pages_fts USING fts5("
+        "url, title, content, domain, "
+        "tokenize='porter unicode61', "
+        "prefix='2,3')"
+    ));
+
+    // ── Sites FTS for full-text search on the curated database ──
+    q.exec(QStringLiteral(
+        "CREATE VIRTUAL TABLE IF NOT EXISTS sites_fts USING fts5("
+        "url, title, description, category, "
+        "tokenize='porter unicode61', "
+        "prefix='2,3')"
     ));
 }
 
@@ -119,8 +138,20 @@ bool Database::addSite(const QString &url, const QString &title, const QString &
     q.addBindValue(QDateTime::currentDateTimeUtc().toString(Qt::ISODate));
 
     bool ok = q.exec();
-    if (ok)
+    if (ok) {
+        // Update FTS index for sites
+        QSqlQuery fts(db);
+        fts.prepare(QStringLiteral("DELETE FROM sites_fts WHERE url = ?"));
+        fts.addBindValue(url);
+        fts.exec();
+        fts.prepare(QStringLiteral("INSERT INTO sites_fts(url, title, description, category) VALUES(?,?,?,?)"));
+        fts.addBindValue(url);
+        fts.addBindValue(title);
+        fts.addBindValue(description);
+        fts.addBindValue(category);
+        fts.exec();
         emit databaseChanged();
+    }
     return ok;
 }
 
@@ -166,31 +197,70 @@ QJsonArray Database::searchSites(const QString &query, int limit) const
     QMutexLocker locker(&m_mutex);
     QJsonArray results;
     QSqlDatabase db = QSqlDatabase::database(QStringLiteral("oynix_main"));
-    QSqlQuery q(db);
 
-    const QString pattern = QStringLiteral("%%1%").arg(query);
-    q.prepare(QStringLiteral(
-        "SELECT url, title, description, category, rating, source, added_at FROM sites "
-        "WHERE url LIKE ? OR title LIKE ? OR description LIKE ? OR category LIKE ? "
-        "ORDER BY rating DESC LIMIT ?"
-    ));
-    q.addBindValue(pattern);
-    q.addBindValue(pattern);
-    q.addBindValue(pattern);
-    q.addBindValue(pattern);
-    q.addBindValue(limit);
+    // Try FTS5 search first (faster + ranked)
+    QStringList words = query.simplified().split(QLatin1Char(' '), Qt::SkipEmptyParts);
+    QStringList ftsTerms;
+    for (const QString &word : words) {
+        QString safe = word;
+        safe.replace(QLatin1Char('"'), QString());
+        if (!safe.isEmpty())
+            ftsTerms << (QLatin1Char('"') + safe + QLatin1Char('"'));
+    }
 
-    if (q.exec()) {
-        while (q.next()) {
-            QJsonObject obj;
-            obj[QStringLiteral("url")] = q.value(0).toString();
-            obj[QStringLiteral("title")] = q.value(1).toString();
-            obj[QStringLiteral("description")] = q.value(2).toString();
-            obj[QStringLiteral("category")] = q.value(3).toString();
-            obj[QStringLiteral("rating")] = q.value(4).toDouble();
-            obj[QStringLiteral("source")] = q.value(5).toString();
-            obj[QStringLiteral("added_at")] = q.value(6).toString();
-            results.append(obj);
+    if (!ftsTerms.isEmpty()) {
+        const QString ftsQuery = ftsTerms.join(QStringLiteral(" AND "));
+        QSqlQuery q(db);
+        q.prepare(QStringLiteral(
+            "SELECT s.url, s.title, s.description, s.category, s.rating, s.source, s.added_at "
+            "FROM sites_fts f JOIN sites s ON f.url = s.url "
+            "WHERE sites_fts MATCH ? ORDER BY s.rating DESC LIMIT ?"
+        ));
+        q.addBindValue(ftsQuery);
+        q.addBindValue(limit);
+
+        if (q.exec()) {
+            while (q.next()) {
+                QJsonObject obj;
+                obj[QStringLiteral("url")] = q.value(0).toString();
+                obj[QStringLiteral("title")] = q.value(1).toString();
+                obj[QStringLiteral("description")] = q.value(2).toString();
+                obj[QStringLiteral("category")] = q.value(3).toString();
+                obj[QStringLiteral("rating")] = q.value(4).toDouble();
+                obj[QStringLiteral("source")] = q.value(5).toString();
+                obj[QStringLiteral("added_at")] = q.value(6).toString();
+                results.append(obj);
+            }
+        }
+    }
+
+    // Fallback to LIKE search if FTS returned nothing
+    if (results.isEmpty()) {
+        const QString pattern = QStringLiteral("%%1%").arg(query);
+        QSqlQuery q(db);
+        q.prepare(QStringLiteral(
+            "SELECT url, title, description, category, rating, source, added_at FROM sites "
+            "WHERE url LIKE ? OR title LIKE ? OR description LIKE ? OR category LIKE ? "
+            "ORDER BY rating DESC LIMIT ?"
+        ));
+        q.addBindValue(pattern);
+        q.addBindValue(pattern);
+        q.addBindValue(pattern);
+        q.addBindValue(pattern);
+        q.addBindValue(limit);
+
+        if (q.exec()) {
+            while (q.next()) {
+                QJsonObject obj;
+                obj[QStringLiteral("url")] = q.value(0).toString();
+                obj[QStringLiteral("title")] = q.value(1).toString();
+                obj[QStringLiteral("description")] = q.value(2).toString();
+                obj[QStringLiteral("category")] = q.value(3).toString();
+                obj[QStringLiteral("rating")] = q.value(4).toDouble();
+                obj[QStringLiteral("source")] = q.value(5).toString();
+                obj[QStringLiteral("added_at")] = q.value(6).toString();
+                results.append(obj);
+            }
         }
     }
 

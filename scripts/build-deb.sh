@@ -23,7 +23,20 @@ JOBS="${JOBS:-$(nproc)}"
 echo "=== OyNIx .deb builder v${VERSION} (${ARCH}) ==="
 
 # ── Prerequisites ──────────────────────────────────────────────
+# Resolve QT_PREFIX: try env var, then QT_ROOT_DIR, then common paths
+if [ -z "${QT_PREFIX:-}" ]; then
+    if [ -n "${QT_ROOT_DIR:-}" ] && [ -d "${QT_ROOT_DIR}/lib" ]; then
+        QT_PREFIX="${QT_ROOT_DIR}"
+    elif [ -n "${Qt6_DIR:-}" ]; then
+        # Qt6_DIR often points to lib/cmake/Qt6 — walk up to prefix
+        _candidate="$(cd "${Qt6_DIR}/../../.." 2>/dev/null && pwd)"
+        if [ -d "${_candidate}/lib" ]; then
+            QT_PREFIX="${_candidate}"
+        fi
+    fi
+fi
 QT_PREFIX="${QT_PREFIX:-/opt/qt6/6.8.3/gcc_64}"
+
 for cmd in cmake dpkg-deb; do
     if ! command -v "$cmd" &>/dev/null; then
         echo "ERROR: $cmd not found" >&2; exit 1
@@ -33,7 +46,11 @@ done
 # Verify Qt prefix actually exists
 if [ ! -d "${QT_PREFIX}/lib" ]; then
     echo "ERROR: Qt prefix not found at ${QT_PREFIX}" >&2
-    echo "  Set QT_PREFIX to your Qt6 installation directory." >&2
+    echo "  Set QT_PREFIX or QT_ROOT_DIR to your Qt6 installation directory." >&2
+    echo "  Detected env vars:" >&2
+    echo "    QT_PREFIX=${QT_PREFIX:-<unset>}" >&2
+    echo "    QT_ROOT_DIR=${QT_ROOT_DIR:-<unset>}" >&2
+    echo "    Qt6_DIR=${Qt6_DIR:-<unset>}" >&2
     exit 1
 fi
 
