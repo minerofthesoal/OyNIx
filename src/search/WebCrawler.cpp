@@ -240,6 +240,7 @@ void WebCrawler::scheduleNext()
         if (!m_robotsCache.contains(domain)) {
             // Need to fetch robots.txt first; re-enqueue this task
             m_queue.prepend(task);
+            lock.unlock();
             fetchRobotsTxt(task.url);
             return; // Will resume after robots.txt is fetched
         }
