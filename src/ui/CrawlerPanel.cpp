@@ -10,6 +10,7 @@
 #include "CrawlerPanel.h"
 #include "search/WebCrawler.h"
 #include "search/NyxSearch.h"
+#include "theme/ThemeEngine.h"
 
 #include <QVBoxLayout>
 #include <QHBoxLayout>
@@ -31,6 +32,7 @@ CrawlerPanel::CrawlerPanel(QWidget *parent)
     : QWidget(parent)
 {
     setupUi();
+    setupStyles();
     connectCrawlerSignals();
 }
 
@@ -168,6 +170,80 @@ void CrawlerPanel::setupUi()
             this, &CrawlerPanel::onPollStatus);
 
     setFixedWidth(300);
+}
+
+// ── Styles ──��──────────────────────────────────────────────────────────
+
+void CrawlerPanel::setupStyles()
+{
+    const auto &c = ThemeEngine::instance().colors();
+
+    QString ss;
+    ss += QStringLiteral("CrawlerPanel { background: ") + c["bg-darkest"] + QStringLiteral("; }\n");
+    ss += QStringLiteral("#panelTitle { color: ") + c["purple-light"]
+       + QStringLiteral("; font-size: 13px; font-weight: 700;"
+                        " letter-spacing: 0.05em; text-transform: uppercase; }\n");
+    ss += QStringLiteral("#sectionLabel { color: ") + c["text-secondary"]
+       + QStringLiteral("; font-size: 11px; font-weight: 600;"
+                        " text-transform: uppercase; letter-spacing: 0.05em; }\n");
+    ss += QStringLiteral("#badge { color: ") + c["bg-darkest"]
+       + QStringLiteral("; background: ") + c["purple-mid"]
+       + QStringLiteral("; font-size: 10px; font-weight: 700;"
+                        " padding: 1px 7px; border-radius: 8px; }\n");
+    ss += QStringLiteral("#crawlerUrlInput { background: ") + c["bg-mid"]
+       + QStringLiteral("; color: ") + c["text-primary"]
+       + QStringLiteral("; border: 1px solid ") + c["border"]
+       + QStringLiteral("; border-radius: 8px; padding: 6px; font-size: 12px; }\n");
+    ss += QStringLiteral("#crawlerUrlInput:focus { border-color: ") + c["purple-mid"]
+       + QStringLiteral("; }\n");
+    ss += QStringLiteral("QLabel { color: ") + c["text-primary"] + QStringLiteral("; }\n");
+    ss += QStringLiteral("QSpinBox { background: ") + c["bg-mid"]
+       + QStringLiteral("; color: ") + c["text-primary"]
+       + QStringLiteral("; border: 1px solid ") + c["border"]
+       + QStringLiteral("; border-radius: 6px; padding: 4px; }\n");
+    ss += QStringLiteral("QCheckBox { color: ") + c["text-primary"]
+       + QStringLiteral("; spacing: 6px; }\n");
+    ss += QStringLiteral("QCheckBox::indicator { width: 14px; height: 14px; border: 1px solid ")
+       + c["purple-mid"] + QStringLiteral("; border-radius: 3px; background: ") + c["bg-mid"]
+       + QStringLiteral("; }\n");
+    ss += QStringLiteral("QCheckBox::indicator:checked { background: ") + c["purple-mid"]
+       + QStringLiteral("; }\n");
+    ss += QStringLiteral("#crawlBtn { background: ") + c["purple-mid"]
+       + QStringLiteral("; color: white; border: none; border-radius: 8px;"
+                        " padding: 6px 14px; font-weight: 600; }\n");
+    ss += QStringLiteral("#crawlBtn:hover { background: ") + c["purple-light"]
+       + QStringLiteral("; }\n");
+    ss += QStringLiteral("#crawlWebBtn { background: rgba(110,106,179,0.15); color: ")
+       + c["purple-light"] + QStringLiteral("; border: 1px solid rgba(110,106,179,0.3);"
+                                             " border-radius: 8px; padding: 6px 14px;"
+                                             " font-weight: 600; }\n");
+    ss += QStringLiteral("#crawlWebBtn:hover { background: rgba(110,106,179,0.3); }\n");
+    ss += QStringLiteral("#stopBtn { background: rgba(212,86,94,0.2); color: ") + c["error"]
+       + QStringLiteral("; border: 1px solid rgba(212,86,94,0.3); border-radius: 6px;"
+                        " padding: 4px 12px; }\n");
+    ss += QStringLiteral("#stopBtn:hover { background: rgba(212,86,94,0.4); }\n");
+    ss += QStringLiteral("#crawlerProgress { background: ") + c["bg-lighter"]
+       + QStringLiteral("; border: none; border-radius: 3px; }\n");
+    ss += QStringLiteral("#crawlerProgress::chunk { background: qlineargradient("
+                         "x1:0,y1:0,x2:1,y2:0,stop:0 ") + c["purple-mid"]
+       + QStringLiteral(",stop:1 ") + c["purple-light"]
+       + QStringLiteral("); border-radius: 3px; }\n");
+    ss += QStringLiteral("#crawlerStatus { color: ") + c["text-secondary"]
+       + QStringLiteral("; font-size: 11px; }\n");
+    ss += QStringLiteral("#crawlerResults { background: ") + c["bg-dark"]
+       + QStringLiteral("; color: ") + c["text-primary"]
+       + QStringLiteral("; border: 1px solid ") + c["border"]
+       + QStringLiteral("; border-radius: 8px; font-size: 12px; outline: none; }\n");
+    ss += QStringLiteral("#crawlerResults::item { padding: 4px 8px; border-radius: 4px; }\n");
+    ss += QStringLiteral("#crawlerResults::item:selected { background: ") + c["selection"]
+       + QStringLiteral("; }\n");
+    ss += QStringLiteral("QScrollBar:vertical { background: transparent; width: 5px; }\n");
+    ss += QStringLiteral("QScrollBar::handle:vertical { background: ") + c["scrollbar"]
+       + QStringLiteral("; border-radius: 2px; }\n");
+    ss += QStringLiteral("QScrollBar::handle:vertical:hover { background: ") + c["scrollbar-hover"]
+       + QStringLiteral("; }\n");
+    ss += QStringLiteral("QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }\n");
+    setStyleSheet(ss);
 }
 
 // ── Connect to native WebCrawler signals ────────────────────────────────
@@ -342,12 +418,13 @@ void CrawlerPanel::refreshResults()
                 .arg(url, status).arg(depth));
 
         // Color code by status
+        const auto &tc = ThemeEngine::instance().colors();
         if (status == QLatin1String("ok"))
-            item->setForeground(QColor(115, 201, 145)); // success green
+            item->setForeground(QColor(tc["success"]));
         else if (status.startsWith(QLatin1String("error")))
-            item->setForeground(QColor(212, 86, 94));    // error red
+            item->setForeground(QColor(tc["error"]));
         else
-            item->setForeground(QColor(200, 202, 216));   // text-primary
+            item->setForeground(QColor(tc["text-primary"]));
     }
 
     // Auto-scroll to bottom

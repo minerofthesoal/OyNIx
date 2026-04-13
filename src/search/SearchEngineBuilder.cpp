@@ -1,4 +1,5 @@
 #include "SearchEngineBuilder.h"
+#include "theme/ThemeEngine.h"
 
 #include <QVBoxLayout>
 #include <QHBoxLayout>
@@ -57,7 +58,8 @@ void SearchEngineBuilder::setupUi()
     // Test area
     auto *testRow = new QHBoxLayout;
     m_testResult = new QLabel(this);
-    m_testResult->setStyleSheet(QStringLiteral("color: #A8A0B8; font-size: 11px;"));
+    m_testResult->setStyleSheet(QStringLiteral("color: ") + ThemeEngine::instance().colors()["text-secondary"]
+        + QStringLiteral("; font-size: 11px;"));
     testRow->addWidget(m_testResult, 1);
 
     auto *testBtn = new QPushButton(QStringLiteral("Test"), this);
@@ -105,7 +107,8 @@ QWidget *SearchEngineBuilder::createVisualBuilder()
 
     auto *helpLabel = new QLabel(QStringLiteral(
         "Use {query} or %s as placeholder for the search term."), this);
-    helpLabel->setStyleSheet(QStringLiteral("color: #605878; font-size: 11px;"));
+    helpLabel->setStyleSheet(QStringLiteral("color: ") + ThemeEngine::instance().colors()["text-muted"]
+        + QStringLiteral("; font-size: 11px;"));
     helpLabel->setWordWrap(true);
     form->addRow(QString(), helpLabel);
 
@@ -120,7 +123,8 @@ QWidget *SearchEngineBuilder::createImportTab()
 
     auto *label = new QLabel(QStringLiteral(
         "Paste OpenSearch XML or JSON definition:"), this);
-    label->setStyleSheet(QStringLiteral("color: #A8A0B8;"));
+    label->setStyleSheet(QStringLiteral("color: ") + ThemeEngine::instance().colors()["text-secondary"]
+        + QStringLiteral(";"));
     layout->addWidget(label);
 
     m_importEdit = new QTextEdit(this);
@@ -169,7 +173,8 @@ QWidget *SearchEngineBuilder::createCodeTab()
     layout->setContentsMargins(12, 12, 12, 12);
 
     auto *label = new QLabel(QStringLiteral("Custom search engine (JSON):"), this);
-    label->setStyleSheet(QStringLiteral("color: #A8A0B8;"));
+    label->setStyleSheet(QStringLiteral("color: ") + ThemeEngine::instance().colors()["text-secondary"]
+        + QStringLiteral(";"));
     layout->addWidget(label);
 
     m_codeEdit = new QTextEdit(this);
@@ -261,22 +266,38 @@ void SearchEngineBuilder::saveToDisk()
 
 void SearchEngineBuilder::applyStyles()
 {
-    setStyleSheet(QStringLiteral(
-        "QDialog { background: #08080d; }"
-        "QGroupBox { color: #E8E0F0; border: 1px solid #2a2a40; border-radius: 6px;"
-        "  margin-top: 12px; padding-top: 16px; }"
-        "QGroupBox::title { subcontrol-origin: margin; left: 12px; padding: 0 4px; }"
-        "QLabel { color: #E8E0F0; }"
-        "QLineEdit, QTextEdit { background: #12121e; color: #E8E0F0; border: 1px solid #2a2a40;"
-        "  border-radius: 4px; padding: 6px; }"
-        "QLineEdit:focus, QTextEdit:focus { border-color: #7B4FBF; }"
-        "QComboBox { background: #12121e; color: #E8E0F0; border: 1px solid #2a2a40;"
-        "  border-radius: 4px; padding: 4px 8px; }"
-        "QTabWidget::pane { border: 1px solid #2a2a40; background: #0a0a12; }"
-        "QTabBar::tab { background: #0e0e16; color: #A8A0B8; padding: 6px 14px; }"
-        "QTabBar::tab:selected { background: #0a0a12; color: #E8E0F0; }"
-        "QPushButton { background: #7B4FBF; color: white; border: none;"
-        "  border-radius: 4px; padding: 6px 14px; }"
-        "QPushButton:hover { background: #9B6FDF; }"
-    ));
+    const auto &c = ThemeEngine::instance().colors();
+
+    QString ss;
+    ss += QStringLiteral("QDialog { background: ") + c["bg-darkest"] + QStringLiteral("; }\n");
+    ss += QStringLiteral("QGroupBox { color: ") + c["text-primary"]
+       + QStringLiteral("; border: 1px solid ") + c["border"]
+       + QStringLiteral("; border-radius: 8px; margin-top: 12px; padding-top: 16px; }\n");
+    ss += QStringLiteral("QGroupBox::title { subcontrol-origin: margin; left: 12px;"
+                         " padding: 0 4px; }\n");
+    ss += QStringLiteral("QLabel { color: ") + c["text-primary"] + QStringLiteral("; }\n");
+    ss += QStringLiteral("QLineEdit, QTextEdit { background: ") + c["bg-mid"]
+       + QStringLiteral("; color: ") + c["text-primary"]
+       + QStringLiteral("; border: 1px solid ") + c["border"]
+       + QStringLiteral("; border-radius: 6px; padding: 6px; }\n");
+    ss += QStringLiteral("QLineEdit:focus, QTextEdit:focus { border-color: ") + c["purple-mid"]
+       + QStringLiteral("; }\n");
+    ss += QStringLiteral("QComboBox { background: ") + c["bg-mid"]
+       + QStringLiteral("; color: ") + c["text-primary"]
+       + QStringLiteral("; border: 1px solid ") + c["border"]
+       + QStringLiteral("; border-radius: 6px; padding: 4px 8px; }\n");
+    ss += QStringLiteral("QComboBox::drop-down { border: none; }\n");
+    ss += QStringLiteral("QTabWidget::pane { border: 1px solid ") + c["border"]
+       + QStringLiteral("; background: ") + c["bg-dark"] + QStringLiteral("; }\n");
+    ss += QStringLiteral("QTabBar::tab { background: ") + c["bg-darkest"]
+       + QStringLiteral("; color: ") + c["text-secondary"]
+       + QStringLiteral("; padding: 6px 14px; }\n");
+    ss += QStringLiteral("QTabBar::tab:selected { background: ") + c["bg-dark"]
+       + QStringLiteral("; color: ") + c["text-primary"] + QStringLiteral("; }\n");
+    ss += QStringLiteral("QPushButton { background: ") + c["purple-mid"]
+       + QStringLiteral("; color: white; border: none; border-radius: 6px;"
+                        " padding: 6px 14px; }\n");
+    ss += QStringLiteral("QPushButton:hover { background: ") + c["purple-light"]
+       + QStringLiteral("; }\n");
+    setStyleSheet(ss);
 }

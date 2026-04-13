@@ -1,5 +1,6 @@
 #include "AiChatPanel.h"
 #include "AiManager.h"
+#include "theme/ThemeEngine.h"
 
 #include <QHBoxLayout>
 #include <QVBoxLayout>
@@ -152,17 +153,39 @@ void AiChatPanel::setupUi()
 
 void AiChatPanel::setupStyles()
 {
-    // Minimal overrides — global theme handles base styling
-    setStyleSheet(QStringLiteral(
-        "AiChatPanel { border-left: 1px solid palette(mid); }"
-        "#aiTitle { font-size: 13px; font-weight: 600; }"
-        "#aiStatus { font-size: 11px; opacity: 0.6; }"
-        "#aiScrollArea { background: transparent; border: none; }"
-        "#aiInput { border-radius: 8px; padding: 6px; }"
-        "#aiSendBtn { border-radius: 16px; font-size: 14px; font-weight: bold;"
-        "  min-width: 32px; min-height: 32px; padding: 0; }"
-        "#aiPill { border-radius: 10px; padding: 3px 10px; font-size: 11px; }"
-    ));
+    const auto &c = ThemeEngine::instance().colors();
+
+    QString ss;
+    ss += QStringLiteral("AiChatPanel { background: ") + c["bg-darkest"]
+       + QStringLiteral("; border-left: 1px solid ") + c["border"] + QStringLiteral("; }\n");
+    ss += QStringLiteral("#aiTitle { color: ") + c["purple-light"]
+       + QStringLiteral("; font-size: 13px; font-weight: 600; }\n");
+    ss += QStringLiteral("#aiStatus { color: ") + c["text-muted"]
+       + QStringLiteral("; font-size: 11px; }\n");
+    ss += QStringLiteral("#aiScrollArea { background: transparent; border: none; }\n");
+    ss += QStringLiteral("#aiInput { background: ") + c["bg-mid"]
+       + QStringLiteral("; color: ") + c["text-primary"]
+       + QStringLiteral("; border: 1px solid ") + c["border"]
+       + QStringLiteral("; border-radius: 10px; padding: 8px; font-size: 13px; }\n");
+    ss += QStringLiteral("#aiInput:focus { border-color: ") + c["purple-mid"] + QStringLiteral("; }\n");
+    ss += QStringLiteral("#aiSendBtn { background: ") + c["purple-mid"]
+       + QStringLiteral("; color: ") + c["bg-darkest"]
+       + QStringLiteral("; border-radius: 18px; font-size: 14px; font-weight: bold;"
+                        " min-width: 36px; min-height: 36px; padding: 0; border: none; }\n");
+    ss += QStringLiteral("#aiSendBtn:hover { background: ") + c["purple-light"]
+       + QStringLiteral("; }\n");
+    ss += QStringLiteral("#aiPill { background: rgba(110,106,179,0.15); color: ")
+       + c["purple-light"] + QStringLiteral("; border: 1px solid rgba(110,106,179,0.3);"
+                                             " border-radius: 12px; padding: 4px 12px;"
+                                             " font-size: 11px; }\n");
+    ss += QStringLiteral("#aiPill:hover { background: rgba(110,106,179,0.3); }\n");
+    ss += QStringLiteral("QScrollBar:vertical { background: transparent; width: 5px; }\n");
+    ss += QStringLiteral("QScrollBar::handle:vertical { background: ") + c["scrollbar"]
+       + QStringLiteral("; border-radius: 2px; }\n");
+    ss += QStringLiteral("QScrollBar::handle:vertical:hover { background: ") + c["scrollbar-hover"]
+       + QStringLiteral("; }\n");
+    ss += QStringLiteral("QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }\n");
+    setStyleSheet(ss);
 }
 
 // ── Message bubbles ──────────────────────────────────────────────────
@@ -172,14 +195,17 @@ QWidget *AiChatPanel::createMessageBubble(const QString &text, bool isUser)
     auto *layout = new QHBoxLayout(bubble);
     layout->setContentsMargins(4, 2, 4, 2);
 
+    const auto &c = ThemeEngine::instance().colors();
     auto *avatar = new QLabel(isUser ? QStringLiteral("U") : QStringLiteral("N"), bubble);
     avatar->setFixedSize(26, 26);
     avatar->setAlignment(Qt::AlignCenter);
     avatar->setStyleSheet(isUser
-        ? QStringLiteral("background: #3d3a6b; color: #d4d2ee; border-radius: 13px;"
-                         " font-size: 11px; font-weight: 600;")
-        : QStringLiteral("background: #6e6ab3; color: #1a1b26; border-radius: 13px;"
-                         " font-size: 11px; font-weight: 600;"));
+        ? QStringLiteral("background: ") + c["purple-dark"] + QStringLiteral("; color: ")
+          + c["purple-pale"] + QStringLiteral("; border-radius: 13px;"
+                                               " font-size: 11px; font-weight: 600;")
+        : QStringLiteral("background: ") + c["purple-mid"] + QStringLiteral("; color: ")
+          + c["bg-darkest"] + QStringLiteral("; border-radius: 13px;"
+                                              " font-size: 11px; font-weight: 600;"));
 
     auto *contentWidget = new QWidget(bubble);
     auto *contentLayout = new QVBoxLayout(contentWidget);
@@ -195,15 +221,18 @@ QWidget *AiChatPanel::createMessageBubble(const QString &text, bool isUser)
         displayText.replace(QLatin1String(">"), QLatin1String("&gt;"));
         // Code blocks: ```...```
         static QRegularExpression codeBlockRe(QStringLiteral("```[\\w]*\\n?([\\s\\S]*?)```"));
-        displayText.replace(codeBlockRe, QStringLiteral(
-            "<pre style='background:#1a1b26;padding:8px;border-radius:6px;"
-            "font-family:monospace;font-size:12px;color:#a09cd8;'>"
-            "\\1</pre>"));
+        displayText.replace(codeBlockRe,
+            QStringLiteral("<pre style='background:") + c["bg-darkest"]
+            + QStringLiteral(";padding:8px;border-radius:6px;"
+                             "font-family:monospace;font-size:12px;color:")
+            + c["purple-glow"] + QStringLiteral(";'>\\1</pre>"));
         // Inline code: `...`
         static QRegularExpression inlineCodeRe(QStringLiteral("`([^`]+)`"));
-        displayText.replace(inlineCodeRe, QStringLiteral(
-            "<code style='background:#1a1b26;padding:1px 4px;border-radius:3px;"
-            "font-family:monospace;font-size:12px;color:#a09cd8;'>\\1</code>"));
+        displayText.replace(inlineCodeRe,
+            QStringLiteral("<code style='background:") + c["bg-darkest"]
+            + QStringLiteral(";padding:1px 4px;border-radius:3px;"
+                             "font-family:monospace;font-size:12px;color:")
+            + c["purple-glow"] + QStringLiteral(";'>\\1</code>"));
         // Bold: **...**
         static QRegularExpression boldRe(QStringLiteral("\\*\\*([^*]+)\\*\\*"));
         displayText.replace(boldRe, QStringLiteral("<b>\\1</b>"));
@@ -229,14 +258,17 @@ QWidget *AiChatPanel::createMessageBubble(const QString &text, bool isUser)
     msgLabel->setTextInteractionFlags(Qt::TextSelectableByMouse | Qt::LinksAccessibleByMouse);
     msgLabel->setOpenExternalLinks(false);
     msgLabel->setStyleSheet(isUser
-        ? QStringLiteral("background: #2a2d42; color: #c8cad8; border-radius: 8px;"
-                         " padding: 8px 12px; font-size: 13px;")
-        : QStringLiteral("background: #24263a; color: #b4b1e0; border-radius: 8px;"
-                         " padding: 8px 12px; font-size: 13px;"));
+        ? QStringLiteral("background: ") + c["bg-light"] + QStringLiteral("; color: ")
+          + c["text-primary"] + QStringLiteral("; border-radius: 10px;"
+                                                " padding: 8px 12px; font-size: 13px;")
+        : QStringLiteral("background: ") + c["bg-mid"] + QStringLiteral("; color: ")
+          + c["purple-soft"] + QStringLiteral("; border-radius: 10px;"
+                                               " padding: 8px 12px; font-size: 13px;"));
 
     auto *timeLabel = new QLabel(QDateTime::currentDateTime().toString(QStringLiteral("hh:mm")),
                                  contentWidget);
-    timeLabel->setStyleSheet(QStringLiteral("color: #565b7e; font-size: 10px; padding-left: 4px;"));
+    timeLabel->setStyleSheet(QStringLiteral("color: ") + c["text-muted"]
+        + QStringLiteral("; font-size: 10px; padding-left: 4px;"));
 
     contentLayout->addWidget(msgLabel);
     contentLayout->addWidget(timeLabel);
@@ -273,7 +305,8 @@ QWidget *AiChatPanel::createTypingIndicator()
 
     for (int i = 0; i < 3; ++i) {
         auto *dot = new QLabel(QStringLiteral("."), widget);
-        dot->setStyleSheet(QStringLiteral("color: #6e6ab3; font-size: 20px; font-weight: bold;"));
+        dot->setStyleSheet(QStringLiteral("color: ") + ThemeEngine::instance().colors()["purple-mid"]
+            + QStringLiteral("; font-size: 20px; font-weight: bold;"));
         layout->addWidget(dot);
     }
     layout->addStretch();
@@ -303,8 +336,8 @@ void AiChatPanel::addSystemMessage(const QString &text)
     auto *label = new QLabel(text, this);
     label->setWordWrap(true);
     label->setAlignment(Qt::AlignCenter);
-    label->setStyleSheet(QStringLiteral(
-        "color: #605878; font-size: 11px; font-style: italic; padding: 8px;"));
+    label->setStyleSheet(QStringLiteral("color: ") + ThemeEngine::instance().colors()["text-muted"]
+        + QStringLiteral("; font-size: 11px; font-style: italic; padding: 8px;"));
     int insertPos = m_messagesLayout->count() - 1;
     if (insertPos < 0) insertPos = 0;
     m_messagesLayout->insertWidget(insertPos, label);
@@ -348,14 +381,15 @@ void AiChatPanel::onStatusChanged(int status, const QString &message)
 void AiChatPanel::updateStatusDot()
 {
     if (!m_statusDot) return;
+    const auto &c = ThemeEngine::instance().colors();
     const auto status = AiManager::instance().status();
     QString color;
     switch (status) {
-    case AiManager::Status::Ready:       color = QStringLiteral("#73c991"); break;
-    case AiManager::Status::Loading:     color = QStringLiteral("#e5a84b"); break;
-    case AiManager::Status::Downloading: color = QStringLiteral("#6e9dd4"); break;
-    case AiManager::Status::Error:       color = QStringLiteral("#d4565e"); break;
-    case AiManager::Status::Fallback:    color = QStringLiteral("#565b7e"); break;
+    case AiManager::Status::Ready:       color = c["success"]; break;
+    case AiManager::Status::Loading:     color = c["warning"]; break;
+    case AiManager::Status::Downloading: color = c["info"]; break;
+    case AiManager::Status::Error:       color = c["error"]; break;
+    case AiManager::Status::Fallback:    color = c["text-muted"]; break;
     }
     m_statusDot->setStyleSheet(QStringLiteral(
         "background: %1; border-radius: 5px;").arg(color));

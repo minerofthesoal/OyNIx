@@ -1,6 +1,7 @@
 #include "TreeTabSidebar.h"
 #include "core/TabWidget.h"
 #include "core/WebView.h"
+#include "theme/ThemeEngine.h"
 
 #include <QVBoxLayout>
 #include <QHBoxLayout>
@@ -94,40 +95,58 @@ void TreeTabSidebar::setupUi()
 
 void TreeTabSidebar::setupStyles()
 {
-    setStyleSheet(QStringLiteral(
-        "TreeTabSidebar { background: #1a1b26; border-right: 1px solid #383b52; }"
-        "#panelTitle { color: #8884c7; font-size: 12px; font-weight: 700;"
-        "  letter-spacing: 0.08em; text-transform: uppercase; background: transparent; }"
-        "#badge { color: #1a1b26; background: #6e6ab3; font-size: 10px; font-weight: 700;"
-        "  padding: 1px 7px; border-radius: 8px; }"
-        "#navBtn { color: #8884c7; font-size: 16px; font-weight: bold;"
-        "  background: transparent; border: 1px solid #383b52; border-radius: 6px; }"
-        "#navBtn:hover { background: #6e6ab3; color: #1a1b26; border-color: #6e6ab3; }"
-    ));
+    const auto &c = ThemeEngine::instance().colors();
 
-    m_searchInput->setStyleSheet(QStringLiteral(
-        "QLineEdit { background: #24263a; color: #c8cad8; border: 1px solid #383b52;"
-        "  border-radius: 6px; padding: 5px 10px; margin: 4px 10px 6px 10px;"
-        "  font-size: 12px; }"
-        "QLineEdit:focus { border-color: #6e6ab3; background: #2a2d42; }"
-        "QLineEdit::placeholder { color: #565b7e; }"
-    ));
+    QString ss;
+    ss += QStringLiteral("TreeTabSidebar { background: ") + c["bg-darkest"]
+       + QStringLiteral("; border-right: 1px solid ") + c["border"] + QStringLiteral("; }\n");
+    ss += QStringLiteral("#panelTitle { color: ") + c["purple-light"]
+       + QStringLiteral("; font-size: 12px; font-weight: 700;"
+                        " letter-spacing: 0.08em; text-transform: uppercase;"
+                        " background: transparent; }\n");
+    ss += QStringLiteral("#badge { color: ") + c["bg-darkest"]
+       + QStringLiteral("; background: ") + c["purple-mid"]
+       + QStringLiteral("; font-size: 10px; font-weight: 700;"
+                        " padding: 1px 7px; border-radius: 8px; }\n");
+    ss += QStringLiteral("#navBtn { color: ") + c["purple-light"]
+       + QStringLiteral("; font-size: 16px; font-weight: bold;"
+                        " background: transparent; border: 1px solid ") + c["border"]
+       + QStringLiteral("; border-radius: 6px; }\n");
+    ss += QStringLiteral("#navBtn:hover { background: ") + c["purple-mid"]
+       + QStringLiteral("; color: ") + c["bg-darkest"]
+       + QStringLiteral("; border-color: ") + c["purple-mid"] + QStringLiteral("; }\n");
+    setStyleSheet(ss);
 
-    m_treeWidget->setStyleSheet(QStringLiteral(
-        "QTreeWidget { background: transparent; border: none; outline: none; }"
-        "QTreeWidget::item { padding: 6px 10px; margin: 1px 6px;"
-        "  border-radius: 6px; color: #c8cad8; }"
-        "QTreeWidget::item:selected { background: rgba(110,106,179,0.25);"
-        "  color: #d4d2ee; }"
-        "QTreeWidget::item:hover:!selected { background: rgba(110,106,179,0.12); }"
-        "QTreeWidget::branch { background: transparent; }"
-        "QTreeWidget::branch:has-children:closed { image: none; }"
-        "QTreeWidget::branch:has-children:open { image: none; }"
-        "QScrollBar:vertical { background: transparent; width: 5px; margin: 2px; }"
-        "QScrollBar::handle:vertical { background: #383b52; border-radius: 2px; min-height: 20px; }"
-        "QScrollBar::handle:vertical:hover { background: #565b7e; }"
-        "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }"
-    ));
+    QString inputSs;
+    inputSs += QStringLiteral("QLineEdit { background: ") + c["bg-mid"]
+            + QStringLiteral("; color: ") + c["text-primary"]
+            + QStringLiteral("; border: 1px solid ") + c["border"]
+            + QStringLiteral("; border-radius: 6px; padding: 5px 10px;"
+                             " margin: 4px 10px 6px 10px; font-size: 12px; }\n");
+    inputSs += QStringLiteral("QLineEdit:focus { border-color: ") + c["purple-mid"]
+            + QStringLiteral("; background: ") + c["bg-light"] + QStringLiteral("; }\n");
+    inputSs += QStringLiteral("QLineEdit::placeholder { color: ") + c["text-muted"]
+            + QStringLiteral("; }\n");
+    m_searchInput->setStyleSheet(inputSs);
+
+    QString treeSs;
+    treeSs += QStringLiteral("QTreeWidget { background: transparent; border: none; outline: none; }\n");
+    treeSs += QStringLiteral("QTreeWidget::item { padding: 6px 10px; margin: 1px 6px;"
+                             " border-radius: 6px; color: ") + c["text-primary"]
+           + QStringLiteral("; }\n");
+    treeSs += QStringLiteral("QTreeWidget::item:selected { background: ") + c["selection"]
+           + QStringLiteral("; color: ") + c["purple-pale"] + QStringLiteral("; }\n");
+    treeSs += QStringLiteral("QTreeWidget::item:hover:!selected { background: rgba(110,106,179,0.12); }\n");
+    treeSs += QStringLiteral("QTreeWidget::branch { background: transparent; }\n");
+    treeSs += QStringLiteral("QTreeWidget::branch:has-children:closed { image: none; }\n");
+    treeSs += QStringLiteral("QTreeWidget::branch:has-children:open { image: none; }\n");
+    treeSs += QStringLiteral("QScrollBar:vertical { background: transparent; width: 5px; margin: 2px; }\n");
+    treeSs += QStringLiteral("QScrollBar::handle:vertical { background: ") + c["scrollbar"]
+           + QStringLiteral("; border-radius: 2px; min-height: 20px; }\n");
+    treeSs += QStringLiteral("QScrollBar::handle:vertical:hover { background: ") + c["scrollbar-hover"]
+           + QStringLiteral("; }\n");
+    treeSs += QStringLiteral("QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }\n");
+    m_treeWidget->setStyleSheet(treeSs);
 }
 
 // ── Refresh tab list ─────────────────────────────────────────────────
