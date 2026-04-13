@@ -1,0 +1,12 @@
+[Desktop Entry]
+Name=OyNIx Browser
+Comment=Chromium-based desktop browser with local AI
+Exec=oynix %u
+Icon=oynix
+Terminal=false
+Type=Application
+Categories=Network;WebBrowser;
+MimeType=text/html;text/xml;application/xhtml+xml;x-scheme-handler/http;x-scheme-handler/https;
+Keywords=browser;web;internet;ai;nyx;
+StartupNotify=true
+StartupWMClass=OyNIx Browser

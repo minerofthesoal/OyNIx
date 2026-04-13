@@ -38,7 +38,7 @@ jobs:
             echo "version=v${{ github.event.inputs.version || '3.1.0' }}" >> "$GITHUB_OUTPUT"
           fi
 
-  # ── Ubuntu/Mint .deb ─────────────────────────────────────────────────
+  # ── Ubuntu/Mint apt package (.deb via dpkg-buildpackage) ────────────
   build-deb:
     needs: prepare
     runs-on: ubuntu-22.04
@@ -49,7 +49,8 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y \
-            dpkg-dev fakeroot gcc g++ cmake ninja-build pkg-config \
+            debhelper devscripts dpkg-dev fakeroot \
+            gcc g++ cmake ninja-build pkg-config \
             libsqlite3-dev libnss3-dev libnspr4-dev \
             libxcomposite-dev libxdamage-dev libxrandr-dev libxtst-dev \
             libxkbcommon-dev libxkbcommon-x11-dev \
@@ -76,6 +77,7 @@ jobs:
           echo "Ninja:    $(ninja --version 2>/dev/null || echo 'not found')"
           echo "GCC:      $(g++ --version | head -1)"
           echo ".NET:     $(dotnet --version)"
+          echo "dh:       $(dh --version 2>/dev/null | head -1 || echo 'not found')"
           echo "Qt root:  ${QT_ROOT_DIR:-unset}"
           echo "Qt6 dir:  ${Qt6_DIR:-unset}"
 
@@ -89,11 +91,11 @@ jobs:
             echo "  Qt libs found: $(ls "${QT_PREFIX}/lib/"libQt6Core.so* 2>/dev/null | head -1)"
           fi
 
-      - name: Build .deb
+      - name: Build apt package
         env:
           QT_PREFIX: ${{ env.QT_ROOT_DIR }}
         run: |
-          chmod +x scripts/build-deb.sh
+          chmod +x scripts/build-deb.sh debian/rules debian/bundle-qt.sh
           ./scripts/build-deb.sh "${{ needs.prepare.outputs.version }}"
 
       - name: Verify .deb
@@ -107,7 +109,8 @@ jobs:
           dpkg-deb --info "$DEB"
           echo ""
           echo "=== Binary files ==="
-          dpkg-deb --contents "$DEB" | grep -E '(oynix|\.so|\.desktop)' | head -20
+          dpkg-deb --contents "$DEB" 2>/dev/null \
+            | grep -E '(oynix|\.so|\.desktop)' | head -20 || true
           echo ""
           echo "=== Size ==="
           du -sh "$DEB"
@@ -381,6 +384,6 @@ jobs:
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "| Platform | Result |" >> "$GITHUB_STEP_SUMMARY"
           echo "|----------|--------|" >> "$GITHUB_STEP_SUMMARY"
-          echo "| Ubuntu .deb | ${{ needs.build-deb.result }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Ubuntu apt (.deb) | ${{ needs.build-deb.result }} |" >> "$GITHUB_STEP_SUMMARY"
           echo "| Windows .exe | ${{ needs.build-exe.result }} |" >> "$GITHUB_STEP_SUMMARY"
           echo "| Arch pacman | ${{ needs.build-pacman.result }} |" >> "$GITHUB_STEP_SUMMARY"
