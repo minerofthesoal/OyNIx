@@ -295,7 +295,7 @@ jobs:
   # ── Release ──────────────────────────────────────────────────────────
   release:
     needs: [prepare, build-deb, build-exe, build-pacman]
-    if: always() && github.ref_type == 'tag'
+    if: always() && (github.ref_type == 'tag' || github.event_name == 'workflow_dispatch' || github.ref_name == 'main' || startsWith(github.ref_name, 'claude/'))
     runs-on: ubuntu-latest
     steps:
       - name: Check if any build succeeded
@@ -310,6 +310,12 @@ jobs:
           else
             echo "has_artifacts=false" >> "$GITHUB_OUTPUT"
             echo "::warning::All builds failed — no release will be created"
+          fi
+          # Pre-release for non-tag builds
+          if [ "${{ github.ref_type }}" = "tag" ]; then
+            echo "prerelease=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "prerelease=true" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Download artifacts
@@ -336,6 +342,7 @@ jobs:
         with:
           tag_name: ${{ steps.tag.outputs.version }}
           name: "OyNIx ${{ steps.tag.outputs.version }}"
+          prerelease: ${{ steps.check.outputs.prerelease == 'true' }}
           generate_release_notes: true
           body: |
             ## OyNIx Browser ${{ steps.tag.outputs.version }}
