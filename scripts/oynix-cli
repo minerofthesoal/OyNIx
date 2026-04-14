@@ -93,9 +93,24 @@ setup_env() {
         export QT_SCALE_FACTOR="${OYNIX_SCALE}"
     fi
 
-    # Wayland / X11 detection
-    if [ -n "${WAYLAND_DISPLAY:-}" ] && [ -z "${QT_QPA_PLATFORM:-}" ]; then
-        export QT_QPA_PLATFORM="wayland;xcb"
+    # Wayland / X11 platform selection
+    # CLI flags --wayland / --x11 are also handled by the binary itself,
+    # but we set the env here so child processes inherit the setting.
+    if [ -z "${QT_QPA_PLATFORM:-}" ]; then
+        local use_wayland=false use_x11=false
+        for a in "$@"; do
+            case "$a" in
+                --wayland) use_wayland=true ;;
+                --x11|--xcb) use_x11=true ;;
+            esac
+        done
+        if $use_wayland; then
+            export QT_QPA_PLATFORM="wayland"
+        elif $use_x11; then
+            export QT_QPA_PLATFORM="xcb"
+        elif [ -n "${WAYLAND_DISPLAY:-}" ]; then
+            export QT_QPA_PLATFORM="wayland;xcb"
+        fi
     fi
 }
 
@@ -116,6 +131,8 @@ Options:
   -s, --search <query>    Search with Nyx search engine
   -p, --private           Open in private browsing mode
   --profile <name>        Use a specific browser profile
+  --wayland               Force Wayland display backend
+  --x11                   Force X11/XCB display backend
   --version               Show version and build info
   --status                Show database and config status
   --reset-config          Reset to default configuration
@@ -125,9 +142,10 @@ Options:
   -h, --help              Show this help message
 
 Environment:
-  OYNIX_HOME    Config directory (default: ~/.config/oynix)
-  OYNIX_DEBUG   Set to 1 for verbose debug output
-  OYNIX_SCALE   DPI scale factor (e.g., 1.5)
+  OYNIX_HOME       Config directory (default: ~/.config/oynix)
+  OYNIX_DEBUG      Set to 1 for verbose debug output
+  OYNIX_SCALE      DPI scale factor (e.g., 1.5)
+  QT_QPA_PLATFORM  Display backend (wayland, xcb, wayland;xcb)
 
 Build from source:
   ./scripts/build-ubuntu.sh --deps-only   # install dependencies

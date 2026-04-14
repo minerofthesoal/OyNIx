@@ -39,7 +39,10 @@ done
 
 # ── 3) Qt plugins ───────────────────────────────────────────
 for plugdir in platforms xcbglintegrations imageformats tls \
-               egldeviceintegrations wayland-shell-integration; do
+               egldeviceintegrations \
+               wayland-shell-integration \
+               wayland-graphics-integration-client \
+               wayland-decoration-client; do
     src="${QT_PREFIX}/plugins/${plugdir}"
     if [ -d "$src" ]; then
         mkdir -p "${LIB_DIR}/plugins/${plugdir}"

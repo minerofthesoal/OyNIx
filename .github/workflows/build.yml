@@ -57,13 +57,14 @@ jobs:
             libx11-xcb-dev libxcb1-dev libxext-dev libxfixes-dev \
             libgl1-mesa-dev libegl1-mesa-dev libdrm-dev libgbm-dev \
             libfontconfig1-dev libfreetype6-dev libglib2.0-dev \
-            libdbus-1-dev libasound2-dev libpulse-dev libexpat1-dev
+            libdbus-1-dev libasound2-dev libpulse-dev libexpat1-dev \
+            libwayland-dev
 
       - name: Install Qt6
         uses: jurplel/install-qt-action@v4
         with:
           version: ${{ env.QT_VERSION }}
-          modules: 'qtwebengine qtwebchannel qtpositioning'
+          modules: 'qtwebengine qtwebchannel qtpositioning qtwayland'
 
       - name: Setup .NET 8
         uses: actions/setup-dotnet@v4
@@ -137,13 +138,14 @@ jobs:
             libx11-xcb-dev libxcb1-dev libxext-dev libxfixes-dev \
             libgl1-mesa-dev libegl1-mesa-dev libdrm-dev libgbm-dev \
             libfontconfig1-dev libfreetype6-dev libglib2.0-dev \
-            libdbus-1-dev libasound2-dev libpulse-dev libexpat1-dev
+            libdbus-1-dev libasound2-dev libpulse-dev libexpat1-dev \
+            libwayland-dev
 
       - name: Install Qt6
         uses: jurplel/install-qt-action@v4
         with:
           version: ${{ env.QT_VERSION }}
-          modules: 'qtwebengine qtwebchannel qtpositioning'
+          modules: 'qtwebengine qtwebchannel qtpositioning qtwayland'
 
       - name: Setup .NET 8
         uses: actions/setup-dotnet@v4
