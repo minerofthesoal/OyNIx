@@ -3,7 +3,7 @@
 #include <QObject>
 #include <QJsonArray>
 #include <QJsonObject>
-#include <QMutex>
+#include <QRecursiveMutex>
 #include <QString>
 #include <QStringList>
 
@@ -51,6 +51,6 @@ private:
     void createTables();
 
     QString m_dbPath;
-    mutable QMutex m_mutex;
+    mutable QRecursiveMutex m_mutex;
     static Database *s_instance;
 };

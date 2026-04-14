@@ -40,7 +40,7 @@ void NyxSearch::indexPage(const QString &url, const QString &title, const QStrin
 }
 
 // ---------------------------------------------------------------------------
-// Index a page discovered by the WebCrawler into the FTS5 index
+// Index a page discovered by the CrabCrawler into the FTS5 index
 // ---------------------------------------------------------------------------
 void NyxSearch::indexCrawledPage(const QJsonObject &page)
 {
@@ -132,7 +132,10 @@ void NyxSearch::onWebResults(const QJsonArray &results)
         scored.append(item);
         score = qMax(0.1, score - 0.01);
     }
-    m_fetcher = nullptr;
+    if (m_fetcher) {
+        m_fetcher->deleteLater();
+        m_fetcher = nullptr;
+    }
     emit webResultsReady(scored);
 }
 

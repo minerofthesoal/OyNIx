@@ -320,6 +320,7 @@ void AiChatPanel::addUserMessage(const QString &text)
     int insertPos = m_messagesLayout->count() - 1;
     if (insertPos < 0) insertPos = 0;
     m_messagesLayout->insertWidget(insertPos, createMessageBubble(text, true));
+    trimMessages();
     scrollToBottom();
 }
 
@@ -328,6 +329,7 @@ void AiChatPanel::addAiMessage(const QString &text)
     int insertPos = m_messagesLayout->count() - 1;
     if (insertPos < 0) insertPos = 0;
     m_messagesLayout->insertWidget(insertPos, createMessageBubble(text, false));
+    trimMessages();
     scrollToBottom();
 }
 
@@ -341,7 +343,20 @@ void AiChatPanel::addSystemMessage(const QString &text)
     int insertPos = m_messagesLayout->count() - 1;
     if (insertPos < 0) insertPos = 0;
     m_messagesLayout->insertWidget(insertPos, label);
+    trimMessages();
     scrollToBottom();
+}
+
+void AiChatPanel::trimMessages()
+{
+    // The layout has message widgets + 1 trailing stretch.
+    // Remove oldest messages (at index 0) when we exceed the cap.
+    while (m_messagesLayout->count() > MaxMessages + 1) {
+        auto *item = m_messagesLayout->takeAt(0);
+        if (item->widget())
+            item->widget()->deleteLater();
+        delete item;
+    }
 }
 
 void AiChatPanel::sendMessage()

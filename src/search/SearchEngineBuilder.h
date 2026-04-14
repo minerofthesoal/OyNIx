@@ -39,7 +39,6 @@ private:
     void addEngine();
     void testEngine();
     void removeSelectedEngine();
-    void saveEngines();
     void loadFromDisk();
     void saveToDisk();
 
