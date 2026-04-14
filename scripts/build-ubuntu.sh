@@ -402,14 +402,22 @@ if [ "$ACTION" = "install-local" ]; then
 OYNIX_DIR="${LIB_DIR}"
 export LD_LIBRARY_PATH="\${OYNIX_DIR}\${LD_LIBRARY_PATH:+:\$LD_LIBRARY_PATH}"
 
+# Check for libxcb-cursor0 (required by Qt6.5+ xcb plugin)
+if ! ldconfig -p 2>/dev/null | grep -q libxcb-cursor; then
+    echo "WARNING: libxcb-cursor0 is missing. Install: sudo apt install libxcb-cursor0" >&2
+fi
+
 # Platform: --wayland/--x11 flags or auto-detect (Wayland preferred)
 if [ -z "\${QT_QPA_PLATFORM:-}" ]; then
     case "\$*" in
         *--x11*|*--xcb*) export QT_QPA_PLATFORM="xcb" ;;
         *--wayland*)      export QT_QPA_PLATFORM="wayland" ;;
         *)
-            if [ -n "\${WAYLAND_DISPLAY:-}" ]; then
+            if [ -n "\${WAYLAND_DISPLAY:-}" ] || \\
+               [ "\${XDG_SESSION_TYPE:-}" = "wayland" ]; then
                 export QT_QPA_PLATFORM="wayland;xcb"
+            else
+                export QT_QPA_PLATFORM="xcb;wayland"
             fi
             ;;
     esac
@@ -469,14 +477,22 @@ if [ "$ACTION" = "install-system" ]; then
 OYNIX_DIR="/usr/lib/oynix"
 export LD_LIBRARY_PATH="${OYNIX_DIR}${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 
+# Check for libxcb-cursor0 (required by Qt6.5+ xcb plugin)
+if ! ldconfig -p 2>/dev/null | grep -q libxcb-cursor; then
+    echo "WARNING: libxcb-cursor0 is missing. Install: sudo apt install libxcb-cursor0" >&2
+fi
+
 # Platform: --wayland/--x11 flags or auto-detect (Wayland preferred)
 if [ -z "${QT_QPA_PLATFORM:-}" ]; then
     case "$*" in
         *--x11*|*--xcb*) export QT_QPA_PLATFORM="xcb" ;;
         *--wayland*)      export QT_QPA_PLATFORM="wayland" ;;
         *)
-            if [ -n "${WAYLAND_DISPLAY:-}" ]; then
+            if [ -n "${WAYLAND_DISPLAY:-}" ] || \
+               [ "${XDG_SESSION_TYPE:-}" = "wayland" ]; then
                 export QT_QPA_PLATFORM="wayland;xcb"
+            else
+                export QT_QPA_PLATFORM="xcb;wayland"
             fi
             ;;
     esac

@@ -10,8 +10,11 @@
 
 #include <QApplication>
 #include <QDir>
+#include <QLibrary>
 #include <QStandardPaths>
 #include <QtWebEngineQuick/qtwebenginequickglobal.h>
+
+#include <cstdio>
 
 #include "core/BrowserWindow.h"
 
@@ -91,10 +94,33 @@ static void selectPlatform(int argc, char *argv[])
 #endif
 }
 
+// Check for libxcb-cursor0 which is required by Qt 6.5+ xcb platform plugin.
+// Without it, Qt aborts with SIGABRT and no useful message for users.
+static void checkXcbDeps()
+{
+#ifdef Q_OS_LINUX
+    QLibrary xcbCursor(QStringLiteral("libxcb-cursor"), 0);
+    if (!xcbCursor.load()) {
+        std::fprintf(stderr,
+            "\n"
+            "  ╔═══════════════════════════════════════════════════════╗\n"
+            "  ║  libxcb-cursor0 is required but not installed.       ║\n"
+            "  ║  The XCB display backend will fail without it.       ║\n"
+            "  ║                                                      ║\n"
+            "  ║  Fix:  sudo apt install libxcb-cursor0               ║\n"
+            "  ╚═══════════════════════════════════════════════════════╝\n"
+            "\n");
+    }
+#endif
+}
+
 int main(int argc, char *argv[])
 {
     // Platform selection must happen before any Qt objects
     selectPlatform(argc, argv);
+
+    // Warn early about missing xcb dependencies
+    checkXcbDeps();
 
     // QtWebEngine must be initialized before QApplication
     QtWebEngineQuick::initialize();

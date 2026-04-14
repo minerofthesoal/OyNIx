@@ -93,6 +93,14 @@ setup_env() {
         export QT_SCALE_FACTOR="${OYNIX_SCALE}"
     fi
 
+    # Pre-flight: check for libxcb-cursor0 (required by Qt6.5+ xcb plugin)
+    if ! ldconfig -p 2>/dev/null | grep -q libxcb-cursor; then
+        echo "WARNING: libxcb-cursor0 is not installed." >&2
+        echo "  The XCB display backend will fail without it." >&2
+        echo "  Install with:  sudo apt install libxcb-cursor0" >&2
+        echo "" >&2
+    fi
+
     # Wayland / X11 platform selection
     # CLI flags --wayland / --x11 are also handled by the binary itself,
     # but we set the env here so child processes inherit the setting.
@@ -108,8 +116,11 @@ setup_env() {
             export QT_QPA_PLATFORM="wayland"
         elif $use_x11; then
             export QT_QPA_PLATFORM="xcb"
-        elif [ -n "${WAYLAND_DISPLAY:-}" ]; then
+        elif [ -n "${WAYLAND_DISPLAY:-}" ] || \
+             [ "${XDG_SESSION_TYPE:-}" = "wayland" ]; then
             export QT_QPA_PLATFORM="wayland;xcb"
+        else
+            export QT_QPA_PLATFORM="xcb;wayland"
         fi
     fi
 }
