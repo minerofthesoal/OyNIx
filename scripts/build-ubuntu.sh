@@ -146,6 +146,10 @@ install_deps() {
         libasound2-dev libpulse-dev
         libexpat1-dev
 
+        # Wayland support (default display backend on Ubuntu)
+        libwayland-dev libwayland-egl1
+        qtwayland6 qt6-wayland-dev qt6-wayland
+
         # .NET 8 SDK (for C# NativeAOT core)
         # Handled separately below
     )
@@ -390,12 +394,26 @@ if [ "$ACTION" = "install-local" ]; then
             "${SHARE_DIR}/icons/hicolor/scalable/apps/oynix.svg"
     fi
 
-    # CLI launcher
+    # CLI launcher with Wayland support
     cat > "${BIN_DIR}/oynix" <<LAUNCHER
 #!/bin/bash
-# OyNIx Browser — CLI launcher
+# OyNIx Browser — CLI launcher (Ubuntu build, Wayland default)
 OYNIX_DIR="${LIB_DIR}"
 export LD_LIBRARY_PATH="\${OYNIX_DIR}\${LD_LIBRARY_PATH:+:\$LD_LIBRARY_PATH}"
+
+# Platform: --wayland/--x11 flags or auto-detect (Wayland preferred)
+if [ -z "\${QT_QPA_PLATFORM:-}" ]; then
+    case "\$*" in
+        *--x11*|*--xcb*) export QT_QPA_PLATFORM="xcb" ;;
+        *--wayland*)      export QT_QPA_PLATFORM="wayland" ;;
+        *)
+            if [ -n "\${WAYLAND_DISPLAY:-}" ]; then
+                export QT_QPA_PLATFORM="wayland;xcb"
+            fi
+            ;;
+    esac
+fi
+
 exec "\${OYNIX_DIR}/oynix" "\$@"
 LAUNCHER
     chmod 755 "${BIN_DIR}/oynix"
@@ -443,12 +461,26 @@ if [ "$ACTION" = "install-system" ]; then
     cd "${BUILD_DIR}"
     sudo cmake --install .
 
-    # Create CLI launcher
+    # Create CLI launcher with Wayland support
     sudo tee /usr/bin/oynix > /dev/null <<'LAUNCHER'
 #!/bin/bash
-# OyNIx Browser — CLI launcher
+# OyNIx Browser — CLI launcher (system install, Wayland default)
 OYNIX_DIR="/usr/lib/oynix"
 export LD_LIBRARY_PATH="${OYNIX_DIR}${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+
+# Platform: --wayland/--x11 flags or auto-detect (Wayland preferred)
+if [ -z "${QT_QPA_PLATFORM:-}" ]; then
+    case "$*" in
+        *--x11*|*--xcb*) export QT_QPA_PLATFORM="xcb" ;;
+        *--wayland*)      export QT_QPA_PLATFORM="wayland" ;;
+        *)
+            if [ -n "${WAYLAND_DISPLAY:-}" ]; then
+                export QT_QPA_PLATFORM="wayland;xcb"
+            fi
+            ;;
+    esac
+fi
+
 exec "${OYNIX_DIR}/oynix" "$@"
 LAUNCHER
     sudo chmod 755 /usr/bin/oynix
