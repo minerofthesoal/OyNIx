@@ -64,7 +64,7 @@ jobs:
         uses: jurplel/install-qt-action@v4
         with:
           version: ${{ env.QT_VERSION }}
-          modules: 'qtwebengine qtwebchannel qtpositioning qtwayland'
+          modules: 'qtwebengine qtwebchannel qtpositioning'
 
       - name: Setup .NET 8
         uses: actions/setup-dotnet@v4
@@ -145,7 +145,7 @@ jobs:
         uses: jurplel/install-qt-action@v4
         with:
           version: ${{ env.QT_VERSION }}
-          modules: 'qtwebengine qtwebchannel qtpositioning qtwayland'
+          modules: 'qtwebengine qtwebchannel qtpositioning'
 
       - name: Setup .NET 8
         uses: actions/setup-dotnet@v4
