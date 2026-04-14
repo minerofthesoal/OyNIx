@@ -63,7 +63,8 @@ Depends:
  libpulse0,
  libdrm2,
  libgbm1,
- libexpat1
+ libexpat1,
+ libxcb-cursor0
 Description: Chromium-based desktop browser with local AI assistant
  OyNIx is a custom browser built with Qt6 WebEngine, C++17, and
  .NET 8 NativeAOT core. Features include tree tabs, Nyx local search

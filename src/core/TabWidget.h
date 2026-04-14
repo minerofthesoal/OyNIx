@@ -60,7 +60,6 @@ private:
     int pinnedTabCount() const;
 
     QToolButton *m_newTabButton = nullptr;
-    QSet<int>    m_pinnedIndices;  // track by widget pointer instead — see cpp
     QSet<WebView *> m_pinnedTabs;
     ExtensionManager *m_extensionManager = nullptr;
 };

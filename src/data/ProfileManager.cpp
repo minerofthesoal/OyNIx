@@ -74,9 +74,16 @@ void ProfileManager::ensureDefaultProfile()
     save();
 
     // Create empty per-profile files
-    QFile(dir + QStringLiteral("/bookmarks.json")).open(QIODevice::WriteOnly);
-    QFile(dir + QStringLiteral("/history.json")).open(QIODevice::WriteOnly);
-    QFile(dir + QStringLiteral("/browser_config.json")).open(QIODevice::WriteOnly);
+    static const QStringList profileFiles = {
+        QStringLiteral("/bookmarks.json"),
+        QStringLiteral("/history.json"),
+        QStringLiteral("/browser_config.json"),
+    };
+    for (const auto &name : profileFiles) {
+        QFile f(dir + name);
+        if (f.open(QIODevice::WriteOnly))
+            f.write("{}");
+    }
 }
 
 QString ProfileManager::hashPassword(const QString &password)
@@ -117,9 +124,16 @@ bool ProfileManager::createProfile(const QString &name, const QString &password)
     m_profiles.append(profile);
 
     // Create empty per-profile files
-    QFile(dir + QStringLiteral("/bookmarks.json")).open(QIODevice::WriteOnly);
-    QFile(dir + QStringLiteral("/history.json")).open(QIODevice::WriteOnly);
-    QFile(dir + QStringLiteral("/browser_config.json")).open(QIODevice::WriteOnly);
+    static const QStringList profileFiles = {
+        QStringLiteral("/bookmarks.json"),
+        QStringLiteral("/history.json"),
+        QStringLiteral("/browser_config.json"),
+    };
+    for (const auto &name : profileFiles) {
+        QFile f(dir + name);
+        if (f.open(QIODevice::WriteOnly))
+            f.write("{}");
+    }
 
     return save();
 }

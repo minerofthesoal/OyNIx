@@ -110,12 +110,14 @@ void GitHubSync::uploadDatabase(const QString &jsonFilePath) {
 
     auto *reply = m_nam->get(req);
     connect(reply, &QNetworkReply::finished, this, [this, reply, encoded, urlStr]() {
-        reply->deleteLater();
+        // Read data before scheduling deletion
         QString sha;
         if (reply->error() == QNetworkReply::NoError) {
             auto doc = QJsonDocument::fromJson(reply->readAll());
             sha = doc.object()[QStringLiteral("sha")].toString();
         }
+        reply->deleteLater();
+
         QJsonObject data;
         data[QStringLiteral("message")] = QStringLiteral("Update OyNIx database");
         data[QStringLiteral("content")] = QString::fromLatin1(encoded);

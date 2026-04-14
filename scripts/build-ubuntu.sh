@@ -141,6 +141,7 @@ install_deps() {
         libx11-xcb-dev libxcb1-dev libxext-dev libxfixes-dev
         libxcomposite-dev libxdamage-dev libxrandr-dev libxtst-dev
         libnss3-dev libnspr4-dev
+        libxcb-cursor-dev libxcb-cursor0
         libdbus-1-dev
         libglib2.0-dev
         libasound2-dev libpulse-dev

@@ -1,5 +1,6 @@
 #include "WebCache.h"
 
+#include <algorithm>
 #include <QCryptographicHash>
 #include <QDateTime>
 #include <QDir>
@@ -112,44 +113,52 @@ void WebCache::pruneOldEntries(int maxAgeDays)
         }
     }
 
-    // Clean empty subdirectories
+    // Clean empty subdirectories (collect then remove bottom-up)
+    QStringList dirs;
     QDirIterator dirIt(m_cacheDir, QDir::Dirs | QDir::NoDotAndDotDot,
                        QDirIterator::Subdirectories);
     while (dirIt.hasNext()) {
         dirIt.next();
-        QDir d(dirIt.filePath());
-        if (d.isEmpty())
-            d.rmdir(dirIt.filePath());
+        dirs.append(dirIt.filePath());
+    }
+    // Reverse so deepest dirs are removed first
+    std::sort(dirs.begin(), dirs.end(), [](const QString &a, const QString &b) {
+        return a.size() > b.size();
+    });
+    for (const auto &path : dirs) {
+        QDir().rmdir(path); // only removes if empty
     }
 }
 
 qint64 WebCache::cacheSize() const
 {
+    int count = 0;
     qint64 total = 0;
-    QDirIterator it(m_cacheDir, QDir::Files, QDirIterator::Subdirectories);
-    while (it.hasNext()) {
-        it.next();
-        total += it.fileInfo().size();
-    }
+    scanCache(count, total);
     return total;
 }
 
 QJsonObject WebCache::getStats() const
 {
-    QJsonObject stats;
-
     int fileCount = 0;
     qint64 totalSize = 0;
+    scanCache(fileCount, totalSize);
+
+    QJsonObject stats;
+    stats[QStringLiteral("cached_pages")] = fileCount;
+    stats[QStringLiteral("cache_size_mb")] = qRound(totalSize / (1024.0 * 1024.0) * 100.0) / 100.0;
+    stats[QStringLiteral("cache_dir")] = m_cacheDir;
+    return stats;
+}
+
+void WebCache::scanCache(int &fileCount, qint64 &totalSize) const
+{
+    fileCount = 0;
+    totalSize = 0;
     QDirIterator it(m_cacheDir, QDir::Files, QDirIterator::Subdirectories);
     while (it.hasNext()) {
         it.next();
         ++fileCount;
         totalSize += it.fileInfo().size();
     }
-
-    stats[QStringLiteral("cached_pages")] = fileCount;
-    stats[QStringLiteral("cache_size_mb")] = qRound(totalSize / (1024.0 * 1024.0) * 100.0) / 100.0;
-    stats[QStringLiteral("cache_dir")] = m_cacheDir;
-
-    return stats;
 }
