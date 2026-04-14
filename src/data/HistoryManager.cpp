@@ -5,13 +5,27 @@
 #include <QFile>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QTimer>
 
 HistoryManager::HistoryManager(const QString &dataDir, QObject *parent)
     : QObject(parent)
     , m_filePath(dataDir + QStringLiteral("/history.json"))
+    , m_saveTimer(new QTimer(this))
 {
     QDir().mkpath(dataDir);
     load();
+
+    // Deferred save: coalesce rapid addEntry() calls into a single disk write
+    m_saveTimer->setSingleShot(true);
+    m_saveTimer->setInterval(SaveDelayMs);
+    connect(m_saveTimer, &QTimer::timeout, this, &HistoryManager::flush);
+}
+
+HistoryManager::~HistoryManager()
+{
+    // Ensure any pending writes are flushed on shutdown
+    if (m_dirty)
+        save();
 }
 
 void HistoryManager::load()
@@ -38,7 +52,7 @@ bool HistoryManager::save() const
 void HistoryManager::trimEntries()
 {
     while (m_history.size() > MaxEntries)
-        m_history.removeAt(0); // Remove oldest entries (front of array)
+        m_history.removeAt(0);
 }
 
 void HistoryManager::addEntry(const QString &url, const QString &title)
@@ -51,8 +65,23 @@ void HistoryManager::addEntry(const QString &url, const QString &title)
     m_history.append(entry);
     trimEntries();
 
+    m_dirty = true;
+    scheduleSave();
+    emit historyChanged();
+}
+
+void HistoryManager::scheduleSave()
+{
+    if (!m_saveTimer->isActive())
+        m_saveTimer->start();
+}
+
+void HistoryManager::flush()
+{
+    if (!m_dirty)
+        return;
     if (save())
-        emit historyChanged();
+        m_dirty = false;
 }
 
 QJsonArray HistoryManager::getAll() const
@@ -91,6 +120,7 @@ QJsonArray HistoryManager::getRecent(int count) const
 void HistoryManager::clear()
 {
     m_history = QJsonArray();
-    if (save())
-        emit historyChanged();
+    m_dirty = true;
+    flush();
+    emit historyChanged();
 }

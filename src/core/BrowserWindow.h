@@ -35,7 +35,7 @@ class BookmarkPanel;
 class SessionManager;
 class SecurityManager;
 class ExtensionPanel;
-class CrawlerPanel;
+class CrabPanel;
 class QSplitter;
 class QWebEngineDownloadRequest;
 
@@ -138,7 +138,7 @@ private:
     TreeTabSidebar   *m_treeTabSidebar   = nullptr;
     BookmarkPanel    *m_bookmarkPanel    = nullptr;
     ExtensionPanel   *m_extensionPanel   = nullptr;
-    CrawlerPanel     *m_crawlerPanel    = nullptr;
+    CrabPanel        *m_crabPanel       = nullptr;
     DownloadManager  *m_downloadManager  = nullptr;
     AudioPlayer      *m_audioPlayer      = nullptr;
     CommandPalette   *m_commandPalette   = nullptr;

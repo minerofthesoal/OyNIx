@@ -74,6 +74,10 @@ private:
     QPushButton   *m_explainBtn    = nullptr;
     QPushButton   *m_clearBtn      = nullptr;
 
+    // Message management
+    void trimMessages();
+    static constexpr int MaxMessages = 200;
+
     // Animation
     QPropertyAnimation *m_slideAnim = nullptr;
     bool m_visible = false;

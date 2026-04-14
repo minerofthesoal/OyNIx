@@ -61,7 +61,24 @@ void WebView::toggleAudioMute()
 // ── Zoom per domain ───────────────────────────────────────────────────
 void WebView::setZoomForDomain(const QString &domain, qreal zoom)
 {
-    s_domainZoomLevels[domain] = zoom;
+    // Only store non-default zoom levels; remove entry if reset to 1.0
+    if (qFuzzyCompare(zoom, 1.0))
+        s_domainZoomLevels.remove(domain);
+    else
+        s_domainZoomLevels[domain] = zoom;
+
+    // Bound the hash to prevent unbounded memory growth
+    if (s_domainZoomLevels.size() > 500) {
+        // Evict entries closest to 1.0 (least useful overrides)
+        auto it = s_domainZoomLevels.begin();
+        while (it != s_domainZoomLevels.end() && s_domainZoomLevels.size() > 400) {
+            if (qAbs(it.value() - 1.0) < 0.05)
+                it = s_domainZoomLevels.erase(it);
+            else
+                ++it;
+        }
+    }
+
     setZoomFactor(zoom);
 }
 

@@ -170,15 +170,19 @@ bool CoreBridge::initialize(const QString &configDir)
     m_crawlerCount      = resolveSym<decltype(m_crawlerCount)>(m_lib, "oynix_crawler_count");
     m_crawlerIsRunning  = resolveSym<decltype(m_crawlerIsRunning)>(m_lib, "oynix_crawler_is_running");
 
-    // Initialize the C# core
+    // Initialize the C# core — only mark loaded if critical symbols resolved
     if (m_init) {
         const QByteArray cfgBytes = configDir.toUtf8();
         m_init(cfgBytes.constData());
+        m_loaded = true;
+        qDebug() << "CoreBridge: C# core loaded successfully";
+    } else {
+        qWarning() << "CoreBridge: library opened but oynix_init not found — bridge disabled";
+        oynix_dlclose(m_lib);
+        m_lib = nullptr;
+        m_loaded = false;
     }
-
-    m_loaded = true;
-    qDebug() << "CoreBridge: C# core loaded successfully";
-    return true;
+    return m_loaded;
 }
 
 void CoreBridge::shutdown()

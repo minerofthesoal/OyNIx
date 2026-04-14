@@ -59,7 +59,7 @@
 #include "search/NyxSearch.h"
 #include "interop/CoreBridge.h"
 #include "ui/ExtensionPanel.h"
-#include "ui/CrawlerPanel.h"
+#include "ui/CrabPanel.h"
 #include "theme/ThemeEngine.h"
 #include "pages/InternalPages.h"
 
@@ -105,9 +105,9 @@ BrowserWindow::BrowserWindow(QWidget *parent)
     m_extensionPanel = new ExtensionPanel(this);
     m_extensionPanel->hide();
 
-    // Crawler panel (inline, hidden by default)
-    m_crawlerPanel = new CrawlerPanel(this);
-    m_crawlerPanel->hide();
+    // Crab panel (inline, hidden by default)
+    m_crabPanel = new CrabPanel(this);
+    m_crabPanel->hide();
 
     // AI chat panel (right)
     m_aiPanel = new AiChatPanel(this);
@@ -115,7 +115,7 @@ BrowserWindow::BrowserWindow(QWidget *parent)
     m_splitter->addWidget(m_treeTabSidebar);
     m_splitter->addWidget(m_tabWidget);
     m_splitter->addWidget(m_extensionPanel);
-    m_splitter->addWidget(m_crawlerPanel);
+    m_splitter->addWidget(m_crabPanel);
     m_splitter->addWidget(m_aiPanel);
     m_splitter->setStretchFactor(0, 0);
     m_splitter->setStretchFactor(1, 1);
@@ -161,8 +161,8 @@ BrowserWindow::BrowserWindow(QWidget *parent)
     // Bookmark panel connections
     connect(m_bookmarkPanel, &BookmarkPanel::bookmarkActivated, this, &BrowserWindow::navigateTo);
 
-    // Crawler panel connections
-    connect(m_crawlerPanel, &CrawlerPanel::openUrl, this, [this](const QString &url) {
+    // Crab panel connections
+    connect(m_crabPanel, &CrabPanel::openUrl, this, [this](const QString &url) {
         navigateTo(QUrl(url));
     });
 
@@ -404,8 +404,8 @@ void BrowserWindow::createMenuBar()
         if (m_extensionPanel) m_extensionPanel->setVisible(!m_extensionPanel->isVisible());
     });
     {
-        auto *a = m_toolsMenu->addAction(tr("Web Crawler"), this, [this]{
-            if (m_crawlerPanel) m_crawlerPanel->setVisible(!m_crawlerPanel->isVisible());
+        auto *a = m_toolsMenu->addAction(tr("Crabs"), this, [this]{
+            if (m_crabPanel) m_crabPanel->setVisible(!m_crabPanel->isVisible());
         });
         a->setShortcut(QKeySequence(QStringLiteral("Ctrl+Shift+W")));
     }
@@ -537,13 +537,13 @@ void BrowserWindow::createNavigationToolbar()
     m_zoomLabel->hide(); // only show when zoom != 100%
     m_navToolbar->addWidget(m_zoomLabel);
 
-    // ── Crawler button ──────────────────────────────────────────
-    auto *crawlerAction = m_navToolbar->addAction(
+    // ── Crabs button ────────────────────────────────────────────
+    auto *crabsAction = m_navToolbar->addAction(
         style()->standardIcon(QStyle::SP_DriveNetIcon),
-        tr("Crawler"), this, [this]{
-            if (m_crawlerPanel) m_crawlerPanel->setVisible(!m_crawlerPanel->isVisible());
+        tr("Crabs"), this, [this]{
+            if (m_crabPanel) m_crabPanel->setVisible(!m_crabPanel->isVisible());
         });
-    crawlerAction->setToolTip(tr("Web Crawler (Ctrl+Shift+W)"));
+    crabsAction->setToolTip(tr("Crabs Web Crawler (Ctrl+Shift+W)"));
 
     // ── Tab count badge ─────────────────────────────────────────
     m_tabCountLabel = new QLabel(this);
@@ -1154,10 +1154,10 @@ void BrowserWindow::registerCommands()
         QString(), QStringLiteral("Help"),
         [this]{ showAbout(); }});
 
-    m_commandPalette->registerCommand({QStringLiteral("web_crawler"),
-        QStringLiteral("Web Crawler"), QStringLiteral("Show/hide web crawler panel"),
+    m_commandPalette->registerCommand({QStringLiteral("crabs"),
+        QStringLiteral("Crabs"), QStringLiteral("Show/hide Crabs web crawler panel"),
         QStringLiteral("Ctrl+Shift+W"), QStringLiteral("Tools"),
-        [this]{ if (m_crawlerPanel) m_crawlerPanel->setVisible(!m_crawlerPanel->isVisible()); }});
+        [this]{ if (m_crabPanel) m_crabPanel->setVisible(!m_crabPanel->isVisible()); }});
 
     m_commandPalette->registerCommand({QStringLiteral("extensions"),
         QStringLiteral("Extensions"), QStringLiteral("Show/hide extensions panel"),

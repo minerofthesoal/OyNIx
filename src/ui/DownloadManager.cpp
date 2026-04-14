@@ -103,53 +103,61 @@ void DownloadManager::addDownload(QWebEngineDownloadRequest *download)
     item.openBtn     = widget->findChild<QPushButton *>(QStringLiteral("dlOpen"));
 
     m_items.append(item);
-    const int idx = m_items.size() - 1;
 
     // Insert before the stretch
     m_listLayout->insertWidget(m_listLayout->count() - 1, widget);
 
+    // Helper: find item by widget pointer (stable after clearCompleted reshuffles indices)
+    auto findItem = [this, widget]() -> DownloadItem* {
+        for (auto &it : m_items) {
+            if (it.widget == widget) return &it;
+        }
+        return nullptr;
+    };
+
     // Connect download signals
     connect(download, &QWebEngineDownloadRequest::receivedBytesChanged, this,
-            [this, idx, download]() {
-                if (idx >= m_items.size()) return;
-                auto &it = m_items[idx];
+            [this, findItem, download]() {
+                auto *it = findItem();
+                if (!it) return;
                 const qint64 received = download->receivedBytes();
                 const qint64 total = download->totalBytes();
-                if (it.progressBar) {
+                if (it->progressBar) {
                     if (total > 0) {
-                        it.progressBar->setMaximum(100);
-                        it.progressBar->setValue(static_cast<int>(received * 100 / total));
+                        it->progressBar->setMaximum(100);
+                        it->progressBar->setValue(static_cast<int>(received * 100 / total));
                     } else {
-                        it.progressBar->setMaximum(0); // indeterminate
+                        it->progressBar->setMaximum(0); // indeterminate
                     }
                 }
-                if (it.statusLabel) {
-                    it.statusLabel->setText(QStringLiteral("%1 / %2")
+                if (it->statusLabel) {
+                    it->statusLabel->setText(QStringLiteral("%1 / %2")
                         .arg(formatBytes(received), formatBytes(total)));
                 }
             });
 
     connect(download, &QWebEngineDownloadRequest::isFinishedChanged, this,
-            [this, idx, download]() {
-                if (idx >= m_items.size()) return;
-                auto &it = m_items[idx];
-                it.completed = true;
-                if (it.progressBar) it.progressBar->setValue(100);
-                if (it.statusLabel) it.statusLabel->setText(QStringLiteral("Complete"));
-                if (it.cancelBtn) it.cancelBtn->hide();
-                if (it.openBtn) it.openBtn->show();
+            [this, findItem]() {
+                auto *it = findItem();
+                if (!it) return;
+                it->completed = true;
+                if (it->progressBar) it->progressBar->setValue(100);
+                if (it->statusLabel) it->statusLabel->setText(QStringLiteral("Complete"));
+                if (it->cancelBtn) it->cancelBtn->hide();
+                if (it->openBtn) it->openBtn->show();
                 updateCountBadge();
             });
 
     // Cancel button
     if (item.cancelBtn) {
-        connect(item.cancelBtn, &QPushButton::clicked, this, [this, idx, download]() {
+        connect(item.cancelBtn, &QPushButton::clicked, this, [this, findItem, download]() {
             download->cancel();
-            if (idx < m_items.size()) {
-                m_items[idx].cancelled = true;
-                if (m_items[idx].statusLabel)
-                    m_items[idx].statusLabel->setText(QStringLiteral("Cancelled"));
-                if (m_items[idx].cancelBtn) m_items[idx].cancelBtn->hide();
+            auto *it = findItem();
+            if (it) {
+                it->cancelled = true;
+                if (it->statusLabel)
+                    it->statusLabel->setText(QStringLiteral("Cancelled"));
+                if (it->cancelBtn) it->cancelBtn->hide();
             }
             updateCountBadge();
         });
@@ -158,9 +166,10 @@ void DownloadManager::addDownload(QWebEngineDownloadRequest *download)
     // Open button
     if (item.openBtn) {
         item.openBtn->hide();
-        connect(item.openBtn, &QPushButton::clicked, this, [this, idx]() {
-            if (idx < m_items.size())
-                QDesktopServices::openUrl(QUrl::fromLocalFile(m_items[idx].filePath));
+        connect(item.openBtn, &QPushButton::clicked, this, [this, findItem]() {
+            auto *it = findItem();
+            if (it)
+                QDesktopServices::openUrl(QUrl::fromLocalFile(it->filePath));
         });
     }
 

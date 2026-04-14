@@ -63,8 +63,8 @@ set(OYNIX_SOURCES
     src/ui/BookmarkPanel.h
     src/ui/ExtensionPanel.cpp
     src/ui/ExtensionPanel.h
-    src/ui/CrawlerPanel.cpp
-    src/ui/CrawlerPanel.h
+    src/ui/CrabPanel.cpp
+    src/ui/CrabPanel.h
     # Media
     src/media/AudioPlayer.cpp
     src/media/AudioPlayer.h
@@ -95,8 +95,8 @@ set(OYNIX_SOURCES
     # Search
     src/search/NyxSearch.cpp
     src/search/NyxSearch.h
-    src/search/WebCrawler.cpp
-    src/search/WebCrawler.h
+    src/search/CrabCrawler.cpp
+    src/search/CrabCrawler.h
     src/search/WebResultsFetcher.cpp
     src/search/WebResultsFetcher.h
     src/search/SearchEngineBuilder.cpp
