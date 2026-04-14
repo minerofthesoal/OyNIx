@@ -10,11 +10,16 @@
 
 #include <QApplication>
 #include <QDir>
+#include <QFileInfo>
 #include <QLibrary>
 #include <QStandardPaths>
 #include <QtWebEngineQuick/qtwebenginequickglobal.h>
 
 #include <cstdio>
+#include <cstdlib>
+#ifdef Q_OS_LINUX
+#include <unistd.h>  // readlink
+#endif
 
 #include "core/BrowserWindow.h"
 
@@ -46,6 +51,62 @@ static void ensureConfigDirs()
     for (const auto &sub : subdirs) {
         dir.mkpath(base + QLatin1Char('/') + sub);
     }
+}
+
+// Resolve the directory containing the oynix binary.
+// Uses /proc/self/exe on Linux, argv[0] fallback elsewhere.
+static QByteArray resolveExeDir(const char *argv0)
+{
+#ifdef Q_OS_LINUX
+    char buf[4096];
+    ssize_t len = readlink("/proc/self/exe", buf, sizeof(buf) - 1);
+    if (len > 0) {
+        buf[len] = '\0';
+        // Return parent directory
+        QByteArray path(buf, static_cast<int>(len));
+        int slash = path.lastIndexOf('/');
+        return (slash > 0) ? path.left(slash) : path;
+    }
+#endif
+    // Fallback: use argv[0]
+    QFileInfo fi(QString::fromLocal8Bit(argv0));
+    return fi.absolutePath().toLocal8Bit();
+}
+
+// Set up library/plugin/resource paths relative to the binary.
+// This makes the binary self-contained — it works whether launched via
+// the wrapper script, directly, or from a development build directory.
+// Must be called before QApplication is created.
+static void setupBundledPaths(const char *argv0)
+{
+    const QByteArray exeDir = resolveExeDir(argv0);
+
+    // Helper: set env var if the directory exists and env var is not already set
+    auto setIfDir = [&](const char *envVar, const QByteArray &path) {
+        if (qEnvironmentVariableIsEmpty(envVar) && QFileInfo::exists(QString::fromLocal8Bit(path)))
+            qputenv(envVar, path);
+    };
+
+    // Qt plugin path — critical for platform plugins (xcb, wayland, etc.)
+    setIfDir("QT_PLUGIN_PATH", exeDir + "/plugins");
+
+    // QtWebEngine process and resources
+    setIfDir("QTWEBENGINEPROCESS_PATH", exeDir + "/libexec/QtWebEngineProcess");
+    setIfDir("QTWEBENGINE_RESOURCES_PATH", exeDir + "/resources");
+    setIfDir("QTWEBENGINE_LOCALES_PATH", exeDir + "/translations");
+
+    // LD_LIBRARY_PATH — prepend exe dir so bundled Qt libs are found first
+#ifdef Q_OS_LINUX
+    {
+        QByteArray ldPath = qgetenv("LD_LIBRARY_PATH");
+        if (!ldPath.contains(exeDir)) {
+            if (ldPath.isEmpty())
+                qputenv("LD_LIBRARY_PATH", exeDir);
+            else
+                qputenv("LD_LIBRARY_PATH", exeDir + ":" + ldPath);
+        }
+    }
+#endif
 }
 
 // Detect whether a Wayland session is active.
@@ -116,6 +177,10 @@ static void checkXcbDeps()
 
 int main(int argc, char *argv[])
 {
+    // Set up bundled library/plugin paths relative to the binary.
+    // Must happen first — before platform selection and QApplication.
+    setupBundledPaths(argv[0]);
+
     // Platform selection must happen before any Qt objects
     selectPlatform(argc, argv);
 
