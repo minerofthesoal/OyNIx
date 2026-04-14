@@ -31,6 +31,7 @@ private:
     explicit WebCache(QObject *parent = nullptr);
 
     [[nodiscard]] QString urlToPath(const QString &url) const;
+    void scanCache(int &fileCount, qint64 &totalSize) const;
 
     QString m_cacheDir;
 };

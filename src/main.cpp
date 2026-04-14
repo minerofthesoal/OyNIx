@@ -45,6 +45,18 @@ static void ensureConfigDirs()
     }
 }
 
+// Detect whether a Wayland session is active.
+// Checks multiple indicators since not all compositors set the same vars.
+static bool isWaylandSession()
+{
+    if (!qEnvironmentVariableIsEmpty("WAYLAND_DISPLAY"))
+        return true;
+    // Modern Ubuntu/GNOME/KDE set XDG_SESSION_TYPE=wayland
+    if (qgetenv("XDG_SESSION_TYPE") == "wayland")
+        return true;
+    return false;
+}
+
 // Set the Qt platform plugin before QApplication is created.
 // Checks CLI flags first, then env, then auto-detects.
 static void selectPlatform(int argc, char *argv[])
@@ -67,9 +79,14 @@ static void selectPlatform(int argc, char *argv[])
         return;
 
 #ifdef Q_OS_LINUX
-    // Auto-detect: if WAYLAND_DISPLAY is set, prefer Wayland with XCB fallback
-    if (!qEnvironmentVariableIsEmpty("WAYLAND_DISPLAY")) {
+    // On Linux, prefer Wayland when a Wayland compositor is running.
+    // Use "wayland;xcb" so Qt auto-falls back to XCB if Wayland fails.
+    // If no Wayland session, use "xcb;wayland" so XCB is tried first
+    // but Wayland is still available as a fallback.
+    if (isWaylandSession()) {
         qputenv("QT_QPA_PLATFORM", "wayland;xcb");
+    } else {
+        qputenv("QT_QPA_PLATFORM", "xcb;wayland");
     }
 #endif
 }
