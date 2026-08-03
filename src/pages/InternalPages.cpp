@@ -31,9 +31,9 @@ QString sharedCss(const QMap<QString, QString> &c) {
         " animation: dotDrift 30s linear infinite; pointer-events: none; }\n");
 
     // Links
-    css += QStringLiteral("a { color: ") + c["purple-light"]
+    css += QStringLiteral("a { color: ") + c["accent-light"]
         + QStringLiteral("; text-decoration: none; transition: color .2s ease; }\n");
-    css += QStringLiteral("a:hover { color: ") + c["purple-glow"] + QStringLiteral("; }\n");
+    css += QStringLiteral("a:hover { color: ") + c["accent-glow"] + QStringLiteral("; }\n");
 
     // Keyframe animations
     css += QStringLiteral(
@@ -64,7 +64,7 @@ QString sharedCss(const QMap<QString, QString> &c) {
         + QStringLiteral("; border-radius: 14px; padding: 18px;"
                          " backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);"
                          " transition: border-color .25s, background .25s, box-shadow .25s, transform .25s; }\n");
-    css += QStringLiteral(".card:hover, .glass:hover { border-color: ") + c["purple-mid"]
+    css += QStringLiteral(".card:hover, .glass:hover { border-color: ") + c["accent-mid"]
         + QStringLiteral("; background: ") + c["bg-light"]
         + QStringLiteral("; box-shadow: 0 8px 32px rgba(110,106,179,0.12);"
                          " transform: translateY(-2px); }\n");
@@ -75,13 +75,13 @@ QString sharedCss(const QMap<QString, QString> &c) {
 
     // Section titles with shimmer underline
     css += QStringLiteral(".section-title { font-size: 1.05em; font-weight: 600; color: ")
-        + c["purple-light"]
+        + c["accent-light"]
         + QStringLiteral("; margin: 28px 0 14px; padding-bottom: 10px;"
                          " border-bottom: 2px solid ") + c["border"]
         + QStringLiteral("; letter-spacing: 0.02em;"
-                         " background: linear-gradient(90deg, ") + c["purple-light"]
-        + QStringLiteral(" 0%, ") + c["purple-glow"]
-        + QStringLiteral(" 50%, ") + c["purple-light"]
+                         " background: linear-gradient(90deg, ") + c["accent-light"]
+        + QStringLiteral(" 0%, ") + c["accent-glow"]
+        + QStringLiteral(" 50%, ") + c["accent-light"]
         + QStringLiteral(" 100%); background-size: 200% 100%;"
                          " -webkit-background-clip: text; -webkit-text-fill-color: transparent;"
                          " animation: shimmer 4s ease infinite; }\n");
@@ -92,15 +92,15 @@ QString sharedCss(const QMap<QString, QString> &c) {
         + c["border"] + QStringLiteral("; color: ") + c["text-primary"]
         + QStringLiteral("; cursor: pointer; background: transparent; font-size: 0.85em;"
                          " transition: all .25s ease; text-decoration: none; }\n");
-    css += QStringLiteral(".btn:hover { border-color: ") + c["purple-mid"]
+    css += QStringLiteral(".btn:hover { border-color: ") + c["accent-mid"]
         + QStringLiteral("; background: ") + c["bg-mid"]
         + QStringLiteral("; transform: translateY(-1px);"
                          " box-shadow: 0 4px 16px rgba(110,106,179,0.1); }\n");
-    css += QStringLiteral(".btn-accent { background: ") + c["purple-mid"]
+    css += QStringLiteral(".btn-accent { background: ") + c["accent-mid"]
         + QStringLiteral("; color: ") + c["bg-darkest"]
-        + QStringLiteral("; border-color: ") + c["purple-mid"]
+        + QStringLiteral("; border-color: ") + c["accent-mid"]
         + QStringLiteral("; font-weight: 600; }\n");
-    css += QStringLiteral(".btn-accent:hover { background: ") + c["purple-light"]
+    css += QStringLiteral(".btn-accent:hover { background: ") + c["accent-light"]
         + QStringLiteral("; box-shadow: 0 4px 20px rgba(110,106,179,0.25); }\n");
 
     // Badge
@@ -200,7 +200,7 @@ QString homePage(const QMap<QString, QString> &c,
                            " border-radius: 50%; filter: blur(80px); opacity: 0.12;"
                            " animation: orbFloat 12s ease-in-out infinite; z-index: -2;"
                            " background: linear-gradient(135deg, ")
-        + c["purple-mid"] + QStringLiteral(", ") + c["purple-glow"]
+        + c["accent-mid"] + QStringLiteral(", ") + c["accent-glow"]
         + QStringLiteral("); }\n"
                           ".orb-1 { top: 10%; left: 15%; }\n"
                           ".orb-2 { bottom: 20%; right: 10%; animation-delay: -6s;"
@@ -224,9 +224,9 @@ QString homePage(const QMap<QString, QString> &c,
     html += QStringLiteral(".logo-mark { font-size: 2.6em; font-weight: 800;"
                            " letter-spacing: -3px; margin-bottom: 36px;"
                            " background: linear-gradient(135deg, ")
-        + c["purple-mid"] + QStringLiteral(" 0%, ") + c["purple-light"]
-        + QStringLiteral(" 40%, ") + c["purple-glow"]
-        + QStringLiteral(" 60%, ") + c["purple-light"]
+        + c["accent-mid"] + QStringLiteral(" 0%, ") + c["accent-light"]
+        + QStringLiteral(" 40%, ") + c["accent-glow"]
+        + QStringLiteral(" 60%, ") + c["accent-light"]
         + QStringLiteral(" 100%); background-size: 200% 100%;"
                           " -webkit-background-clip: text; -webkit-text-fill-color: transparent;"
                           " animation: shimmer 6s ease infinite; }\n");
@@ -240,7 +240,7 @@ QString homePage(const QMap<QString, QString> &c,
         + QStringLiteral("; border-radius: 16px; color: ") + c["text-primary"]
         + QStringLiteral("; outline: none; transition: border-color .25s, box-shadow .25s;"
                          " backdrop-filter: blur(8px); }\n");
-    html += QStringLiteral(".search-input:focus { border-color: ") + c["purple-mid"]
+    html += QStringLiteral(".search-input:focus { border-color: ") + c["accent-mid"]
         + QStringLiteral("; box-shadow: 0 0 0 3px rgba(110,106,179,0.18),"
                          " 0 8px 32px rgba(110,106,179,0.08); }\n");
     html += QStringLiteral(".search-input::placeholder { color: ") + c["text-muted"]
@@ -263,7 +263,7 @@ QString homePage(const QMap<QString, QString> &c,
         + QStringLiteral("; border: 1px solid ") + c["border"]
         + QStringLiteral("; font-size: .82em; font-weight: 500; transition: all .25s ease;"
                          " backdrop-filter: blur(8px); }\n");
-    html += QStringLiteral(".nav-pill:hover { border-color: ") + c["purple-mid"]
+    html += QStringLiteral(".nav-pill:hover { border-color: ") + c["accent-mid"]
         + QStringLiteral("; background: ") + c["bg-light"]
         + QStringLiteral("; box-shadow: 0 4px 16px rgba(110,106,179,0.12);"
                          " transform: translateY(-2px); }\n");
@@ -273,7 +273,7 @@ QString homePage(const QMap<QString, QString> &c,
                            " margin-bottom: 40px; animation: slideUp .5s .15s ease both; }\n");
     html += QStringLiteral(".stat-item { text-align: center; }\n");
     html += QStringLiteral(".stat-value { font-size: 1.6em; font-weight: 700; color: ")
-        + c["purple-mid"] + QStringLiteral("; }\n");
+        + c["accent-mid"] + QStringLiteral("; }\n");
     html += QStringLiteral(".stat-label { font-size: .7em; color: ") + c["text-muted"]
         + QStringLiteral("; text-transform: uppercase; letter-spacing: 0.08em; margin-top: 3px; }\n");
 
@@ -290,14 +290,14 @@ QString homePage(const QMap<QString, QString> &c,
         + c["bg-mid"] + QStringLiteral("; border: 1px solid ") + c["border"]
         + QStringLiteral("; text-decoration: none; transition: all .25s ease; overflow: hidden;"
                          " backdrop-filter: blur(8px); }\n");
-    html += QStringLiteral(".recent-item:hover { border-color: ") + c["purple-mid"]
+    html += QStringLiteral(".recent-item:hover { border-color: ") + c["accent-mid"]
         + QStringLiteral("; background: ") + c["bg-light"]
         + QStringLiteral("; transform: translateY(-2px);"
                          " box-shadow: 0 6px 24px rgba(110,106,179,0.1); }\n");
     html += QStringLiteral(".recent-favicon { width: 32px; height: 32px; border-radius: 8px;"
                            " background: rgba(110,106,179,0.15); display: flex;"
                            " align-items: center; justify-content: center; font-weight: 700;"
-                           " font-size: .8em; color: ") + c["purple-light"]
+                           " font-size: .8em; color: ") + c["accent-light"]
         + QStringLiteral("; flex-shrink: 0; }\n");
     html += QStringLiteral(".recent-text { overflow: hidden; }\n");
     html += QStringLiteral(".recent-title { font-size: .84em; font-weight: 600; color: ")
@@ -312,11 +312,11 @@ QString homePage(const QMap<QString, QString> &c,
                            " max-width: 700px; width: 100%; margin-bottom: 32px;"
                            " animation: slideUp .5s .3s ease both; }\n");
     html += QStringLiteral(".bm-chip { padding: 7px 16px; border-radius: 10px; font-size: .78em;"
-                           " background: rgba(110,106,179,0.1); color: ") + c["purple-light"]
+                           " background: rgba(110,106,179,0.1); color: ") + c["accent-light"]
         + QStringLiteral("; border: 1px solid rgba(110,106,179,0.18);"
                          " text-decoration: none; transition: all .25s ease; }\n");
     html += QStringLiteral(".bm-chip:hover { background: rgba(110,106,179,0.2); border-color: ")
-        + c["purple-mid"]
+        + c["accent-mid"]
         + QStringLiteral("; transform: translateY(-1px);"
                          " box-shadow: 0 4px 12px rgba(110,106,179,0.1); }\n");
 
@@ -328,7 +328,7 @@ QString homePage(const QMap<QString, QString> &c,
                           " background: rgba(26,27,38,0.5); }\n");
     html += QStringLiteral(".home-footer a { color: ") + c["text-muted"]
         + QStringLiteral("; }\n");
-    html += QStringLiteral(".home-footer a:hover { color: ") + c["purple-light"]
+    html += QStringLiteral(".home-footer a:hover { color: ") + c["accent-light"]
         + QStringLiteral("; }\n");
 
     html += QStringLiteral("</style></head><body>\n");
@@ -521,7 +521,7 @@ QString searchPage(const QString &query,
     html += QStringLiteral(".search-logo { font-size: 1.5em; font-weight: 800;"
                            " letter-spacing: -1px; margin-bottom: 18px;"
                            " background: linear-gradient(135deg, ")
-        + c["purple-mid"] + QStringLiteral(", ") + c["purple-light"]
+        + c["accent-mid"] + QStringLiteral(", ") + c["accent-light"]
         + QStringLiteral("); background-size: 200% 100%;"
                          " -webkit-background-clip: text; -webkit-text-fill-color: transparent;"
                          " animation: shimmer 5s ease infinite; }\n");
@@ -535,7 +535,7 @@ QString searchPage(const QString &query,
         + QStringLiteral("; border-radius: 12px; color: ") + c["text-primary"]
         + QStringLiteral("; outline: none; transition: border-color .25s, box-shadow .25s;"
                          " backdrop-filter: blur(8px); }\n");
-    html += QStringLiteral(".search-again input:focus { border-color: ") + c["purple-mid"]
+    html += QStringLiteral(".search-again input:focus { border-color: ") + c["accent-mid"]
         + QStringLiteral("; box-shadow: 0 0 0 3px rgba(110,106,179,0.14); }\n");
 
     html += QStringLiteral(".result-count { text-align: center; color: ") + c["text-muted"]
@@ -547,7 +547,7 @@ QString searchPage(const QString &query,
         + QStringLiteral("; border: 1px solid ") + c["border"]
         + QStringLiteral("; border-radius: 14px; padding: 18px 22px; margin-bottom: 12px;"
                          " transition: all .25s ease; backdrop-filter: blur(8px); }\n");
-    html += QStringLiteral(".result:hover { border-color: ") + c["purple-mid"]
+    html += QStringLiteral(".result:hover { border-color: ") + c["accent-mid"]
         + QStringLiteral("; transform: translateX(6px);"
                          " box-shadow: 0 6px 28px rgba(110,106,179,0.12); }\n");
     html += QStringLiteral(".r-meta { display: flex; align-items: center; gap: 8px;"
@@ -556,13 +556,13 @@ QString searchPage(const QString &query,
                            " background: rgba(110,106,179,0.15); display: flex;"
                            " align-items: center; justify-content: center;"
                            " font-size: .65em; font-weight: 700; color: ")
-        + c["purple-light"] + QStringLiteral("; }\n");
+        + c["accent-light"] + QStringLiteral("; }\n");
     html += QStringLiteral(".r-domain { font-size: .75em; color: ") + c["text-muted"]
         + QStringLiteral("; font-weight: 500; }\n");
-    html += QStringLiteral(".r-title { color: ") + c["purple-light"]
+    html += QStringLiteral(".r-title { color: ") + c["accent-light"]
         + QStringLiteral("; font-size: 1.05em; font-weight: 600; display: block;"
                          " margin-bottom: 4px; transition: color .2s; text-decoration: none; }\n");
-    html += QStringLiteral(".r-title:hover { color: ") + c["purple-glow"]
+    html += QStringLiteral(".r-title:hover { color: ") + c["accent-glow"]
         + QStringLiteral("; }\n");
     html += QStringLiteral(".r-url { color: ") + c["text-muted"]
         + QStringLiteral("; font-size: .73em; margin-bottom: 6px;"
@@ -574,16 +574,16 @@ QString searchPage(const QString &query,
     html += QStringLiteral(".badge { font-size: .65em; font-weight: 700; padding: 2px 8px;"
                            " border-radius: 6px; text-transform: uppercase; letter-spacing: 0.04em; }\n");
     html += QStringLiteral(
-        ".badge.oyn { background: rgba(139,92,246,0.22); color: ") + c["purple-light"]
+        ".badge.oyn { background: rgba(139,92,246,0.22); color: ") + c["accent-light"]
         + QStringLiteral("; }\n");
     html += QStringLiteral(
-        ".badge.oynp { background: rgba(139,92,246,0.35); color: ") + c["purple-pale"]
+        ".badge.oynp { background: rgba(139,92,246,0.35); color: ") + c["accent-pale"]
         + QStringLiteral("; }\n");
     html += QStringLiteral(
-        ".badge.nyx { background: rgba(110,106,179,0.18); color: ") + c["purple-light"]
+        ".badge.nyx { background: rgba(110,106,179,0.18); color: ") + c["accent-light"]
         + QStringLiteral("; }\n");
     html += QStringLiteral(
-        ".badge.nyxp { background: rgba(110,106,179,0.30); color: ") + c["purple-pale"]
+        ".badge.nyxp { background: rgba(110,106,179,0.30); color: ") + c["accent-pale"]
         + QStringLiteral("; }\n");
     html += QStringLiteral(
         ".badge.web { background: rgba(80,80,100,0.25); color: ") + c["text-secondary"]
@@ -684,10 +684,10 @@ QString bookmarksPage(const QJsonArray &bookmarks, const QMap<QString, QString> 
 
     // Page header
     html += QStringLiteral("\n.page-title { font-size: 1.7em; font-weight: 700; color: ")
-        + c["purple-light"]
+        + c["accent-light"]
         + QStringLiteral("; margin-bottom: 4px;"
-                         " background: linear-gradient(135deg, ") + c["purple-mid"]
-        + QStringLiteral(", ") + c["purple-light"]
+                         " background: linear-gradient(135deg, ") + c["accent-mid"]
+        + QStringLiteral(", ") + c["accent-light"]
         + QStringLiteral("); -webkit-background-clip: text;"
                          " -webkit-text-fill-color: transparent; }\n");
     html += QStringLiteral(".page-subtitle { color: ") + c["text-muted"]
@@ -701,7 +701,7 @@ QString bookmarksPage(const QJsonArray &bookmarks, const QMap<QString, QString> 
         + QStringLiteral("; border-radius: 12px; color: ") + c["text-primary"]
         + QStringLiteral("; outline: none; transition: border-color .25s, box-shadow .25s;"
                          " backdrop-filter: blur(8px); }\n");
-    html += QStringLiteral(".search-filter input:focus { border-color: ") + c["purple-mid"]
+    html += QStringLiteral(".search-filter input:focus { border-color: ") + c["accent-mid"]
         + QStringLiteral("; box-shadow: 0 0 0 3px rgba(110,106,179,0.14); }\n");
 
     // Grid + cards with glass
@@ -716,9 +716,9 @@ QString bookmarksPage(const QJsonArray &bookmarks, const QMap<QString, QString> 
     html += QStringLiteral(".bm-card::before { content: ''; position: absolute;"
                            " top: 0; left: 0; right: 0; height: 3px;"
                            " background: linear-gradient(90deg, transparent, ")
-        + c["purple-mid"] + QStringLiteral(", transparent);"
+        + c["accent-mid"] + QStringLiteral(", transparent);"
                           " opacity: 0; transition: opacity .25s; }\n");
-    html += QStringLiteral(".bm-card:hover { border-color: ") + c["purple-mid"]
+    html += QStringLiteral(".bm-card:hover { border-color: ") + c["accent-mid"]
         + QStringLiteral("; transform: translateY(-3px);"
                          " box-shadow: 0 8px 28px rgba(110,106,179,0.12); }\n");
     html += QStringLiteral(".bm-card:hover::before { opacity: 1; }\n");
@@ -726,20 +726,20 @@ QString bookmarksPage(const QJsonArray &bookmarks, const QMap<QString, QString> 
     html += QStringLiteral(".bm-icon { width: 36px; height: 36px; border-radius: 10px;"
                            " background: rgba(110,106,179,0.12); display: flex;"
                            " align-items: center; justify-content: center; font-weight: 700;"
-                           " font-size: .9em; color: ") + c["purple-light"]
+                           " font-size: .9em; color: ") + c["accent-light"]
         + QStringLiteral("; margin-bottom: 10px; }\n");
     html += QStringLiteral(".bm-title { font-size: .95em; font-weight: 600; color: ")
-        + c["purple-light"]
+        + c["accent-light"]
         + QStringLiteral("; text-decoration: none; display: block; margin-bottom: 6px;"
                          " white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }\n");
-    html += QStringLiteral(".bm-title:hover { color: ") + c["purple-glow"]
+    html += QStringLiteral(".bm-title:hover { color: ") + c["accent-glow"]
         + QStringLiteral("; }\n");
     html += QStringLiteral(".bm-domain { font-size: .75em; color: ") + c["text-muted"]
         + QStringLiteral("; margin-bottom: 12px; }\n");
     html += QStringLiteral(".bm-footer { display: flex; justify-content: space-between;"
                            " align-items: center; }\n");
     html += QStringLiteral(".bm-folder { font-size: .7em; padding: 3px 10px; border-radius: 8px;"
-                           " background: rgba(110,106,179,0.1); color: ") + c["purple-mid"]
+                           " background: rgba(110,106,179,0.1); color: ") + c["accent-mid"]
         + QStringLiteral("; }\n");
 
     // Empty state
@@ -818,8 +818,8 @@ QString historyPage(const QJsonArray &history, const QMap<QString, QString> &c) 
 
     // Page header
     html += QStringLiteral("\n.page-title { font-size: 1.7em; font-weight: 700;"
-                           " background: linear-gradient(135deg, ") + c["purple-mid"]
-        + QStringLiteral(", ") + c["purple-light"]
+                           " background: linear-gradient(135deg, ") + c["accent-mid"]
+        + QStringLiteral(", ") + c["accent-light"]
         + QStringLiteral("); -webkit-background-clip: text;"
                          " -webkit-text-fill-color: transparent; margin-bottom: 4px; }\n");
     html += QStringLiteral(".page-subtitle { color: ") + c["text-muted"]
@@ -833,7 +833,7 @@ QString historyPage(const QJsonArray &history, const QMap<QString, QString> &c) 
         + QStringLiteral("; border-radius: 12px; color: ") + c["text-primary"]
         + QStringLiteral("; outline: none; transition: border-color .25s, box-shadow .25s;"
                          " backdrop-filter: blur(8px); }\n");
-    html += QStringLiteral(".search-filter input:focus { border-color: ") + c["purple-mid"]
+    html += QStringLiteral(".search-filter input:focus { border-color: ") + c["accent-mid"]
         + QStringLiteral("; box-shadow: 0 0 0 3px rgba(110,106,179,0.14); }\n");
 
     // Timeline items
@@ -841,7 +841,7 @@ QString historyPage(const QJsonArray &history, const QMap<QString, QString> &c) 
     html += QStringLiteral(".hist-list::before { content: ''; position: absolute;"
                            " left: 7px; top: 0; bottom: 0; width: 2px;"
                            " background: linear-gradient(to bottom, ")
-        + c["purple-mid"] + QStringLiteral(" 0%, ") + c["border"]
+        + c["accent-mid"] + QStringLiteral(" 0%, ") + c["border"]
         + QStringLiteral(" 100%); border-radius: 1px; }\n");
 
     html += QStringLiteral(".hist-item { display: flex; align-items: flex-start; gap: 14px;"
@@ -850,12 +850,12 @@ QString historyPage(const QJsonArray &history, const QMap<QString, QString> &c) 
     html += QStringLiteral(".hist-item:hover { background: ") + c["bg-mid"]
         + QStringLiteral("; }\n");
     html += QStringLiteral(".hist-dot { width: 10px; height: 10px; border-radius: 50%;"
-                           " background: ") + c["purple-mid"]
+                           " background: ") + c["accent-mid"]
         + QStringLiteral("; flex-shrink: 0; margin-top: 6px; position: relative;"
                          " z-index: 1; margin-left: -18px;"
                          " box-shadow: 0 0 0 3px ") + c["bg-darkest"]
         + QStringLiteral("; transition: all .25s; }\n");
-    html += QStringLiteral(".hist-item:hover .hist-dot { background: ") + c["purple-glow"]
+    html += QStringLiteral(".hist-item:hover .hist-dot { background: ") + c["accent-glow"]
         + QStringLiteral("; box-shadow: 0 0 0 3px ") + c["bg-mid"]
         + QStringLiteral(", 0 0 8px rgba(110,106,179,0.3); }\n");
 
@@ -863,11 +863,11 @@ QString historyPage(const QJsonArray &history, const QMap<QString, QString> &c) 
     html += QStringLiteral(".hist-main { display: flex; justify-content: space-between;"
                            " align-items: baseline; margin-bottom: 4px; }\n");
     html += QStringLiteral(".hist-title { font-size: .92em; font-weight: 600; color: ")
-        + c["purple-light"]
+        + c["accent-light"]
         + QStringLiteral("; text-decoration: none; flex: 1; white-space: nowrap;"
                          " overflow: hidden; text-overflow: ellipsis; margin-right: 12px;"
                          " transition: color .2s; }\n");
-    html += QStringLiteral(".hist-title:hover { color: ") + c["purple-glow"]
+    html += QStringLiteral(".hist-title:hover { color: ") + c["accent-glow"]
         + QStringLiteral("; }\n");
     html += QStringLiteral(".hist-time { font-size: .73em; color: ") + c["text-muted"]
         + QStringLiteral("; white-space: nowrap; font-variant-numeric: tabular-nums; }\n");
@@ -971,8 +971,8 @@ QString settingsPage(const QJsonObject &config, const QMap<QString, QString> &c)
 
     // Page header
     html += QStringLiteral("\n.page-title { font-size: 1.7em; font-weight: 700;"
-                           " background: linear-gradient(135deg, ") + c["purple-mid"]
-        + QStringLiteral(", ") + c["purple-light"]
+                           " background: linear-gradient(135deg, ") + c["accent-mid"]
+        + QStringLiteral(", ") + c["accent-light"]
         + QStringLiteral("); -webkit-background-clip: text;"
                          " -webkit-text-fill-color: transparent; margin-bottom: 4px; }\n");
     html += QStringLiteral(".page-subtitle { color: ") + c["text-muted"]
@@ -987,7 +987,7 @@ QString settingsPage(const QJsonObject &config, const QMap<QString, QString> &c)
     html += QStringLiteral(".setting-section:nth-child(2) { animation-delay: .05s; }\n");
     html += QStringLiteral(".setting-section:nth-child(3) { animation-delay: .1s; }\n");
     html += QStringLiteral(".setting-section:hover { border-color: rgba(110,106,179,0.3); }\n");
-    html += QStringLiteral(".setting-section h3 { color: ") + c["purple-light"]
+    html += QStringLiteral(".setting-section h3 { color: ") + c["accent-light"]
         + QStringLiteral("; font-size: 1em; font-weight: 600; margin-bottom: 16px;"
                          " padding-bottom: 12px; border-bottom: 1px solid ") + c["border"]
         + QStringLiteral("; display: flex; align-items: center; gap: 8px; }\n");
@@ -1018,7 +1018,7 @@ QString settingsPage(const QJsonObject &config, const QMap<QString, QString> &c)
         + c["text-muted"]
         + QStringLiteral("; border-radius: 50%; transition: .3s; }\n");
     html += QStringLiteral(".toggle input:checked + .toggle-slider { background: ")
-        + c["purple-mid"]
+        + c["accent-mid"]
         + QStringLiteral("; box-shadow: 0 0 12px rgba(110,106,179,0.3); }\n");
     html += QStringLiteral(".toggle input:checked + .toggle-slider:before {"
                            " transform: translateX(20px); background: white; }\n");
@@ -1030,8 +1030,8 @@ QString settingsPage(const QJsonObject &config, const QMap<QString, QString> &c)
                          " backdrop-filter: blur(8px); animation: slideUp .4s .15s ease both; }\n");
     html += QStringLiteral(".about-version { font-size: 1.2em; font-weight: 700;"
                            " margin-bottom: 6px;"
-                           " background: linear-gradient(135deg, ") + c["purple-mid"]
-        + QStringLiteral(", ") + c["purple-light"]
+                           " background: linear-gradient(135deg, ") + c["accent-mid"]
+        + QStringLiteral(", ") + c["accent-light"]
         + QStringLiteral("); -webkit-background-clip: text;"
                          " -webkit-text-fill-color: transparent; }\n");
     html += QStringLiteral(".about-tech { font-size: .8em; color: ") + c["text-muted"]
@@ -1117,8 +1117,8 @@ QString downloadsPage(const QJsonArray &downloads, const QMap<QString, QString> 
 
     // Page header
     html += QStringLiteral("\n.page-title { font-size: 1.7em; font-weight: 700;"
-                           " background: linear-gradient(135deg, ") + c["purple-mid"]
-        + QStringLiteral(", ") + c["purple-light"]
+                           " background: linear-gradient(135deg, ") + c["accent-mid"]
+        + QStringLiteral(", ") + c["accent-light"]
         + QStringLiteral("); -webkit-background-clip: text;"
                          " -webkit-text-fill-color: transparent; margin-bottom: 4px; }\n");
     html += QStringLiteral(".page-subtitle { color: ") + c["text-muted"]
@@ -1130,7 +1130,7 @@ QString downloadsPage(const QJsonArray &downloads, const QMap<QString, QString> 
         + QStringLiteral("; border: 1px solid ") + c["border"]
         + QStringLiteral("; border-radius: 14px; margin-bottom: 10px;"
                          " transition: all .25s; backdrop-filter: blur(8px); }\n");
-    html += QStringLiteral(".dl-item:hover { border-color: ") + c["purple-mid"]
+    html += QStringLiteral(".dl-item:hover { border-color: ") + c["accent-mid"]
         + QStringLiteral("; transform: translateX(4px);"
                          " box-shadow: 0 4px 20px rgba(110,106,179,0.1); }\n");
 
@@ -1148,12 +1148,12 @@ QString downloadsPage(const QJsonArray &downloads, const QMap<QString, QString> 
 
     // Status badges
     html += QStringLiteral(".dl-badge { font-size: .72em; padding: 2px 8px; border-radius: 6px;"
-                           " background: rgba(110,106,179,0.12); color: ") + c["purple-light"]
+                           " background: rgba(110,106,179,0.12); color: ") + c["accent-light"]
         + QStringLiteral("; font-weight: 600; }\n");
     html += QStringLiteral(".dl-complete { background: rgba(80,200,120,0.15);"
                            " color: #50c878; }\n");
     html += QStringLiteral(".dl-active { background: rgba(110,106,179,0.18); color: ")
-        + c["purple-glow"]
+        + c["accent-glow"]
         + QStringLiteral("; animation: pulse 1.5s ease infinite; }\n");
 
     // Empty state
@@ -1231,8 +1231,8 @@ QString profilesPage(const QJsonArray &profiles, const QString &activeProfile,
 
     // Page header
     html += QStringLiteral("\n.page-title { font-size: 1.7em; font-weight: 700;"
-                           " background: linear-gradient(135deg, ") + c["purple-mid"]
-        + QStringLiteral(", ") + c["purple-light"]
+                           " background: linear-gradient(135deg, ") + c["accent-mid"]
+        + QStringLiteral(", ") + c["accent-light"]
         + QStringLiteral("); -webkit-background-clip: text;"
                          " -webkit-text-fill-color: transparent; margin-bottom: 4px; }\n");
     html += QStringLiteral(".page-subtitle { color: ") + c["text-muted"]
@@ -1250,13 +1250,13 @@ QString profilesPage(const QJsonArray &profiles, const QString &activeProfile,
     html += QStringLiteral(".profile-card::before { content: ''; position: absolute;"
                            " top: 0; left: 0; right: 0; height: 4px;"
                            " background: linear-gradient(90deg, transparent, ")
-        + c["purple-mid"] + QStringLiteral(", transparent);"
+        + c["accent-mid"] + QStringLiteral(", transparent);"
                           " opacity: 0; transition: opacity .3s; }\n");
-    html += QStringLiteral(".profile-card:hover { border-color: ") + c["purple-mid"]
+    html += QStringLiteral(".profile-card:hover { border-color: ") + c["accent-mid"]
         + QStringLiteral("; transform: translateY(-4px);"
                          " box-shadow: 0 12px 36px rgba(110,106,179,0.15); }\n");
     html += QStringLiteral(".profile-card:hover::before { opacity: 1; }\n");
-    html += QStringLiteral(".profile-card.active { border-color: ") + c["purple-mid"]
+    html += QStringLiteral(".profile-card.active { border-color: ") + c["accent-mid"]
         + QStringLiteral("; }\n");
     html += QStringLiteral(".profile-card.active::before { opacity: 1;"
                            " animation: glowBorder 2s ease infinite; }\n");
@@ -1270,7 +1270,7 @@ QString profilesPage(const QJsonArray &profiles, const QString &activeProfile,
 
     html += QStringLiteral(".profile-name { font-weight: 700; font-size: 1.05em; color: ")
         + c["text-primary"] + QStringLiteral("; margin-bottom: 6px; }\n");
-    html += QStringLiteral(".profile-status { font-size: .75em; color: ") + c["purple-mid"]
+    html += QStringLiteral(".profile-status { font-size: .75em; color: ") + c["accent-mid"]
         + QStringLiteral("; font-weight: 600; margin-bottom: 10px;"
                          " display: flex; align-items: center; justify-content: center; gap: 5px; }\n");
     html += QStringLiteral(".profile-status::before { content: ''; width: 6px; height: 6px;"

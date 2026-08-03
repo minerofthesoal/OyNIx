@@ -23,15 +23,15 @@ WebView::WebView(QWidget *parent)
     setupPage();
 
     connect(this, &QWebEngineView::loadStarted,
-            this, &WebView::onLoadStarted, Qt::UniqueConnection);
+            this, &WebView::onLoadStarted;
     connect(this, &QWebEngineView::loadProgress,
-            this, &WebView::onLoadProgress, Qt::UniqueConnection);
+            this, &WebView::onLoadProgress;
     connect(this, &QWebEngineView::loadFinished,
-            this, &WebView::onLoadFinished, Qt::UniqueConnection);
+            this, &WebView::onLoadFinished;
     connect(this, &QWebEngineView::urlChanged,
-            this, &WebView::onUrlChanged, Qt::UniqueConnection);
+            this, &WebView::onUrlChanged;
     connect(this, &QWebEngineView::iconChanged,
-            this, &WebView::onIconChanged, Qt::UniqueConnection);
+            this, &WebView::onIconChanged;
 }
 
 WebView::~WebView() = default;

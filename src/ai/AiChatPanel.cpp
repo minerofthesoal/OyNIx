@@ -158,7 +158,7 @@ void AiChatPanel::setupStyles()
     QString ss;
     ss += QStringLiteral("AiChatPanel { background: ") + c["bg-darkest"]
        + QStringLiteral("; border-left: 1px solid ") + c["border"] + QStringLiteral("; }\n");
-    ss += QStringLiteral("#aiTitle { color: ") + c["purple-light"]
+    ss += QStringLiteral("#aiTitle { color: ") + c["accent-light"]
        + QStringLiteral("; font-size: 13px; font-weight: 600; }\n");
     ss += QStringLiteral("#aiStatus { color: ") + c["text-muted"]
        + QStringLiteral("; font-size: 11px; }\n");
@@ -167,15 +167,15 @@ void AiChatPanel::setupStyles()
        + QStringLiteral("; color: ") + c["text-primary"]
        + QStringLiteral("; border: 1px solid ") + c["border"]
        + QStringLiteral("; border-radius: 10px; padding: 8px; font-size: 13px; }\n");
-    ss += QStringLiteral("#aiInput:focus { border-color: ") + c["purple-mid"] + QStringLiteral("; }\n");
-    ss += QStringLiteral("#aiSendBtn { background: ") + c["purple-mid"]
+    ss += QStringLiteral("#aiInput:focus { border-color: ") + c["accent-mid"] + QStringLiteral("; }\n");
+    ss += QStringLiteral("#aiSendBtn { background: ") + c["accent-mid"]
        + QStringLiteral("; color: ") + c["bg-darkest"]
        + QStringLiteral("; border-radius: 18px; font-size: 14px; font-weight: bold;"
                         " min-width: 36px; min-height: 36px; padding: 0; border: none; }\n");
-    ss += QStringLiteral("#aiSendBtn:hover { background: ") + c["purple-light"]
+    ss += QStringLiteral("#aiSendBtn:hover { background: ") + c["accent-light"]
        + QStringLiteral("; }\n");
     ss += QStringLiteral("#aiPill { background: rgba(110,106,179,0.15); color: ")
-       + c["purple-light"] + QStringLiteral("; border: 1px solid rgba(110,106,179,0.3);"
+       + c["accent-light"] + QStringLiteral("; border: 1px solid rgba(110,106,179,0.3);"
                                              " border-radius: 12px; padding: 4px 12px;"
                                              " font-size: 11px; }\n");
     ss += QStringLiteral("#aiPill:hover { background: rgba(110,106,179,0.3); }\n");
@@ -200,10 +200,10 @@ QWidget *AiChatPanel::createMessageBubble(const QString &text, bool isUser)
     avatar->setFixedSize(26, 26);
     avatar->setAlignment(Qt::AlignCenter);
     avatar->setStyleSheet(isUser
-        ? QStringLiteral("background: ") + c["purple-dark"] + QStringLiteral("; color: ")
-          + c["purple-pale"] + QStringLiteral("; border-radius: 13px;"
+        ? QStringLiteral("background: ") + c["accent-dark"] + QStringLiteral("; color: ")
+          + c["accent-pale"] + QStringLiteral("; border-radius: 13px;"
                                                " font-size: 11px; font-weight: 600;")
-        : QStringLiteral("background: ") + c["purple-mid"] + QStringLiteral("; color: ")
+        : QStringLiteral("background: ") + c["accent-mid"] + QStringLiteral("; color: ")
           + c["bg-darkest"] + QStringLiteral("; border-radius: 13px;"
                                               " font-size: 11px; font-weight: 600;"));
 
@@ -225,14 +225,14 @@ QWidget *AiChatPanel::createMessageBubble(const QString &text, bool isUser)
             QStringLiteral("<pre style='background:") + c["bg-darkest"]
             + QStringLiteral(";padding:8px;border-radius:6px;"
                              "font-family:monospace;font-size:12px;color:")
-            + c["purple-glow"] + QStringLiteral(";'>\\1</pre>"));
+            + c["accent-glow"] + QStringLiteral(";'>\\1</pre>"));
         // Inline code: `...`
         static QRegularExpression inlineCodeRe(QStringLiteral("`([^`]+)`"));
         displayText.replace(inlineCodeRe,
             QStringLiteral("<code style='background:") + c["bg-darkest"]
             + QStringLiteral(";padding:1px 4px;border-radius:3px;"
                              "font-family:monospace;font-size:12px;color:")
-            + c["purple-glow"] + QStringLiteral(";'>\\1</code>"));
+            + c["accent-glow"] + QStringLiteral(";'>\\1</code>"));
         // Bold: **...**
         static QRegularExpression boldRe(QStringLiteral("\\*\\*([^*]+)\\*\\*"));
         displayText.replace(boldRe, QStringLiteral("<b>\\1</b>"));
@@ -262,7 +262,7 @@ QWidget *AiChatPanel::createMessageBubble(const QString &text, bool isUser)
           + c["text-primary"] + QStringLiteral("; border-radius: 10px;"
                                                 " padding: 8px 12px; font-size: 13px;")
         : QStringLiteral("background: ") + c["bg-mid"] + QStringLiteral("; color: ")
-          + c["purple-soft"] + QStringLiteral("; border-radius: 10px;"
+          + c["accent-soft"] + QStringLiteral("; border-radius: 10px;"
                                                " padding: 8px 12px; font-size: 13px;"));
 
     auto *timeLabel = new QLabel(QDateTime::currentDateTime().toString(QStringLiteral("hh:mm")),
@@ -305,7 +305,7 @@ QWidget *AiChatPanel::createTypingIndicator()
 
     for (int i = 0; i < 3; ++i) {
         auto *dot = new QLabel(QStringLiteral("."), widget);
-        dot->setStyleSheet(QStringLiteral("color: ") + ThemeEngine::instance().colors()["purple-mid"]
+        dot->setStyleSheet(QStringLiteral("color: ") + ThemeEngine::instance().colors()["accent-mid"]
             + QStringLiteral("; font-size: 20px; font-weight: bold;"));
         layout->addWidget(dot);
     }
