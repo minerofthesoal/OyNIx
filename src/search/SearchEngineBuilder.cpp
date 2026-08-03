@@ -280,7 +280,7 @@ void SearchEngineBuilder::applyStyles()
        + QStringLiteral("; color: ") + c["text-primary"]
        + QStringLiteral("; border: 1px solid ") + c["border"]
        + QStringLiteral("; border-radius: 6px; padding: 6px; }\n");
-    ss += QStringLiteral("QLineEdit:focus, QTextEdit:focus { border-color: ") + c["purple-mid"]
+    ss += QStringLiteral("QLineEdit:focus, QTextEdit:focus { border-color: ") + c["accent-mid"]
        + QStringLiteral("; }\n");
     ss += QStringLiteral("QComboBox { background: ") + c["bg-mid"]
        + QStringLiteral("; color: ") + c["text-primary"]
@@ -294,10 +294,10 @@ void SearchEngineBuilder::applyStyles()
        + QStringLiteral("; padding: 6px 14px; }\n");
     ss += QStringLiteral("QTabBar::tab:selected { background: ") + c["bg-dark"]
        + QStringLiteral("; color: ") + c["text-primary"] + QStringLiteral("; }\n");
-    ss += QStringLiteral("QPushButton { background: ") + c["purple-mid"]
+    ss += QStringLiteral("QPushButton { background: ") + c["accent-mid"]
        + QStringLiteral("; color: white; border: none; border-radius: 6px;"
                         " padding: 6px 14px; }\n");
-    ss += QStringLiteral("QPushButton:hover { background: ") + c["purple-light"]
+    ss += QStringLiteral("QPushButton:hover { background: ") + c["accent-light"]
        + QStringLiteral("; }\n");
     setStyleSheet(ss);
 }

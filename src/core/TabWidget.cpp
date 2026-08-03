@@ -103,13 +103,13 @@ WebView *TabWidget::addNewTab(const QUrl &url)
         updateTabTooltip(idx);
         if (idx == currentIndex())
             emit currentTitleChanged(display);
-    }, Qt::UniqueConnection);
+    };
 
     connect(view, &WebView::iconChanged, this, [this, view](const QIcon &icon) {
         const int idx = indexOf(view);
         if (idx >= 0)
             setTabIcon(idx, icon);
-    }, Qt::UniqueConnection);
+    };
 
     connect(view, &QWebEngineView::urlChanged, this, [this, view](const QUrl &u) {
         const int idx = indexOf(view);
@@ -117,17 +117,17 @@ WebView *TabWidget::addNewTab(const QUrl &url)
             updateTabTooltip(idx);
         if (indexOf(view) == currentIndex())
             emit currentUrlChanged(u);
-    }, Qt::UniqueConnection);
+    };
 
     // New tab requests from the view (target=_blank etc.)
     connect(view, &WebView::newTabRequested, this, [this](const QUrl &u) {
         addNewTab(u);
-    }, Qt::UniqueConnection);
+    };
 
     // Forward oyn:// interception — pass full URL so query params are preserved
     connect(view->webPage(), &WebPage::oynUrlRequested, this, [this](const QUrl &url) {
         emit internalUrlRequested(url);
-    }, Qt::UniqueConnection);
+    };
 
     // Audio state — update tab icon/text hint
     connect(view, &WebView::audioStateChanged, this, [this, view](bool playing) {
@@ -140,7 +140,7 @@ WebView *TabWidget::addNewTab(const QUrl &url)
             setTabText(idx, speaker + text);
         else if (!playing && text.startsWith(speaker))
             setTabText(idx, text.mid(speaker.size()));
-    }, Qt::UniqueConnection);
+    };
 
     const int index = insertTab(count(), view, tr("New Tab"));
     setCurrentIndex(index);

@@ -82,7 +82,7 @@ void AudioPlayer::setupUi()
 
     // Title
     auto *header = new QLabel(QStringLiteral("Audio Player"), this);
-    header->setStyleSheet(QStringLiteral("color: ") + c["purple-light"]
+    header->setStyleSheet(QStringLiteral("color: ") + c["accent-light"]
         + QStringLiteral("; font-size: 13px; font-weight: 700;"
                          " letter-spacing: 0.05em; text-transform: uppercase;"));
     layout->addWidget(header);
@@ -194,13 +194,13 @@ void AudioPlayer::setupStyles()
        + QStringLiteral("; color: ") + c["text-primary"]
        + QStringLiteral("; border: 1px solid ") + c["border"]
        + QStringLiteral("; border-radius: 6px; font-size: 12px; font-weight: bold; }\n");
-    ss += QStringLiteral("QPushButton:hover { background: ") + c["purple-mid"]
-       + QStringLiteral("; border-color: ") + c["purple-mid"] + QStringLiteral("; }\n");
+    ss += QStringLiteral("QPushButton:hover { background: ") + c["accent-mid"]
+       + QStringLiteral("; border-color: ") + c["accent-mid"] + QStringLiteral("; }\n");
     ss += QStringLiteral("QSlider::groove:horizontal { background: ") + c["bg-mid"]
        + QStringLiteral("; height: 4px; border-radius: 2px; }\n");
-    ss += QStringLiteral("QSlider::handle:horizontal { background: ") + c["purple-mid"]
+    ss += QStringLiteral("QSlider::handle:horizontal { background: ") + c["accent-mid"]
        + QStringLiteral("; width: 12px; height: 12px; margin: -4px 0; border-radius: 6px; }\n");
-    ss += QStringLiteral("QSlider::sub-page:horizontal { background: ") + c["purple-mid"]
+    ss += QStringLiteral("QSlider::sub-page:horizontal { background: ") + c["accent-mid"]
        + QStringLiteral("; border-radius: 2px; }\n");
     ss += QStringLiteral("QListWidget { background: ") + c["bg-dark"]
        + QStringLiteral("; color: ") + c["text-primary"]

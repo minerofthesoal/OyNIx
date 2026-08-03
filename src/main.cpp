@@ -108,6 +108,13 @@ int main(int argc, char *argv[])
     profile->settings()->setAttribute(QWebEngineSettings::AutoLoadImages, true);
     profile->settings()->setAttribute(QWebEngineSettings::JavascriptEnabled, true);
     profile->settings()->setAttribute(QWebEngineSettings::AllowRunningInsecureContent, true);
+    // Allow loading local file:// URLs (essential for opening local HTML files)
+    profile->settings()->setAttribute(QWebEngineSettings::LocalStorageEnabled, true);
+    profile->setHttpCacheType(QWebEngineProfile::MemoryHttpCache);
+    profile->setPersistentCookiesPolicy(QWebEngineProfile::ForcePersistentCookies);
+    
+    // Set a custom user agent for better compatibility with local files
+    profile->setHttpUserAgent(QStringLiteral("Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) OyNIx/4.3 Chrome/120.0.0.0 Safari/537.36"));
 
     QApplication app(argc, argv);
     app.setApplicationName(QStringLiteral("OyNIx Browser"));

@@ -32,7 +32,8 @@ CrabCrawler::CrabCrawler(QObject *parent)
     , m_timer(new QTimer(this))
 {
     m_timer->setSingleShot(true);
-    connect(m_timer, &QTimer::timeout, this, &CrabCrawler::scheduleNext);
+    m_timer->setTimerType(Qt::VeryCoarseTimer);  // Prevents UI thread blocking
+    connect(m_timer, &QTimer::timeout, this, &CrabCrawler::scheduleNext, Qt::QueuedConnection);
 }
 
 CrabCrawler::~CrabCrawler()
@@ -228,8 +229,10 @@ void CrabCrawler::scheduleNext()
         // Politeness delay
         if (!canFetchFromDomain(domain)) {
             m_queue.prepend(task);
-            if (!m_timer->isActive())
-                m_timer->start(m_politenessMs);
+            if (!m_timer->isActive()) {
+                m_timer->setInterval(qMax(200, m_politenessMs));  // Minimum 200ms to prevent rapid firing
+                m_timer->start();
+            }
             return;
         }
 
@@ -372,8 +375,11 @@ void CrabCrawler::onPageFinished(QNetworkReply *reply, const CrabCrawler::CrawlT
     }
 
     // Schedule more work via timer (keeps UI responsive)
-    if (!m_timer->isActive())
-        m_timer->start(m_politenessMs);
+    // Use QTimer::singleShot with Qt::CoarseTimer to prevent UI blocking
+    if (!m_timer->isActive()) {
+        m_timer->setInterval(qMax(200, m_politenessMs));  // Minimum 200ms to prevent rapid firing
+        m_timer->start();
+    }
 }
 
 // ── Robots.txt ──────────────────────────────────────────────────────────
