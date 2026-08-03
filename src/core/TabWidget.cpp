@@ -34,8 +34,8 @@ TabWidget::TabWidget(QWidget *parent)
        + QStringLiteral("; color: ") + c["text-primary"]
        + QStringLiteral("; padding: 6px 16px; border: 1px solid transparent;"
                         " border-bottom: none; min-width: 120px; max-width: 240px; }\n");
-    ss += QStringLiteral("QTabBar::tab:selected { background: ") + c["purple-dark"]
-       + QStringLiteral("; border-color: ") + c["purple-mid"] + QStringLiteral("; }\n");
+    ss += QStringLiteral("QTabBar::tab:selected { background: ") + c["accent-dark"]
+       + QStringLiteral("; border-color: ") + c["accent-mid"] + QStringLiteral("; }\n");
     ss += QStringLiteral("QTabBar::tab:hover:!selected { background: ") + c["selection"]
        + QStringLiteral("; }\n");
     ss += QStringLiteral("QTabBar::close-button { image: none; }\n");
@@ -66,7 +66,7 @@ void TabWidget::setupNewTabButton()
         QStringLiteral("QToolButton { color: ") + cb["text-primary"]
         + QStringLiteral("; font-size: 18px; font-weight: bold;"
                          " border: none; padding: 4px 10px; }"
-                         "QToolButton:hover { background: ") + cb["purple-mid"]
+                         "QToolButton:hover { background: ") + cb["accent-mid"]
         + QStringLiteral("; border-radius: 4px; }"));
 
     setCornerWidget(m_newTabButton, Qt::TopRightCorner);
@@ -103,13 +103,13 @@ WebView *TabWidget::addNewTab(const QUrl &url)
         updateTabTooltip(idx);
         if (idx == currentIndex())
             emit currentTitleChanged(display);
-    });
+    }, Qt::UniqueConnection);
 
     connect(view, &WebView::iconChanged, this, [this, view](const QIcon &icon) {
         const int idx = indexOf(view);
         if (idx >= 0)
             setTabIcon(idx, icon);
-    });
+    }, Qt::UniqueConnection);
 
     connect(view, &QWebEngineView::urlChanged, this, [this, view](const QUrl &u) {
         const int idx = indexOf(view);
@@ -117,17 +117,17 @@ WebView *TabWidget::addNewTab(const QUrl &url)
             updateTabTooltip(idx);
         if (indexOf(view) == currentIndex())
             emit currentUrlChanged(u);
-    });
+    }, Qt::UniqueConnection);
 
     // New tab requests from the view (target=_blank etc.)
     connect(view, &WebView::newTabRequested, this, [this](const QUrl &u) {
         addNewTab(u);
-    });
+    }, Qt::UniqueConnection);
 
     // Forward oyn:// interception — pass full URL so query params are preserved
     connect(view->webPage(), &WebPage::oynUrlRequested, this, [this](const QUrl &url) {
         emit internalUrlRequested(url);
-    });
+    }, Qt::UniqueConnection);
 
     // Audio state — update tab icon/text hint
     connect(view, &WebView::audioStateChanged, this, [this, view](bool playing) {
@@ -140,7 +140,7 @@ WebView *TabWidget::addNewTab(const QUrl &url)
             setTabText(idx, speaker + text);
         else if (!playing && text.startsWith(speaker))
             setTabText(idx, text.mid(speaker.size()));
-    });
+    }, Qt::UniqueConnection);
 
     const int index = insertTab(count(), view, tr("New Tab"));
     setCurrentIndex(index);
@@ -298,10 +298,10 @@ void TabWidget::showTabContextMenu(const QPoint &pos)
     menu->setStyleSheet(
         QStringLiteral("QMenu { background: ") + cm["bg-darkest"]
         + QStringLiteral("; color: ") + cm["text-primary"]
-        + QStringLiteral("; border: 1px solid ") + cm["purple-mid"]
+        + QStringLiteral("; border: 1px solid ") + cm["accent-mid"]
         + QStringLiteral("; border-radius: 8px; }"
                          "QMenu::item { padding: 6px 16px; border-radius: 4px; }"
-                         "QMenu::item:selected { background: ") + cm["purple-dark"]
+                         "QMenu::item:selected { background: ") + cm["accent-dark"]
         + QStringLiteral("; }"
                          "QMenu::separator { background: ") + cm["border"]
         + QStringLiteral("; height: 1px; margin: 4px 8px; }"));

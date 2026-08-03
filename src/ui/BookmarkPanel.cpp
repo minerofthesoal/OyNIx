@@ -95,7 +95,7 @@ void BookmarkPanel::setupStyles()
 
     QString ss;
     ss += QStringLiteral("BookmarkPanel { background: ") + c["bg-darkest"] + QStringLiteral("; }\n");
-    ss += QStringLiteral("#panelTitle { color: ") + c["purple-light"]
+    ss += QStringLiteral("#panelTitle { color: ") + c["accent-light"]
        + QStringLiteral("; font-size: 13px; font-weight: 700;"
                         " letter-spacing: 0.05em; text-transform: uppercase; }\n");
     ss += QStringLiteral("QLineEdit { background: ") + c["bg-mid"]
@@ -103,10 +103,10 @@ void BookmarkPanel::setupStyles()
        + QStringLiteral("; border: 1px solid ") + c["border"]
        + QStringLiteral("; border-radius: 6px; padding: 5px 10px;"
                         " margin: 0 8px 4px 8px; font-size: 12px; }\n");
-    ss += QStringLiteral("QLineEdit:focus { border-color: ") + c["purple-mid"] + QStringLiteral("; }\n");
+    ss += QStringLiteral("QLineEdit:focus { border-color: ") + c["accent-mid"] + QStringLiteral("; }\n");
     ss += QStringLiteral("QLineEdit::placeholder { color: ") + c["text-muted"] + QStringLiteral("; }\n");
     ss += QStringLiteral("QPushButton { background: rgba(110,106,179,0.15); color: ")
-       + c["purple-light"] + QStringLiteral("; border: 1px solid rgba(110,106,179,0.3);"
+       + c["accent-light"] + QStringLiteral("; border: 1px solid rgba(110,106,179,0.3);"
                                              " border-radius: 6px; padding: 4px 10px;"
                                              " font-size: 11px; }\n");
     ss += QStringLiteral("QPushButton:hover { background: rgba(110,106,179,0.3); }\n");
@@ -115,7 +115,7 @@ void BookmarkPanel::setupStyles()
     ss += QStringLiteral("QTreeWidget::item { padding: 5px 8px; border-radius: 6px;"
                          " margin: 1px 4px; }\n");
     ss += QStringLiteral("QTreeWidget::item:selected { background: ") + c["selection"]
-       + QStringLiteral("; color: ") + c["purple-pale"] + QStringLiteral("; }\n");
+       + QStringLiteral("; color: ") + c["accent-pale"] + QStringLiteral("; }\n");
     ss += QStringLiteral("QTreeWidget::item:hover:!selected { background: rgba(110,106,179,0.12); }\n");
     ss += QStringLiteral("QScrollBar:vertical { background: transparent; width: 5px; }\n");
     ss += QStringLiteral("QScrollBar::handle:vertical { background: ") + c["scrollbar"]
@@ -209,10 +209,10 @@ void BookmarkPanel::showContextMenu(const QPoint &pos)
     menu->setStyleSheet(
         QStringLiteral("QMenu { background: ") + c["bg-darkest"]
         + QStringLiteral("; color: ") + c["text-primary"]
-        + QStringLiteral("; border: 1px solid ") + c["purple-mid"]
+        + QStringLiteral("; border: 1px solid ") + c["accent-mid"]
         + QStringLiteral("; border-radius: 8px; }"
                          "QMenu::item { padding: 6px 16px; border-radius: 4px; }"
-                         "QMenu::item:selected { background: ") + c["purple-dark"]
+                         "QMenu::item:selected { background: ") + c["accent-dark"]
         + QStringLiteral("; }"));
 
     const QString data = item->data(0, Qt::UserRole).toString();

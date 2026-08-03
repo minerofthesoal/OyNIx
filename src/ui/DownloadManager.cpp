@@ -36,7 +36,7 @@ void DownloadManager::setupUi()
     auto *headerLayout = new QHBoxLayout(header);
     headerLayout->setContentsMargins(14, 10, 14, 10);
     auto *titleLabel = new QLabel(QStringLiteral("Downloads"), this);
-    titleLabel->setStyleSheet(QStringLiteral("color: ") + c["purple-light"]
+    titleLabel->setStyleSheet(QStringLiteral("color: ") + c["accent-light"]
         + QStringLiteral("; font-size: 14px; font-weight: bold;"));
     headerLayout->addWidget(titleLabel);
     headerLayout->addStretch();
@@ -44,7 +44,7 @@ void DownloadManager::setupUi()
     m_clearAllBtn = new QPushButton(QStringLiteral("Clear Completed"), this);
     m_clearAllBtn->setStyleSheet(
         QStringLiteral("QPushButton { background: rgba(110,106,179,0.15); color: ")
-        + c["purple-light"]
+        + c["accent-light"]
         + QStringLiteral("; border: 1px solid rgba(110,106,179,0.3); border-radius: 8px;"
                          " padding: 5px 14px; font-size: 11px; }"
                          "QPushButton:hover { background: rgba(110,106,179,0.3); }"));
@@ -241,8 +241,8 @@ QWidget *DownloadManager::createDownloadWidget(QWebEngineDownloadRequest *downlo
         "QProgressBar { background: ") + c["bg-lighter"]
         + QStringLiteral("; border: none; border-radius: 2px; }"
                          "QProgressBar::chunk { background: qlineargradient("
-                         "x1:0,y1:0,x2:1,y2:0,stop:0 ") + c["purple-mid"]
-        + QStringLiteral(",stop:1 ") + c["purple-light"]
+                         "x1:0,y1:0,x2:1,y2:0,stop:0 ") + c["accent-mid"]
+        + QStringLiteral(",stop:1 ") + c["accent-light"]
         + QStringLiteral("); border-radius: 2px; }"));
     layout->addWidget(progressBar);
 

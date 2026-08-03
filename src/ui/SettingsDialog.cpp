@@ -370,7 +370,7 @@ QWidget *SettingsDialog::createAboutTab()
     layout->addWidget(titleLabel);
 
     auto *versionLabel = new QLabel(QStringLiteral("Version 3.1.0"), this);
-    versionLabel->setStyleSheet(QStringLiteral("color: ") + ca["purple-mid"]
+    versionLabel->setStyleSheet(QStringLiteral("color: ") + ca["accent-mid"]
         + QStringLiteral("; font-size: 16px;"));
     versionLabel->setAlignment(Qt::AlignCenter);
     layout->addWidget(versionLabel);
@@ -412,7 +412,7 @@ void SettingsDialog::applyStyles()
                         " border-bottom: none; }\n");
     ss += QStringLiteral("QTabBar::tab:selected { background: ") + c["bg-dark"]
        + QStringLiteral("; color: ") + c["text-primary"]
-       + QStringLiteral("; border-color: ") + c["purple-mid"] + QStringLiteral("; }\n");
+       + QStringLiteral("; border-color: ") + c["accent-mid"] + QStringLiteral("; }\n");
     ss += QStringLiteral("QTabBar::tab:hover { color: ") + c["text-primary"]
        + QStringLiteral("; }\n");
     ss += QStringLiteral("QLabel { color: ") + c["text-primary"] + QStringLiteral("; }\n");
@@ -420,7 +420,7 @@ void SettingsDialog::applyStyles()
        + QStringLiteral("; color: ") + c["text-primary"]
        + QStringLiteral("; border: 1px solid ") + c["border"]
        + QStringLiteral("; border-radius: 6px; padding: 6px; }\n");
-    ss += QStringLiteral("QLineEdit:focus { border-color: ") + c["purple-mid"]
+    ss += QStringLiteral("QLineEdit:focus { border-color: ") + c["accent-mid"]
        + QStringLiteral("; }\n");
     ss += QStringLiteral("QComboBox { background: ") + c["bg-mid"]
        + QStringLiteral("; color: ") + c["text-primary"]
@@ -429,14 +429,14 @@ void SettingsDialog::applyStyles()
     ss += QStringLiteral("QComboBox::drop-down { border: none; }\n");
     ss += QStringLiteral("QComboBox QAbstractItemView { background: ") + c["bg-darkest"]
        + QStringLiteral("; color: ") + c["text-primary"]
-       + QStringLiteral("; selection-background-color: ") + c["purple-dark"]
+       + QStringLiteral("; selection-background-color: ") + c["accent-dark"]
        + QStringLiteral("; }\n");
     ss += QStringLiteral("QCheckBox { color: ") + c["text-primary"]
        + QStringLiteral("; spacing: 8px; }\n");
     ss += QStringLiteral("QCheckBox::indicator { width: 16px; height: 16px; border: 1px solid ")
-       + c["purple-mid"] + QStringLiteral("; border-radius: 4px; background: ") + c["bg-mid"]
+       + c["accent-mid"] + QStringLiteral("; border-radius: 4px; background: ") + c["bg-mid"]
        + QStringLiteral("; }\n");
-    ss += QStringLiteral("QCheckBox::indicator:checked { background: ") + c["purple-mid"]
+    ss += QStringLiteral("QCheckBox::indicator:checked { background: ") + c["accent-mid"]
        + QStringLiteral("; }\n");
     ss += QStringLiteral("QSpinBox { background: ") + c["bg-mid"]
        + QStringLiteral("; color: ") + c["text-primary"]
@@ -447,10 +447,10 @@ void SettingsDialog::applyStyles()
        + QStringLiteral("; border-radius: 8px; margin-top: 12px; padding-top: 16px; }\n");
     ss += QStringLiteral("QGroupBox::title { subcontrol-origin: margin; left: 12px;"
                          " padding: 0 4px; }\n");
-    ss += QStringLiteral("QPushButton { background: ") + c["purple-mid"]
+    ss += QStringLiteral("QPushButton { background: ") + c["accent-mid"]
        + QStringLiteral("; color: white; border: none; border-radius: 6px;"
                         " padding: 6px 14px; }\n");
-    ss += QStringLiteral("QPushButton:hover { background: ") + c["purple-light"]
+    ss += QStringLiteral("QPushButton:hover { background: ") + c["accent-light"]
        + QStringLiteral("; }\n");
     ss += QStringLiteral("QDialogButtonBox QPushButton { min-width: 80px; }\n");
     setStyleSheet(ss);

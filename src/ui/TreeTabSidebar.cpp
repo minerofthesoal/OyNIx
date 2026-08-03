@@ -100,21 +100,21 @@ void TreeTabSidebar::setupStyles()
     QString ss;
     ss += QStringLiteral("TreeTabSidebar { background: ") + c["bg-darkest"]
        + QStringLiteral("; border-right: 1px solid ") + c["border"] + QStringLiteral("; }\n");
-    ss += QStringLiteral("#panelTitle { color: ") + c["purple-light"]
+    ss += QStringLiteral("#panelTitle { color: ") + c["accent-light"]
        + QStringLiteral("; font-size: 12px; font-weight: 700;"
                         " letter-spacing: 0.08em; text-transform: uppercase;"
                         " background: transparent; }\n");
     ss += QStringLiteral("#badge { color: ") + c["bg-darkest"]
-       + QStringLiteral("; background: ") + c["purple-mid"]
+       + QStringLiteral("; background: ") + c["accent-mid"]
        + QStringLiteral("; font-size: 10px; font-weight: 700;"
                         " padding: 1px 7px; border-radius: 8px; }\n");
-    ss += QStringLiteral("#navBtn { color: ") + c["purple-light"]
+    ss += QStringLiteral("#navBtn { color: ") + c["accent-light"]
        + QStringLiteral("; font-size: 16px; font-weight: bold;"
                         " background: transparent; border: 1px solid ") + c["border"]
        + QStringLiteral("; border-radius: 6px; }\n");
-    ss += QStringLiteral("#navBtn:hover { background: ") + c["purple-mid"]
+    ss += QStringLiteral("#navBtn:hover { background: ") + c["accent-mid"]
        + QStringLiteral("; color: ") + c["bg-darkest"]
-       + QStringLiteral("; border-color: ") + c["purple-mid"] + QStringLiteral("; }\n");
+       + QStringLiteral("; border-color: ") + c["accent-mid"] + QStringLiteral("; }\n");
     setStyleSheet(ss);
 
     QString inputSs;
@@ -123,7 +123,7 @@ void TreeTabSidebar::setupStyles()
             + QStringLiteral("; border: 1px solid ") + c["border"]
             + QStringLiteral("; border-radius: 6px; padding: 5px 10px;"
                              " margin: 4px 10px 6px 10px; font-size: 12px; }\n");
-    inputSs += QStringLiteral("QLineEdit:focus { border-color: ") + c["purple-mid"]
+    inputSs += QStringLiteral("QLineEdit:focus { border-color: ") + c["accent-mid"]
             + QStringLiteral("; background: ") + c["bg-light"] + QStringLiteral("; }\n");
     inputSs += QStringLiteral("QLineEdit::placeholder { color: ") + c["text-muted"]
             + QStringLiteral("; }\n");
@@ -135,7 +135,7 @@ void TreeTabSidebar::setupStyles()
                              " border-radius: 6px; color: ") + c["text-primary"]
            + QStringLiteral("; }\n");
     treeSs += QStringLiteral("QTreeWidget::item:selected { background: ") + c["selection"]
-           + QStringLiteral("; color: ") + c["purple-pale"] + QStringLiteral("; }\n");
+           + QStringLiteral("; color: ") + c["accent-pale"] + QStringLiteral("; }\n");
     treeSs += QStringLiteral("QTreeWidget::item:hover:!selected { background: rgba(110,106,179,0.12); }\n");
     treeSs += QStringLiteral("QTreeWidget::branch { background: transparent; }\n");
     treeSs += QStringLiteral("QTreeWidget::branch:has-children:closed { image: none; }\n");
