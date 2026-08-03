@@ -1,5 +1,5 @@
 /*
- * OyNIx Browser v3.1 - Entry Point
+ * OyNIx Browser v4.3 - Entry Point
  * Chromium-based desktop browser using Qt6 WebEngine, C++17
  *
  * Platform selection:
@@ -12,6 +12,8 @@
 #include <QDir>
 #include <QStandardPaths>
 #include <QtWebEngineQuick/qtwebenginequickglobal.h>
+#include <QWebEngineProfile>
+#include <QWebEngineSettings>
 
 #include "core/BrowserWindow.h"
 
@@ -99,9 +101,17 @@ int main(int argc, char *argv[])
     // QtWebEngine must be initialized before QApplication
     QtWebEngineQuick::initialize();
 
+    // Enable local file access globally for HTML files
+    QWebEngineProfile *profile = QWebEngineProfile::defaultProfile();
+    profile->settings()->setAttribute(QWebEngineSettings::LocalContentCanAccessRemoteUrls, true);
+    profile->settings()->setAttribute(QWebEngineSettings::LocalStorageEnabled, true);
+    profile->settings()->setAttribute(QWebEngineSettings::AutoLoadImages, true);
+    profile->settings()->setAttribute(QWebEngineSettings::JavascriptEnabled, true);
+    profile->settings()->setAttribute(QWebEngineSettings::AllowRunningInsecureContent, true);
+
     QApplication app(argc, argv);
     app.setApplicationName(QStringLiteral("OyNIx Browser"));
-    app.setApplicationVersion(QStringLiteral("3.1"));
+    app.setApplicationVersion(QStringLiteral("4.3"));
     app.setOrganizationName(QStringLiteral("OyNIx"));
     app.setOrganizationDomain(QStringLiteral("oynix.dev"));
 

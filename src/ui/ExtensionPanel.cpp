@@ -86,15 +86,15 @@ void ExtensionPanel::setupStyles()
 
     QString ss;
     ss += QStringLiteral("ExtensionPanel { background: ") + c["bg-darkest"] + QStringLiteral("; }\n");
-    ss += QStringLiteral("#panelTitle { color: ") + c["purple-light"]
+    ss += QStringLiteral("#panelTitle { color: ") + c["accent-light"]
        + QStringLiteral("; font-size: 12px; font-weight: 700;"
                         " letter-spacing: 0.08em; text-transform: uppercase; }\n");
     ss += QStringLiteral("#badge { color: ") + c["bg-darkest"]
-       + QStringLiteral("; background: ") + c["purple-mid"]
+       + QStringLiteral("; background: ") + c["accent-mid"]
        + QStringLiteral("; font-size: 10px; font-weight: 700;"
                         " padding: 1px 7px; border-radius: 8px; }\n");
     ss += QStringLiteral("#smallBtn { background: rgba(110,106,179,0.15); color: ")
-       + c["purple-light"] + QStringLiteral("; border: 1px solid rgba(110,106,179,0.3);"
+       + c["accent-light"] + QStringLiteral("; border: 1px solid rgba(110,106,179,0.3);"
                                              " border-radius: 6px; padding: 3px 10px;"
                                              " font-size: 11px; }\n");
     ss += QStringLiteral("#smallBtn:hover { background: rgba(110,106,179,0.3); }\n");
@@ -104,7 +104,7 @@ void ExtensionPanel::setupStyles()
     ss += QStringLiteral("#extList::item { padding: 6px 10px; margin: 1px 4px;"
                          " border-radius: 6px; }\n");
     ss += QStringLiteral("#extList::item:selected { background: ") + c["selection"]
-       + QStringLiteral("; color: ") + c["purple-pale"] + QStringLiteral("; }\n");
+       + QStringLiteral("; color: ") + c["accent-pale"] + QStringLiteral("; }\n");
     ss += QStringLiteral("#extList::item:hover:!selected { background: rgba(110,106,179,0.12); }\n");
     ss += QStringLiteral("QScrollBar:vertical { background: transparent; width: 5px; }\n");
     ss += QStringLiteral("QScrollBar::handle:vertical { background: ") + c["scrollbar"]

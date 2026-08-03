@@ -595,7 +595,7 @@ void BrowserWindow::createNavigationToolbar()
     m_loadProgress->setStyleSheet(QStringLiteral(
         "QProgressBar { background: transparent; border: none; }"
         "QProgressBar::chunk { background: %1; }")
-        .arg(c.value(QStringLiteral("purple-mid"))));
+        .arg(c.value(QStringLiteral("accent-mid"))));
 
     // Track page load progress from current tab
     auto updateLoadState = [this]() {

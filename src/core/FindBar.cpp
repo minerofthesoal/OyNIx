@@ -234,7 +234,7 @@ void FindBar::applyStyle()
     QString ss;
 
     ss += QStringLiteral("FindBar { background: ") + c["bg-darkest"]
-       + QStringLiteral("; border-top: 2px solid ") + c["purple-mid"]
+       + QStringLiteral("; border-top: 2px solid ") + c["accent-mid"]
        + QStringLiteral("; }\n");
 
     ss += QStringLiteral("QLineEdit { background: ") + c["bg-mid"]
@@ -243,7 +243,7 @@ void FindBar::applyStyle()
        + QStringLiteral("; border-radius: 8px; padding: 5px 10px;"
                         " selection-background-color: ") + c["selection"]
        + QStringLiteral("; font-size: 13px; }\n");
-    ss += QStringLiteral("QLineEdit:focus { border-color: ") + c["purple-mid"]
+    ss += QStringLiteral("QLineEdit:focus { border-color: ") + c["accent-mid"]
        + QStringLiteral("; background: ") + c["bg-light"]
        + QStringLiteral("; }\n");
 
@@ -251,10 +251,10 @@ void FindBar::applyStyle()
        + QStringLiteral("; color: ") + c["text-primary"]
        + QStringLiteral("; border: 1px solid ") + c["border"]
        + QStringLiteral("; border-radius: 6px; }\n");
-    ss += QStringLiteral("QPushButton:hover { background: ") + c["purple-dark"]
-       + QStringLiteral("; border-color: ") + c["purple-mid"]
+    ss += QStringLiteral("QPushButton:hover { background: ") + c["accent-dark"]
+       + QStringLiteral("; border-color: ") + c["accent-mid"]
        + QStringLiteral("; }\n");
-    ss += QStringLiteral("QPushButton:pressed { background: ") + c["purple-mid"]
+    ss += QStringLiteral("QPushButton:pressed { background: ") + c["accent-mid"]
        + QStringLiteral("; color: ") + c["bg-darkest"]
        + QStringLiteral("; }\n");
 

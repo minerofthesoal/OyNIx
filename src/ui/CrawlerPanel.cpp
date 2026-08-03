@@ -236,21 +236,21 @@ void CrawlerPanel::setupStyles()
 
     QString ss;
     ss += QStringLiteral("CrawlerPanel { background: ") + c["bg-darkest"] + QStringLiteral("; }\n");
-    ss += QStringLiteral("#panelTitle { color: ") + c["purple-light"]
+    ss += QStringLiteral("#panelTitle { color: ") + c["accent-light"]
        + QStringLiteral("; font-size: 13px; font-weight: 700;"
                         " letter-spacing: 0.05em; text-transform: uppercase; }\n");
     ss += QStringLiteral("#sectionLabel { color: ") + c["text-secondary"]
        + QStringLiteral("; font-size: 11px; font-weight: 600;"
                         " text-transform: uppercase; letter-spacing: 0.05em; }\n");
     ss += QStringLiteral("#badge { color: ") + c["bg-darkest"]
-       + QStringLiteral("; background: ") + c["purple-mid"]
+       + QStringLiteral("; background: ") + c["accent-mid"]
        + QStringLiteral("; font-size: 10px; font-weight: 700;"
                         " padding: 1px 7px; border-radius: 8px; }\n");
     ss += QStringLiteral("#crawlerUrlInput { background: ") + c["bg-mid"]
        + QStringLiteral("; color: ") + c["text-primary"]
        + QStringLiteral("; border: 1px solid ") + c["border"]
        + QStringLiteral("; border-radius: 8px; padding: 6px; font-size: 12px; }\n");
-    ss += QStringLiteral("#crawlerUrlInput:focus { border-color: ") + c["purple-mid"]
+    ss += QStringLiteral("#crawlerUrlInput:focus { border-color: ") + c["accent-mid"]
        + QStringLiteral("; }\n");
     ss += QStringLiteral("QLabel { color: ") + c["text-primary"] + QStringLiteral("; }\n");
     ss += QStringLiteral("QSpinBox { background: ") + c["bg-mid"]
@@ -260,17 +260,17 @@ void CrawlerPanel::setupStyles()
     ss += QStringLiteral("QCheckBox { color: ") + c["text-primary"]
        + QStringLiteral("; spacing: 6px; }\n");
     ss += QStringLiteral("QCheckBox::indicator { width: 14px; height: 14px; border: 1px solid ")
-       + c["purple-mid"] + QStringLiteral("; border-radius: 3px; background: ") + c["bg-mid"]
+       + c["accent-mid"] + QStringLiteral("; border-radius: 3px; background: ") + c["bg-mid"]
        + QStringLiteral("; }\n");
-    ss += QStringLiteral("QCheckBox::indicator:checked { background: ") + c["purple-mid"]
+    ss += QStringLiteral("QCheckBox::indicator:checked { background: ") + c["accent-mid"]
        + QStringLiteral("; }\n");
-    ss += QStringLiteral("#crawlBtn { background: ") + c["purple-mid"]
+    ss += QStringLiteral("#crawlBtn { background: ") + c["accent-mid"]
        + QStringLiteral("; color: white; border: none; border-radius: 8px;"
                         " padding: 6px 14px; font-weight: 600; }\n");
-    ss += QStringLiteral("#crawlBtn:hover { background: ") + c["purple-light"]
+    ss += QStringLiteral("#crawlBtn:hover { background: ") + c["accent-light"]
        + QStringLiteral("; }\n");
     ss += QStringLiteral("#crawlWebBtn { background: rgba(110,106,179,0.15); color: ")
-       + c["purple-light"] + QStringLiteral("; border: 1px solid rgba(110,106,179,0.3);"
+       + c["accent-light"] + QStringLiteral("; border: 1px solid rgba(110,106,179,0.3);"
                                              " border-radius: 8px; padding: 6px 14px;"
                                              " font-weight: 600; }\n");
     ss += QStringLiteral("#crawlWebBtn:hover { background: rgba(110,106,179,0.3); }\n");
@@ -281,8 +281,8 @@ void CrawlerPanel::setupStyles()
     ss += QStringLiteral("#crawlerProgress { background: ") + c["bg-lighter"]
        + QStringLiteral("; border: none; border-radius: 3px; }\n");
     ss += QStringLiteral("#crawlerProgress::chunk { background: qlineargradient("
-                         "x1:0,y1:0,x2:1,y2:0,stop:0 ") + c["purple-mid"]
-       + QStringLiteral(",stop:1 ") + c["purple-light"]
+                         "x1:0,y1:0,x2:1,y2:0,stop:0 ") + c["accent-mid"]
+       + QStringLiteral(",stop:1 ") + c["accent-light"]
        + QStringLiteral("); border-radius: 3px; }\n");
     ss += QStringLiteral("#crawlerStatus { color: ") + c["text-secondary"]
        + QStringLiteral("; font-size: 11px; }\n");

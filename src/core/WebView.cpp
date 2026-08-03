@@ -23,15 +23,15 @@ WebView::WebView(QWidget *parent)
     setupPage();
 
     connect(this, &QWebEngineView::loadStarted,
-            this, &WebView::onLoadStarted);
+            this, &WebView::onLoadStarted, Qt::UniqueConnection);
     connect(this, &QWebEngineView::loadProgress,
-            this, &WebView::onLoadProgress);
+            this, &WebView::onLoadProgress, Qt::UniqueConnection);
     connect(this, &QWebEngineView::loadFinished,
-            this, &WebView::onLoadFinished);
+            this, &WebView::onLoadFinished, Qt::UniqueConnection);
     connect(this, &QWebEngineView::urlChanged,
-            this, &WebView::onUrlChanged);
+            this, &WebView::onUrlChanged, Qt::UniqueConnection);
     connect(this, &QWebEngineView::iconChanged,
-            this, &WebView::onIconChanged);
+            this, &WebView::onIconChanged, Qt::UniqueConnection);
 }
 
 WebView::~WebView() = default;
@@ -41,6 +41,15 @@ void WebView::setupPage()
 {
     m_page = new WebPage(QWebEngineProfile::defaultProfile(), this);
     setPage(m_page);
+
+    // Enable local file access for HTML files
+    auto *settings = page()->settings();
+    settings->setAttribute(QWebEngineSettings::LocalContentCanAccessRemoteUrls, true);
+    settings->setAttribute(QWebEngineSettings::LocalStorageEnabled, true);
+    settings->setAttribute(QWebEngineSettings::AutoLoadImages, true);
+    settings->setAttribute(QWebEngineSettings::JavascriptEnabled, true);
+    // Allow file:// URLs to be loaded (Qt WebEngine blocks by default)
+    settings->setAttribute(QWebEngineSettings::AllowRunningInsecureContent, true);
 
     // Audible state tracking (recentlyAudibleChanged in Qt 6.8+)
     connect(m_page, &QWebEnginePage::recentlyAudibleChanged,

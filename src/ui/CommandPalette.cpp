@@ -61,9 +61,9 @@ void CommandPalette::setupStyles()
 
     ss += QStringLiteral("#cpInput { background: ") + c["bg-mid"]
        + QStringLiteral("; color: ") + c["text-primary"]
-       + QStringLiteral("; border: 2px solid ") + c["purple-mid"]
+       + QStringLiteral("; border: 2px solid ") + c["accent-mid"]
        + QStringLiteral("; border-radius: 12px; padding: 12px 16px; font-size: 14px; }\n");
-    ss += QStringLiteral("#cpInput:focus { border-color: ") + c["purple-light"]
+    ss += QStringLiteral("#cpInput:focus { border-color: ") + c["accent-light"]
        + QStringLiteral("; background: ") + c["bg-light"] + QStringLiteral("; }\n");
 
     ss += QStringLiteral("#cpResults { background: ") + c["bg-dark"]
@@ -72,8 +72,8 @@ void CommandPalette::setupStyles()
        + QStringLiteral("; font-size: 13px; outline: none; }\n");
     ss += QStringLiteral("#cpResults::item { padding: 10px 14px; border-radius: 6px;"
                          " margin: 1px 2px; }\n");
-    ss += QStringLiteral("#cpResults::item:selected { background: ") + c["purple-dark"]
-       + QStringLiteral("; color: ") + c["purple-pale"] + QStringLiteral("; }\n");
+    ss += QStringLiteral("#cpResults::item:selected { background: ") + c["accent-dark"]
+       + QStringLiteral("; color: ") + c["accent-pale"] + QStringLiteral("; }\n");
     ss += QStringLiteral("#cpResults::item:hover:!selected { background: ") + c["bg-lighter"]
        + QStringLiteral("; }\n");
 
@@ -166,7 +166,7 @@ void CommandPalette::paintEvent(QPaintEvent * /*event*/)
     QColor bg(c.value(QStringLiteral("bg-darkest"), QStringLiteral("#1a1b26")));
     bg.setAlpha(245);
     p.setBrush(bg);
-    p.setPen(QPen(QColor(c.value(QStringLiteral("purple-mid"), QStringLiteral("#6e6ab3"))), 1.5));
+    p.setPen(QPen(QColor(c.value(QStringLiteral("accent-mid"), QStringLiteral("#6e6ab3"))), 1.5));
     p.drawRoundedRect(rect().adjusted(1, 1, -1, -1), 14, 14);
 }
 
